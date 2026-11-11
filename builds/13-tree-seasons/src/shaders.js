@@ -587,6 +587,65 @@ void main(){
 `;
 
 // ---------------------------------------------------------------------------------------------
+// The squirrel. Its body is rebuilt in its pose every frame (engine/squirrel.js), so the vertex
+// stage only places it. The work here is the fur.
+const FUR_VS_BODY = `
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec3 aCoat;   // a coordinate that stays with the skin, so the fur pattern does not swim
+layout(location=3) in vec2 aInfo;   // kind (0 body, 2 eye, 3 tail, 4 ear tuft, 5 nut), belly 0..1
+uniform mat4 uModel;
+#ifndef SHADOW_PASS
+out vec3 vWorld; out vec3 vNrm; out vec3 vCoat; out vec2 vInfo;
+#endif
+void main(){
+  vec4 w=uModel*vec4(aPos,1.);
+  gl_Position=uViewProj*w;
+#ifndef SHADOW_PASS
+  vWorld=w.xyz; vNrm=mat3(uModel)*aNrm; vCoat=aCoat; vInfo=aInfo;
+#endif
+}
+`;
+
+const FUR_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
+in vec3 vWorld; in vec3 vNrm; in vec3 vCoat; in vec2 vInfo;
+uniform vec3 uColA;   // back
+uniform vec3 uColB;   // belly
+uniform vec3 uColC;   // eyes
+uniform vec3 uColD;   // tail
+const float FUR_STRANDS = 420.;  // fineness of the hairs across the body
+const float FUR_GLOW = 0.7;      // how brightly the tips of the fur catch the light at the outline
+void main(){
+  vec3 N=normalize(vNrm);
+  vec3 V=normalize(uCam-vWorld);
+  vec3 L=uSunDir;
+  float kind=vInfo.x;
+  vec3 base=mix(uColA,uColB,smoothstep(0.2,0.7,vInfo.y));
+  float fuzz=0.45;
+  if(kind>4.5){ base=vec3(0.26,0.15,0.06); fuzz=0.; }
+  else if(kind>3.5){ base=uColA*0.45; fuzz=0.9; }
+  else if(kind>2.5){ base=uColD; fuzz=1.; }
+  else if(kind>1.5){ base=uColC; fuzz=0.; }
+  // Hairs lie along the body: fine across it, long along it.
+  float strand=noise3(vCoat*vec3(90.,FUR_STRANDS,FUR_STRANDS));
+  float blotch=noise3(vCoat*38.+5.);
+  base*=0.70+0.42*strand*step(0.01,fuzz)+0.18*blotch;
+  float sh=shadowAt4(vWorld+N*0.03,1.5);
+  float wrap=clamp((dot(N,L)+0.4)/1.4,0.,1.);              // fur scatters light, so shade creeps round softly
+  vec3 amb=mix(uGroundAmb,uSkyAmb,N.y*0.5+0.5)*1.1;
+  vec3 lit=base*(wrap*sh*uSunCol*0.9+amb);
+  float facing=max(dot(N,V),0.);
+  // A ragged outline: hairs, not a smooth skin. The tail is the bushiest.
+  if(fuzz>0. && facing<fuzz*0.42*noise3(vCoat*vec3(160.,900.,900.))) discard;
+  float edge=pow(1.-facing,2.5);
+  float behind=pow(max(dot(-V,L),0.),2.);                  // strongest when the sun is behind the animal
+  lit+=base*FUR_GLOW*edge*fuzz*(uSunCol*sh*(0.22+0.9*behind)+uSkyAmb*0.3);
+  if(kind>1.5 && kind<2.5) lit+=uSunCol*sh*pow(max(dot(N,normalize(L+V)),0.),30.)*0.8+uSkyAmb*0.25*edge;   // a bright wet eye
+  fragColor=encodeOut(applyFog(lit,vWorld));
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
 // Butterflies: each is two flapping quads, its whole flight worked out here from time and a seed.
 const FLY_VS = HEAD + SHARED + `
 layout(location=0) in vec3 aWing;   // x: along the body -1..1, y: out along the wing 0..1, z: side -1 or 1
@@ -772,6 +831,9 @@ export const SHADERS = {
   critterVS: HEAD + SHARED + CRITTER_VS_BODY,
   critterShadowVS: HEAD + '#define SHADOW_PASS\n' + SHARED + CRITTER_VS_BODY,
   critterFS: CRITTER_FS,
+  furVS: HEAD + SHARED + FUR_VS_BODY,
+  furShadowVS: HEAD + '#define SHADOW_PASS\n' + SHARED + FUR_VS_BODY,
+  furFS: FUR_FS,
   flyVS: FLY_VS,
   flyFS: FLY_FS,
   flowerVS: FLOWER_VS,

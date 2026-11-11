@@ -4,7 +4,8 @@
 // this file only builds the little models and draws them.
 
 import { setUniforms, createBuffer, bindAttributes } from '../engine/glkit.js';
-import { LIFE, lifeActivity, findPerches, findSquirrelRoute, birdState, squirrelState, flockState } from '../engine/life.js';
+import { LIFE, lifeActivity, findPerches, findSquirrelRoute, birdState, flockState } from '../engine/life.js';
+import { squirrelPose, createSquirrelMesh, buildSquirrelMesh, SQUIRREL_VERTEX_FLOATS } from '../engine/squirrel.js';
 import { mulberry32 } from '../engine/tree.js';
 
 const BIRD_SCALE = 1.8;        // small birds are drawn this much larger than life, so they read from 46 m
@@ -23,7 +24,8 @@ const BIRD_COATS = [
   { a: [0.30, 0.29, 0.34], b: [0.62, 0.36, 0.27], c: [0.30, 0.30, 0.34], d: [0.10, 0.10, 0.11] },  // chaffinch
 ];
 const FLOCK_COAT = { a: [0.07, 0.07, 0.08], b: [0.22, 0.22, 0.23], c: [0.05, 0.05, 0.05], d: [0.05, 0.05, 0.06] };
-const SQUIRREL_COAT = { a: [0.33, 0.15, 0.065], b: [0.70, 0.63, 0.53], c: [0.04, 0.03, 0.03], d: [0.29, 0.12, 0.05] };
+// The squirrel: back, belly, eye, tail.
+const SQUIRREL_COAT = { a: [0.20, 0.078, 0.032], b: [0.62, 0.57, 0.48], c: [0.012, 0.01, 0.01], d: [0.23, 0.088, 0.032] };
 
 // --- Model building -----------------------------------------------------------------------------
 // Vertex: position 3, normal 3, part 1, colour region 1.
@@ -77,24 +79,6 @@ function birdModel() {
   return m;
 }
 
-// A red squirrel, about 20 cm in the body with a tail as long again.
-function squirrelModel() {
-  const m = new Model();
-  const belly = (ny) => (ny < -0.25 ? 1 : 0);
-  sweep(m, [[-0.10, 0.045, 0.012], [-0.08, 0.050, 0.036], [-0.03, 0.055, 0.045], [0.03, 0.055, 0.038], [0.07, 0.060, 0.028],
-    [0.10, 0.070, 0.027], [0.125, 0.072, 0.024], [0.15, 0.066, 0.012], [0.158, 0.064, 0.003]], 8, 0, belly);
-  for (const s of [1, -1]) {                                                                       // tufted ears
-    flat(m, [[0.098, 0.090, 0.012 * s], [0.116, 0.090, 0.013 * s], [0.103, 0.122, 0.017 * s]], 0, 0);
-  }
-  sweep(m, [[-0.095, 0.050, 0.014], [-0.15, 0.060, 0.035], [-0.19, 0.110, 0.048], [-0.185, 0.180, 0.050],
-    [-0.14, 0.235, 0.042], [-0.09, 0.250, 0.020], [-0.07, 0.245, 0.004]], 8, 3, () => 3);          // tail
-  for (const s of [1, -1]) {                                                                       // legs
-    sweep(m, [[0.06, 0.045, 0.012], [0.068, 0.0, 0.008]], 5, 0, () => 0, 0.022 * s);
-    sweep(m, [[-0.05, 0.05, 0.02], [-0.035, 0.0, 0.011]], 5, 0, () => 0, 0.03 * s);
-  }
-  return m;
-}
-
 // Builds the matrix that places a model: x along fwd, y along up, tipped nose-up by pitch about pivotX.
 function placeModel(pos, fwd, up, pitch, s, pivotX = 0) {
   let ux = up[0], uy = up[1], uz = up[2];
@@ -124,11 +108,23 @@ export function createWildlife(gl, P, tree, quality) {
     return { vao, count: model.i.length };
   };
   const bird = upload(birdModel());
-  const squirrel = upload(squirrelModel());
 
   const perches = findPerches(tree.skeleton, 26);
   const route = findSquirrelRoute(tree.skeleton);
   const rnd = mulberry32(4411);
+
+  // The squirrel's body is rebuilt in its pose every frame; only the list of triangles is fixed.
+  const sqMesh = createSquirrelMesh();
+  buildSquirrelMesh(squirrelPose(0, route).pose, 0, sqMesh);
+  const sqVao = gl.createVertexArray();
+  gl.bindVertexArray(sqVao);
+  const sqBuffer = createBuffer(gl, gl.ARRAY_BUFFER, sqMesh.vertices, gl.DYNAMIC_DRAW);
+  bindAttributes(gl, sqBuffer, SQUIRREL_VERTEX_FLOATS, [
+    { loc: 0, size: 3, offset: 0 }, { loc: 1, size: 3, offset: 3 }, { loc: 2, size: 3, offset: 6 }, { loc: 3, size: 2, offset: 9 },
+  ]);
+  createBuffer(gl, gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(sqMesh.indices));
+  const sqIndexCount = sqMesh.indices.length;
+  let squirrel = null;   // { model, pos, mode, moving, onBark } while it is about
 
   // --- Butterflies ------------------------------------------------------------------------------
   const flyCount = quality.butterflies;
@@ -206,9 +202,13 @@ export function createWildlife(gl, P, tree, quality) {
       const coat = BIRD_COATS[i < 3 ? i : 3 + (i % 2)];
       animals.push({ mesh: bird, coat, model: placeModel(b.pos, b.fwd, [0, 1, 0], Math.asin(Math.max(-1, Math.min(1, b.fwd[1]))) * 0.8, BIRD_SCALE * b.scale), flap: b.flap, fold: b.fold, tail: 0 });
     }
+    squirrel = null;
     if (activity.squirrel > 0.01) {
-      const s = squirrelState(time, route);
-      animals.push({ mesh: squirrel, coat: SQUIRREL_COAT, model: placeModel(s.pos, s.fwd, s.up, s.pitch, SQUIRREL_SCALE * activity.squirrel, -0.05), flap: 0, fold: 0, tail: s.tail });
+      const s = squirrelPose(time, route);
+      buildSquirrelMesh(s.pose, time, sqMesh);
+      gl.bindBuffer(gl.ARRAY_BUFFER, sqBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, sqMesh.vertices, 0, sqMesh.count * SQUIRREL_VERTEX_FLOATS);
+      squirrel = { model: placeModel(s.pos, s.fwd, s.up, 0, SQUIRREL_SCALE * activity.squirrel), pos: s.pos, mode: s.mode, moving: s.moving, onBark: s.onBark };
     }
     if (activity.flock > 0.01) {
       for (let j = 0; j < LIFE.FLOCK; j++) {
@@ -232,10 +232,24 @@ export function createWildlife(gl, P, tree, quality) {
     }
   }
 
-  function drawShadow(U, shadowVP) { drawAnimals(P.critterShadow, U, { uViewProj: shadowVP }); }
+  function drawSquirrel(prog, U, extra) {
+    if (!squirrel) return;
+    gl.useProgram(prog.program);
+    setUniforms(gl, prog, U);
+    if (extra) setUniforms(gl, prog, extra);
+    setUniforms(gl, prog, { uModel: squirrel.model, uColA: SQUIRREL_COAT.a, uColB: SQUIRREL_COAT.b, uColC: SQUIRREL_COAT.c, uColD: SQUIRREL_COAT.d });
+    gl.bindVertexArray(sqVao);
+    gl.drawElements(gl.TRIANGLES, sqIndexCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  function drawShadow(U, shadowVP) {
+    drawAnimals(P.critterShadow, U, { uViewProj: shadowVP });
+    drawSquirrel(P.furShadow, U, { uViewProj: shadowVP });
+  }
 
   function draw(U, year) {
     drawAnimals(P.critter, U);
+    drawSquirrel(P.fur, U);
     // Flowers are out from mid spring, toadstools until early winter; skip the draw otherwise.
     if (year > 0.06 && year < 0.84) {
       gl.useProgram(P.flower.program);
@@ -252,5 +266,5 @@ export function createWildlife(gl, P, tree, quality) {
     }
   }
 
-  return { update, draw, drawShadow, get activity() { return activity; }, get animals() { return animals.length; }, perches, route };
+  return { update, draw, drawShadow, get activity() { return activity; }, get animals() { return animals.length + (squirrel ? 1 : 0); }, get squirrel() { return squirrel; }, perches, route };
 }

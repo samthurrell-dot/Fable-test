@@ -6,7 +6,7 @@
 //   const perches = findPerches(tree.skeleton, 26);
 //   const route = findSquirrelRoute(tree.skeleton);
 //   const bird = birdState(3, time, activity.birds, perches, wind);   // or null when away
-//   const squirrel = squirrelState(time, route);
+//   (the squirrel itself is in engine/squirrel.js)
 //   const goose = flockState(5, time);
 
 export const LIFE = {
@@ -18,8 +18,6 @@ export const LIFE = {
   SORTIE_SECONDS: 4.5,    // length of such a loop
   SORTIE_REACH: 8,        // metres a loop swings out from the tree
   TURN_SECONDS: 1.3,      // a perched bird looks a new way this often
-  SQUIRREL_CYCLE: 36,     // seconds for the squirrel's whole round trip
-  SQUIRREL_STRIDE: 0.28,  // metres covered by one bound
   SQUIRREL_START: 3.4,    // metres from the trunk where it forages
   FLOCK: 11,              // birds in the far autumn flock
   FLOCK_CYCLE: 30,        // seconds between passes
@@ -207,7 +205,8 @@ export function findSquirrelRoute(skel, toward = [0.92, 0.4]) {
   return { pts, dist, ground: dist[14], climb: dist[climbEnd], total: dist[dist.length - 1] };
 }
 
-function routeAt(route, d) {
+// A point d metres along the squirrel's route: { pos, nrm (the surface it is on), tan (the way the route runs) }.
+export function routeAt(route, d) {
   const { pts, dist } = route;
   d = Math.min(Math.max(d, 0), route.total);
   let k = 1;
@@ -218,47 +217,6 @@ function routeAt(route, d) {
   const tan = [b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]];
   const l = Math.hypot(tan[0], tan[1], tan[2]) || 1;
   return { pos: mix(a.p, b.p), nrm: mix(a.n, b.n), tan: [tan[0] / l, tan[1] / l, tan[2] / l] };
-}
-
-// The squirrel. Returns { pos, fwd, up, pitch (radians, nose up), tail (radians), sitting }.
-export function squirrelState(t, route) {
-  const P = LIFE.SQUIRREL_CYCLE;
-  const u = ((t % P) + P) % P;
-  const g = route.ground, c = route.climb, e = route.total;
-  // Key moments: [seconds, metres along the route]. Equal distances in a row mean a pause.
-  const keys = [
-    [0, 0], [1.2, 0.9], [2.6, 0.9], [3.6, 0.3], [5.0, 0.3],   // foraging: short dashes and stops
-    [8.4, g], [8.9, g],                                        // run to the foot of the tree
-    [11.6, c], [12.1, c],                                      // climb
-    [14.6, e], [21.0, e],                                      // out along the bough, then sit
-    [23.2, c], [25.6, g], [26.2, g],                           // back down
-    [30.0, 0.9], [31.2, 0.9], [32.6, 0], [P, 0],
-  ];
-  let k = 1;
-  while (k < keys.length - 1 && keys[k][0] < u) k++;
-  const [t0, d0] = keys[k - 1], [t1, d1] = keys[k];
-  const f0 = clamp01((u - t0) / (t1 - t0)), f = f0 * f0 * (3 - 2 * f0);
-  const d = d0 + (d1 - d0) * f;
-  const moving = Math.abs(d1 - d0) > 1e-4;
-  // Which way it faces: the way it is going, or the way it last went.
-  let dirSign = Math.sign(d1 - d0);
-  for (let j = k - 1; dirSign === 0 && j > 0; j--) dirSign = Math.sign(keys[j][1] - keys[j - 1][1]);
-  if (dirSign === 0) dirSign = 1;
-
-  const r = routeAt(route, d);
-  const onTrunk = Math.abs(r.nrm[1]) < 0.5;
-  const speed = moving ? Math.sin(f0 * Math.PI) : 0;          // 0 at each end of a dash
-  const phase = d / LIFE.SQUIRREL_STRIDE;
-  const bound = Math.abs(Math.sin(phase * Math.PI)) * (onTrunk ? 0.008 : 0.04) * speed;
-  const pos = [r.pos[0] + r.nrm[0] * bound, r.pos[1] + r.nrm[1] * bound, r.pos[2] + r.nrm[2] * bound];
-  const sitting = !moving && !onTrunk;
-  // Sitting up on its haunches takes a moment at each end of the pause.
-  const settle = sitting ? Math.min(smooth(0, 0.35, u - t0), smooth(0, 0.35, t1 - u)) : 0;
-  const pitch = settle * 0.85 + Math.cos(phase * 2 * Math.PI) * 0.22 * speed;
-  // The tail flicks in bursts while it sits.
-  const burst = hash(Math.floor(t / 1.7), 3) > 0.45 ? 1 : 0;
-  const tail = sitting ? Math.sin(t * 9) * 0.35 * burst * settle : Math.sin(phase * 2 * Math.PI) * 0.18 * speed;
-  return { pos, fwd: [r.tan[0] * dirSign, r.tan[1] * dirSign, r.tan[2] * dirSign], up: r.nrm, pitch, tail, sitting };
 }
 
 // One bird of the far flock that crosses behind the tree in autumn. j = 0 is the leader.

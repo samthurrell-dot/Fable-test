@@ -68,6 +68,8 @@ export function createScene(canvas, tree, quality) {
     post: [SHADERS.screenVS, SHADERS.postFS],
     critter: [SHADERS.critterVS, SHADERS.critterFS],
     critterShadow: [SHADERS.critterShadowVS, SHADERS.depthOnlyFS],
+    fur: [SHADERS.furVS, SHADERS.furFS],
+    furShadow: [SHADERS.furShadowVS, SHADERS.depthOnlyFS],
     fly: [SHADERS.flyVS, SHADERS.flyFS],
     flower: [SHADERS.flowerVS, SHADERS.flowerFS],
   });
@@ -119,7 +121,9 @@ export function createScene(canvas, tree, quality) {
     const r = 0.5 + GRASS_RADIUS * Math.pow(rnd(), 0.7), a = rnd() * Math.PI * 2;
     blades[i * 6] = Math.cos(a) * r;
     blades[i * 6 + 1] = Math.sin(a) * r;
-    blades[i * 6 + 2] = (0.16 + 0.3 * rnd() * rnd() + (r < 2 ? -0.06 : 0)) * (rnd() < 0.06 ? 2.1 : 1);   // a few tall seed-head stems
+    // Grass is short and thin in the shade under the crown and grows long out in the open.
+    const open = Math.min(1, Math.max(0, (r - 2.2) / 5));
+    blades[i * 6 + 2] = (0.16 + 0.3 * rnd() * rnd()) * (0.42 + 0.58 * open * open * (3 - 2 * open)) * (rnd() < 0.06 * open ? 2.1 : 1);   // a few tall seed-head stems
     blades[i * 6 + 3] = rnd() * Math.PI * 2;
     blades[i * 6 + 4] = rnd();
     blades[i * 6 + 5] = rnd();
@@ -321,5 +325,5 @@ export function createScene(canvas, tree, quality) {
     if (target) { const w = target.w, h = target.h; target.dispose(); target = null; resize(w, h); }
   }
 
-  return { gl, resize, render, info, setMsaa };
+  return { gl, resize, render, info, setMsaa, life: wildlife };
 }

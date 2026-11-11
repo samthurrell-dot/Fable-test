@@ -4,7 +4,9 @@
 // URL controls (for looking at exact moments):
 //   ?t=12.5          freeze the animation at 12.5 seconds
 //   ?season=autumn   start in a season (spring, summer, autumn, winter) or at a number 0..1
-//   ?view=crown      camera: wide (default), crown, ground
+//   ?view=crown      camera: wide (default), crown, ground, squirrel
+//   ?yaw=1.2         start with the camera swung round by this many radians
+//   ?fov=4           force the lens angle in degrees (for close stills)
 //   ?stats=1         show frame rate and counts
 //   ?quality=phone   force the phone settings (or desktop)
 //   ?tune=fresh      measure this device's speed again (tune=0 skips the check)
@@ -39,8 +41,10 @@ const VIEWS = {
   wide: { label: 'Whole tree', distance: 46, height: 3.2, target: [0, 4.9, 0], fov: 17, fitWidth: 13.5, blur: 1 },
   crown: { label: 'Crown', distance: 21, height: 6.4, target: [1.4, 6.7, 0], fov: 15, fitWidth: 5, blur: 0.6 },
   ground: { label: 'Ground', distance: 13, height: 0.9, target: [0.9, 1.5, 0], fov: 25, fitWidth: 5, blur: 0.4 },
+  // A long lens that follows the squirrel. When it is away (deep winter) this falls back to the ground view.
+  squirrel: { label: 'Squirrel', distance: 9, height: 0.75, target: [0, 0.14, 0], fov: 8, fitWidth: 1.3, blur: 0.3, follow: true },
 };
-const VIEW_ORDER = ['wide', 'crown', 'ground'];
+const VIEW_ORDER = ['wide', 'crown', 'ground', 'squirrel'];
 
 const QUALITY = {
   desktop: { twigs: 8000, leafSizeMul: 1, grassBlades: 50000, flowers: 9000, butterflies: 30, snowflakes: 6000, shadowSize: 2048, msaa: 4, maxDpr: 2, blur: 1, maxBlurPx: 11, blurStep: 1.4 },
@@ -102,7 +106,8 @@ let releasedAt = -1e9;     // when it was let go
 // --- Camera -----------------------------------------------------------------------------------
 let viewName = VIEWS[params.get('view')] ? params.get('view') : 'wide';
 const cam = { ...VIEWS[viewName], target: [...VIEWS[viewName].target] };
-let dragYaw = 0, dragLift = 0, parX = 0, parY = 0, parTX = 0, parTY = 0;
+const centre = [0, 0, 0];   // the point the camera circles: the tree, or the squirrel in its view
+let dragYaw = parseFloat(params.get('yaw')) || 0, dragLift = 0, parX = 0, parY = 0, parTX = 0, parTY = 0;
 
 function setView(name) {
   viewName = name;
@@ -139,7 +144,7 @@ addEventListener('keydown', (e) => {
     year = (((year + (e.key === 'ArrowRight' ? 0.01 : -0.01)) % 1) + 1) % 1;
     releasedAt = performance.now() / 1000;
     e.preventDefault();
-  } else if (e.key >= '1' && e.key <= '3') {
+  } else if (e.key >= '1' && e.key <= '4') {
     setView(VIEW_ORDER[+e.key - 1]);
   }
 });
@@ -227,28 +232,34 @@ function frame(now) {
   if (seasonLabel.textContent !== name) seasonLabel.textContent = name;
 
   // Ease the camera towards the chosen view.
-  const v = VIEWS[viewName];
+  let v = VIEWS[viewName];
+  const quarry = v.follow ? scene.life.squirrel : null;
+  if (v.follow && !quarry) v = VIEWS.ground;
   const k = frozen ? 1 : 1 - Math.exp(-dt * 2.2);
+  const want = quarry ? quarry.pos : [0, 0, 0];
+  const kc = frozen ? 1 : 1 - Math.exp(-dt * (quarry ? 5 : 2.2));
+  for (let i = 0; i < 3; i++) centre[i] += (want[i] - centre[i]) * kc;
   cam.distance += (v.distance - cam.distance) * k;
   cam.height += (v.height - cam.height) * k;
   cam.fov += (v.fov - cam.fov) * k;
   cam.fitWidth += (v.fitWidth - cam.fitWidth) * k;
   cam.blur += (v.blur - cam.blur) * k;
   for (let i = 0; i < 3; i++) cam.target[i] += (v.target[i] - cam.target[i]) * k;
+  const aim = [cam.target[0] + centre[0], cam.target[1] + centre[1], cam.target[2] + centre[2]];
   parX += (parTX - parX) * (frozen ? 0 : Math.min(1, dt * 3));
   parY += (parTY - parY) * (frozen ? 0 : Math.min(1, dt * 3));
 
   const yaw = ORBIT_SWING * Math.sin(time * ORBIT_RATE) + dragYaw + parX * 0.03;
-  const height = Math.max(0.4, cam.height + dragLift * (cam.height * 0.5 + 1) - parY * 0.25);
-  const eye = [Math.sin(yaw) * cam.distance, height, Math.cos(yaw) * cam.distance];
+  const height = Math.max(0.4, cam.height + centre[1] + dragLift * (cam.height * 0.5 + 1) - parY * 0.25);
+  const eye = [centre[0] + Math.sin(yaw) * cam.distance, height, centre[2] + Math.cos(yaw) * cam.distance];
   // On a tall, narrow screen widen the lens so the whole subject still fits.
   const aspect = canvas.width / canvas.height;
-  let fovY = (cam.fov * Math.PI) / 180;
+  let fovY = ((parseFloat(params.get('fov')) || cam.fov) * Math.PI) / 180;
   const fitFov = 2 * Math.atan(cam.fitWidth / (2 * cam.distance * aspect));
-  fovY = Math.max(fovY, fitFov);
-  const focus = Math.hypot(eye[0] - cam.target[0], eye[1] - cam.target[1], eye[2] - cam.target[2]);
+  if (!params.has('fov')) fovY = Math.max(fovY, fitFov);
+  const focus = Math.hypot(eye[0] - aim[0], eye[1] - aim[1], eye[2] - aim[2]);
 
-  const st = scene.render({ time, year: y, eye, target: cam.target, fovY, focus, blur: cam.blur, yearSeconds: YEAR_SECONDS });
+  const st = scene.render({ time, year: y, eye, target: aim, fovY, focus, blur: cam.blur, yearSeconds: YEAR_SECONDS });
   if (!loading.hidden) { loading.hidden = true; boot.totalMs = performance.now() - boot.start; }
   sound.update(st);
 
