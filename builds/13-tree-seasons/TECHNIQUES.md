@@ -68,6 +68,14 @@ Snow on branches: vertices on upward-facing surfaces are pushed out along the no
 
 Eight key moments of light, sky, haze, grass and wind, blended with a smooth step, plus closed-form snow cover, snowfall and canopy curves that wrap cleanly at the new year. `seasonState(y)` returns everything the renderer needs. See `demo/seasons.html`.
 
+## 5b. Sky for a long lens (`SKY_FS`)
+
+A long lens only sees the few degrees above the horizon. Clouds projected on a flat plane smear into streaks there. Here the cloud noise is sampled on a cylinder round the viewer (`CLOUD_RING`, `CLOUD_RISE`), so banks keep their shape at the horizon and wrap with no seam. Tops are lit by comparing the density a little higher up (`CLOUD_LIGHT_STEP`): less cloud above = brighter. Far hills and a tree line are two noise ridgelines on the same circle, paling towards their feet.
+
+**Mistake fixed:** an orange horizon mixed with a blue zenith gives grey. Keep the two sky colours on the same side of neutral when you want a coloured sky.
+
+The sun's compass direction is a per-season key (`sunAzimuth`): side light models the summer crown; light from behind makes autumn leaves glow.
+
 ## 6. Lens (`POST_FS`)
 
 One-pass depth of field: a golden-angle spiral gather where each sample counts only if its own blur circle reaches the centre pixel. Then exposure, per-season saturation and tint, a filmic curve, vignette and grain. Measured cost: too small to see (removing it did not lower frame time).

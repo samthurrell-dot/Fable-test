@@ -209,8 +209,9 @@ const float LEAF_HALF_WIDTH = 0.31; // half width as a share of length
 const float LEAF_FOLD = 0.13;      // how far the edges lift (V fold along the midrib)
 const float LEAF_CURL = 0.16;      // how far the tip droops
 #ifndef SHADOW_PASS
-out vec3 vWorld; out vec3 vNrm; out vec2 vLocal; out vec4 vParam; out float vAge;
+out vec3 vWorld; out vec3 vNrm; out vec2 vLocal; out vec4 vParam; out float vAge; out float vTone;
 #endif
+const float CLUMP_SIZE = 0.9;      // metres; neighbouring leaves share a tone over about this distance
 vec3 rotAxis(vec3 v, vec3 k, float a){ float c=cos(a), s=sin(a); return v*c+cross(k,v)*s+k*dot(k,v)*(1.-c); }
 void main(){
   float grow=smoothstep(iSched.x, iSched.x+uGrowDur, uYear);
@@ -260,13 +261,16 @@ void main(){
   vWorld=wp; vNrm=nrm; vLocal=aLocal.xy;
   vParam=vec4(smoothstep(iSched.y,iSched.y+uTurnDur,uYear), iRand.y, iMisc.z, landed);
   vAge=clamp((uYear-(iSched.z+fallDur))/0.07,0.,1.);
+  vTone=noise3(iPos/CLUMP_SIZE+3.1);
 #endif
 }
 `;
 
 const LEAF_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
-in vec3 vWorld; in vec3 vNrm; in vec2 vLocal; in vec4 vParam; in float vAge;
+in vec3 vWorld; in vec3 vNrm; in vec2 vLocal; in vec4 vParam; in float vAge; in float vTone;
 uniform float uKind;
+const float VEIN_COUNT = 6.;       // side veins per leaf
+const float VEIN_DEPTH = 0.2;      // how much darker a vein is than the blade
 const vec3 LEAF_FRESH = vec3(0.34,0.50,0.07);   // new spring leaf
 const vec3 LEAF_DEEP = vec3(0.065,0.19,0.035);  // mature summer leaf
 const vec3 LEAF_YELLOW = vec3(0.78,0.52,0.04);
@@ -276,7 +280,7 @@ const vec3 LEAF_BROWN = vec3(0.19,0.105,0.05);  // dry leaf on the ground
 const vec3 PETAL_EDGE = vec3(0.98,0.95,0.94);
 const vec3 PETAL_HEART = vec3(0.93,0.78,0.83);
 const float TRANSLUCENCY = 0.85;   // light let through a leaf when the sun is behind it
-const float LEAF_GLOSS = 0.12;     // strength of the waxy highlight
+const float LEAF_GLOSS = 0.2;      // strength of the waxy highlight
 void main(){
   vec3 N=normalize(vNrm);
   if(!gl_FrontFacing) N=-N;
@@ -289,12 +293,15 @@ void main(){
     float t=clamp(turn+(abs(vLocal.x)*0.6+vLocal.y*0.3-0.45)*0.7*sin(turn*3.14159),0.,1.);
     float mature=smoothstep(0.14,0.36,uYear);
     vec3 green=mix(LEAF_FRESH,LEAF_DEEP,mature)*(0.78+0.44*vParam.y);
-    float r=vParam.y;
+    green=mix(green*0.72, green*vec3(1.35,1.22,0.9), smoothstep(0.25,0.75,vTone));   // whole sprays are darker or yellower
+    float r=clamp(vParam.y*0.6+vTone*0.6-0.1,0.,1.);                                 // and turn similar colours together
     vec3 aut=r<0.5 ? mix(LEAF_YELLOW,LEAF_ORANGE,r*2.) : mix(LEAF_ORANGE,LEAF_RED,(r-0.5)*2.);
     base=mix(green, mix(vec3(0.50,0.52,0.06),aut,smoothstep(0.35,1.,t)), smoothstep(0.,0.5,t));
     base=mix(base,LEAF_BROWN*(0.7+0.6*r),vAge*0.85);
     float rib=smoothstep(0.07,0.,abs(vLocal.x));
-    base*=1.-0.22*rib;
+    float vein=smoothstep(0.07,0.,abs(fract(vLocal.y*VEIN_COUNT-abs(vLocal.x)*1.8)-0.5));
+    vein*=clamp(1.-fwidth(vLocal.y)*VEIN_COUNT*2.5,0.,1.);   // fades out when a leaf is only a few pixels long
+    base*=1.-0.22*rib-VEIN_DEPTH*vein*(1.-rib);
     through=pow(base,vec3(0.75))*vec3(1.15,1.2,0.55);
     trans=TRANSLUCENCY*(1.-0.6*vAge);
     gloss=LEAF_GLOSS*(1.-turn);
@@ -342,6 +349,8 @@ uniform vec3 uGrassA; uniform vec3 uGrassB; uniform vec3 uHill;
 uniform float uCanopy;
 const float GROUND_HAZE = 0.3;   // the meadow hazes more slowly than the air above it, so no white band at the horizon
 const vec3 SOIL = vec3(0.07,0.05,0.035);   // worn earth at the foot of the trunk
+const float SNOW_DRIFT_SCALE = 0.22;  // size of snow drifts; smaller = broader
+const float SNOW_RELIEF = 3.2;        // steepness of the drifts
 const float SHADE_UNDER_CROWN = 0.25;       // how much skylight the full crown blocks
 void main(){
   vec2 p=vWorld.xz;
@@ -361,9 +370,14 @@ void main(){
   vec3 lit=col*(ndl*sh*uSunCol*0.9+uSkyAmb*1.4*ao);
   if(uSnow>0.001){   // the snow maths is skipped for three seasons of the year
     float sn=snowMask(p);
-    float drift=fbm2x2(p*0.5+4.);
+    // Soft drifts: tilt the snow surface by the slope of a broad noise, so the low sun rakes across it.
+    float h0=fbm2x2(p*SNOW_DRIFT_SCALE+4.);
+    float hx=fbm2x2((p+vec2(0.35,0.))*SNOW_DRIFT_SCALE+4.);
+    float hz=fbm2x2((p+vec2(0.,0.35))*SNOW_DRIFT_SCALE+4.);
+    vec3 ns=normalize(vec3((h0-hx)*SNOW_RELIEF,1.,(h0-hz)*SNOW_RELIEF));
+    float nds=max(dot(ns,uSunDir),0.);
     float sparkle=step(0.985,hash21(floor(p*220.)))*exp(-d*0.03);
-    vec3 snowLit=SNOW_ALBEDO*(ndl*sh*uSunCol*(0.95+sparkle*2.)+uSkyAmb*ao)*(0.82+0.36*drift);
+    vec3 snowLit=SNOW_ALBEDO*(nds*sh*uSunCol*(1.1+sparkle*2.)+uSkyAmb*ao*(0.9+0.2*h0));
     lit=mix(lit,snowLit,sn);
   }
   float haze=1.-exp(-max(d-FOG_START,0.)*uFogDensity*GROUND_HAZE);
@@ -429,6 +443,15 @@ in vec2 vUv;
 uniform mat4 uInvViewProj;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uHill;
 uniform float uCloud;
+const float CLOUD_RING = 3.0;        // size of cloud banks round the horizon; bigger = more, smaller banks
+const float CLOUD_RISE = 12.;        // vertical squash; bigger = flatter clouds
+const float CLOUD_LIGHT_STEP = 0.02; // how far up to look when shading cloud tops
+const float CLOUD_DRIFT = 0.008;     // speed of drift across the sky
+// Clouds live on a cylinder round the viewer, so they wrap without a seam and do not smear at the horizon.
+float cloudDensity(vec2 n2, float el){
+  vec3 q=vec3(n2.x*CLOUD_RING+uTime*CLOUD_DRIFT, el*CLOUD_RISE, n2.y*CLOUD_RING);
+  return noise3(q)*0.55+noise3(q*2.1+3.7)*0.28+noise3(q*4.3+9.1)*0.17;
+}
 void main(){
   vec4 farPt=uInvViewProj*vec4(vUv*2.-1.,1.,1.);
   vec3 dir=normalize(farPt.xyz/farPt.w-uCam);
@@ -436,17 +459,23 @@ void main(){
   vec3 col=mix(uHorizon,uZenith,pow(clamp(el,0.,1.),0.38));
   float sd=max(dot(dir,uSunDir),0.);
   col+=uSunCol*(pow(sd,700.)*6.+pow(sd,14.)*0.22+pow(sd,3.)*0.07)*(1.-0.6*uCloud);
-  if(el>0.){
-    vec2 cp=dir.xz/(el+0.08)*0.9+uTime*vec2(0.006,0.002);
-    float c=fbm2(cp*1.3)+0.5*fbm2x2(cp*3.1+5.);
-    float lo=mix(0.95,0.35,uCloud);
-    float cover=smoothstep(lo,lo+0.45,c)*smoothstep(0.,0.1,el);
-    vec3 cloudCol=mix(uHorizon*1.1,vec3(1.),0.45)*(0.75+0.25*uSunDir.y)+uSunCol*(0.04+0.12*pow(sd,2.));
-    cloudCol*=mix(1.,0.78,uCloud*smoothstep(0.8,1.4,c));
-    col=mix(col,cloudCol,cover*0.9);
+  vec2 n2=normalize(dir.xz+1e-5);
+  // A band of warm, bright air low on the horizon, strongest towards the sun.
+  col=mix(col,uHorizon*1.12,exp(-max(el,0.)*14.)*0.5);
+  col+=uSunCol*0.05*exp(-max(el,0.)*9.)*pow(sd,1.5);
+  if(el>-0.02){
+    float d0=cloudDensity(n2,el);
+    float d1=cloudDensity(n2,el+CLOUD_LIGHT_STEP);
+    float lo=mix(0.56,0.28,uCloud);
+    float cover=smoothstep(lo,lo+0.2,d0)*smoothstep(-0.02,0.03,el);
+    float top=smoothstep(-0.04,0.10,d0-d1);          // bright where there is less cloud above
+    vec3 sunTint=uSunCol/max(max(uSunCol.r,uSunCol.g),uSunCol.b);
+    vec3 bright=mix(vec3(1.),sunTint,0.65)*(0.80+0.25*uSunDir.y+0.45*pow(sd,2.));
+    vec3 base=mix(uZenith,uHorizon,0.6)*0.82;
+    vec3 cloudCol=mix(base,bright,top*(1.-0.45*uCloud));
+    col=mix(col,cloudCol,cover*0.93);
   }
   // Far hills and a nearer tree line. Sampled on a circle so there is no seam.
-  vec2 n2=normalize(dir.xz+1e-5);
   float h1=0.020+0.036*fbm2x2(n2*2.6+1.3)+0.008*noise2(n2*11.+4.);
   float h2=0.012+0.020*noise2(n2*17.+9.)+0.008*noise2(n2*80.+2.);
   // Haze gathers in the valleys: both layers pale towards their feet.

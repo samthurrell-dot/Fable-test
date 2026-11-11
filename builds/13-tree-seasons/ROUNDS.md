@@ -1,6 +1,6 @@
 # 13 – A tree through the seasons: rounds
 
-State: **draft**. v1 plus one improvement round and one speed round are done. The prompt asks for at least 4 improvement rounds, so 3 are still owed (see "Next" at the bottom).
+State: **draft**. v1 plus three rounds are done (two on the look, one on speed). The prompt asks for at least 4 improvement rounds, so at least one is still owed (see "Next" at the bottom).
 
 Checked in the desktop app's browser pane on this PC (Intel UHD Graphics 615, a low-power laptop chip). The pane was hidden during the run, so frame rate was measured with `window.__bench()` (draws frames back to back and waits for the GPU) and not from the live loop.
 
@@ -42,10 +42,20 @@ Three weakest things:
 2. **Too many noise look-ups per pixel.** Changed: two-octave noise for broad patches, snow maths skipped outside winter, four shadow taps on leaves and grass instead of nine.
 3. **No way to cope with a weak GPU at start-up.** Changed: a start-up check times three real frames, switches MSAA off above 20 ms and picks an internal resolution aimed at 13 ms. `?t=` skips the check so stills are full quality.
 
+## Round 3 (look)
+
+Three weakest things:
+1. **The sky was grey smears in every season.** Clouds were noise on a flat plane, which stretches into streaks near the horizon, and the long lens only ever sees the horizon. Autumn mixed an orange horizon with a blue zenith, which makes grey. Changed: clouds now live on a cylinder round the viewer (no smear, no seam) with bright tops and blue-grey bases; a warm band of air sits low on the horizon; autumn zenith is now a pale warm grey so the mix stays golden.
+2. **The crown was one flat green with no form.** The sun was behind the tree in every season, so the side facing the lens was all in shade. Changed: the sun's direction is now set per season (`sunAzimuth` in `engine/seasons.js`): side light in spring and summer, more from behind in autumn and winter. Whole sprays of leaves share a darker or yellower tone (`CLUMP_SIZE`) and turn similar autumn colours together. Leaves have side veins that fade out at distance; stronger gloss.
+3. **Winter snow was flat and the light was dull.** Changed: the snow surface is tilted by the slope of a broad noise so the low sun rakes across soft drifts (`SNOW_RELIEF`); mid-winter sun is stronger and warmer against a bluer sky fill.
+
+Measured after this round on the UHD 615, phone settings: full 1920×1080 with 4× MSAA 63 ms (was 55: the new clouds and veins cost about 8 ms); auto-tuned size (1075×605, no MSAA) 18 ms (was 17). The start-up check aims for 13 ms, so it now picks a slightly lower resolution.
+
 ## Next (rounds still owed)
 
-- Autumn sky is grey, not golden; summer crown is one flat green; leaves in the "crown" view are plain (no veins, no serration).
-- Winter: tree shadow on snow is faint; no snow build-up shape on the ground at the trunk.
+- Cloud cover is thin in the wide view: mostly a clean gradient. A few clear cumulus shapes would add life.
+- Leaves have no serrated edge; the autumn leaf fall still reads as a sheet on the downwind side.
+- Winter: tree shadow on snow is still faint from the wide view; no snow build-up shape on the ground at the trunk.
 - Grass blades in shade read as dark spikes at the edge of the shadow.
 - Not checked: a real phone, a real desktop GPU, the sound (written, never heard), dragging the slider by touch.
 - Bark and ground use only code-made textures. Poly Haven bark would raise realism (needs a download).

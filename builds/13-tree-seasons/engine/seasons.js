@@ -87,6 +87,7 @@ export function blossomSchedule(rand1, rand2, heightNorm) {
 // --- Light, sky and ground through the year ------------------------------------------------
 // Eight key moments, evenly spaced: key i sits at y = i / 8. Colours are linear RGB.
 //   sunElevation  degrees above the horizon
+//   sunAzimuth    radians from +z towards +x (1.57 = light from the right, 3.14 = from behind the tree)
 //   sun, sunPower colour and strength of direct light
 //   zenith, horizon   sky colours
 //   skyAmbient, groundAmbient   fill light from above and below
@@ -99,7 +100,7 @@ export function blossomSchedule(rand1, rand2, heightNorm) {
 //   saturation, tint   final colour grade
 const KEYS = [
   { // 0.000 early spring: cool morning, bare tree, last snow
-    sunElevation: 28, sun: [1.0, 0.90, 0.78], sunPower: 2.7,
+    sunElevation: 28, sunAzimuth: 1.6, sun: [1.0, 0.90, 0.78], sunPower: 2.7,
     zenith: [0.20, 0.38, 0.70], horizon: [0.62, 0.72, 0.82],
     skyAmbient: [0.30, 0.40, 0.55], groundAmbient: [0.10, 0.10, 0.07],
     fog: [0.60, 0.68, 0.76], fogDensity: 0.0045,
@@ -108,7 +109,7 @@ const KEYS = [
     saturation: 0.95, tint: [1.0, 1.0, 1.03],
   },
   { // 0.125 mid spring: blossom
-    sunElevation: 38, sun: [1.0, 0.94, 0.84], sunPower: 3.2,
+    sunElevation: 38, sunAzimuth: 1.5, sun: [1.0, 0.94, 0.84], sunPower: 3.2,
     zenith: [0.16, 0.36, 0.74], horizon: [0.60, 0.74, 0.88],
     skyAmbient: [0.30, 0.42, 0.60], groundAmbient: [0.09, 0.14, 0.05],
     fog: [0.62, 0.74, 0.86], fogDensity: 0.004,
@@ -117,7 +118,7 @@ const KEYS = [
     saturation: 1.05, tint: [1.0, 1.0, 1.0],
   },
   { // 0.250 early summer
-    sunElevation: 48, sun: [1.0, 0.96, 0.88], sunPower: 3.6,
+    sunElevation: 48, sunAzimuth: 1.45, sun: [1.0, 0.96, 0.88], sunPower: 3.6,
     zenith: [0.12, 0.32, 0.75], horizon: [0.55, 0.72, 0.90],
     skyAmbient: [0.28, 0.40, 0.60], groundAmbient: [0.08, 0.13, 0.04],
     fog: [0.60, 0.74, 0.88], fogDensity: 0.0036,
@@ -126,7 +127,7 @@ const KEYS = [
     saturation: 1.05, tint: [1.0, 1.0, 1.0],
   },
   { // 0.375 mid summer: high sun, warm haze
-    sunElevation: 52, sun: [1.0, 0.95, 0.86], sunPower: 3.8,
+    sunElevation: 52, sunAzimuth: 1.45, sun: [1.0, 0.95, 0.86], sunPower: 3.8,
     zenith: [0.07, 0.24, 0.72], horizon: [0.50, 0.68, 0.90],
     skyAmbient: [0.28, 0.38, 0.56], groundAmbient: [0.09, 0.12, 0.04],
     fog: [0.66, 0.74, 0.82], fogDensity: 0.0035,
@@ -135,8 +136,8 @@ const KEYS = [
     saturation: 1.03, tint: [1.02, 1.0, 0.98],
   },
   { // 0.500 early autumn
-    sunElevation: 36, sun: [1.0, 0.86, 0.66], sunPower: 3.4,
-    zenith: [0.14, 0.30, 0.64], horizon: [0.72, 0.72, 0.70],
+    sunElevation: 36, sunAzimuth: 1.8, sun: [1.0, 0.86, 0.66], sunPower: 3.4,
+    zenith: [0.16, 0.30, 0.62], horizon: [0.80, 0.72, 0.60],
     skyAmbient: [0.30, 0.36, 0.48], groundAmbient: [0.10, 0.11, 0.045],
     fog: [0.74, 0.72, 0.66], fogDensity: 0.005,
     grassDark: [0.075, 0.13, 0.03], grassLight: [0.23, 0.25, 0.06], grassHeight: 0.9,
@@ -144,8 +145,8 @@ const KEYS = [
     saturation: 1.05, tint: [1.03, 1.0, 0.96],
   },
   { // 0.625 mid autumn: low golden light, mist
-    sunElevation: 22, sun: [1.0, 0.72, 0.42], sunPower: 3.6,
-    zenith: [0.16, 0.28, 0.55], horizon: [0.90, 0.72, 0.50],
+    sunElevation: 22, sunAzimuth: 2.05, sun: [1.0, 0.72, 0.42], sunPower: 3.6,
+    zenith: [0.36, 0.38, 0.46], horizon: [1.05, 0.66, 0.30],
     skyAmbient: [0.36, 0.36, 0.42], groundAmbient: [0.13, 0.10, 0.05],
     fog: [0.86, 0.70, 0.50], fogDensity: 0.007,
     grassDark: [0.095, 0.115, 0.03], grassLight: [0.27, 0.22, 0.07], grassHeight: 0.75,
@@ -153,7 +154,7 @@ const KEYS = [
     saturation: 1.08, tint: [1.05, 1.0, 0.93],
   },
   { // 0.750 early winter: overcast, first snow
-    sunElevation: 16, sun: [0.95, 0.85, 0.78], sunPower: 1.8,
+    sunElevation: 16, sunAzimuth: 2.0, sun: [0.95, 0.85, 0.78], sunPower: 1.8,
     zenith: [0.42, 0.48, 0.56], horizon: [0.74, 0.76, 0.80],
     skyAmbient: [0.55, 0.60, 0.70], groundAmbient: [0.12, 0.12, 0.10],
     fog: [0.72, 0.75, 0.80], fogDensity: 0.011,
@@ -162,9 +163,9 @@ const KEYS = [
     saturation: 0.88, tint: [0.98, 1.0, 1.04],
   },
   { // 0.875 mid winter: pale sun on snow
-    sunElevation: 15, sun: [1.0, 0.86, 0.72], sunPower: 2.5,
+    sunElevation: 15, sunAzimuth: 1.9, sun: [1.0, 0.84, 0.68], sunPower: 3.6,
     zenith: [0.30, 0.42, 0.62], horizon: [0.82, 0.80, 0.82],
-    skyAmbient: [0.50, 0.60, 0.80], groundAmbient: [0.12, 0.13, 0.12],
+    skyAmbient: [0.38, 0.48, 0.72], groundAmbient: [0.12, 0.13, 0.12],
     fog: [0.78, 0.81, 0.88], fogDensity: 0.009,
     grassDark: [0.09, 0.09, 0.045], grassLight: [0.19, 0.17, 0.08], grassHeight: 0.45,
     hill: [0.10, 0.11, 0.11], cloud: 0.42, shadow: 0.92, wind: 0.5,
@@ -172,7 +173,6 @@ const KEYS = [
   },
 ];
 
-const SUN_AZIMUTH = 2.18;   // radians from +z towards +x; the sun sits ahead and to the right of the start view
 const SNOW_BOUNCE = [0.50, 0.56, 0.68]; // light thrown back up by lying snow
 const SNOW_ON_HILLS = [0.72, 0.76, 0.84];
 
@@ -196,7 +196,7 @@ export function seasonState(y) {
   out.snow = snow;
   out.snowFall = snowFall(y);
   out.canopy = canopy(y);
-  out.sunDir = [Math.sin(SUN_AZIMUTH) * Math.cos(el), Math.sin(el), Math.cos(SUN_AZIMUTH) * Math.cos(el)];
+  out.sunDir = [Math.sin(out.sunAzimuth) * Math.cos(el), Math.sin(el), Math.cos(out.sunAzimuth) * Math.cos(el)];
   out.sunColour = out.sun.map((c) => c * out.sunPower);
   out.groundAmbient = mix3(out.groundAmbient, SNOW_BOUNCE, snow * 0.85);
   out.hill = mix3(out.hill, SNOW_ON_HILLS, snow * 0.8);

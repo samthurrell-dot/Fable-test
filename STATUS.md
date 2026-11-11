@@ -10,7 +10,7 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 - [x] Ready prompts in `prompts/ready/`.
 
 ## In progress
-- **13-tree-seasons** – DRAFT. v1 + round 1 (look) + round 2 (speed) done and working on `main`. 3 improvement rounds still owed. What to fix next is listed at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
+- **13-tree-seasons** – DRAFT. v1 + round 1 (look) + round 2 (speed) + round 3 (look) done and working on `main`. At least 1 improvement round still owed. What to fix next is listed at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
   - Why 13 was run first and not 06: it is the shortest Fable-ranked run (55 min cap), needs no Blender and no downloads, and has the highest reuse score in `plan/viability.md`. 06 and 15 are still to run.
 
 ## Next
@@ -22,4 +22,4 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 ## Build log
 | Build | Model + effort | State | Rounds done | Link |
 |---|---|---|---|---|
-| 13-tree-seasons | Fable 5.2, default effort | Draft, works | v1 + 2 of 4 | `builds/13-tree-seasons/index.html` |
+| 13-tree-seasons | Fable 5.2, default effort | Draft, works | v1 + 3 of 4 | `builds/13-tree-seasons/index.html` |
