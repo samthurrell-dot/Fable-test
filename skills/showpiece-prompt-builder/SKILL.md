@@ -108,6 +108,10 @@ Add this block after "Hard rules" when the build is for Sam (edit as needed):
 
 And add the **harvest clause** from `templates/fixed-blocks.md` whenever the code should become reusable knowledge.
 
+For long runs that may hit a usage limit, add a **checkpoints block**: commit and push after v1 and every round, keep `ROUNDS.md`, update `STATUS.md`, never leave `main` broken (use a `wip/<build>` branch). The ready prompts in `samthurrell-dot/Fable-test/prompts/ready/` show the exact wording.
+
+Templates live in `samthurrell-dot/Fable-test` under `skills/showpiece-prompt-builder/templates/`. If they are not to hand, copy blocks 1, 3, 4 and 5 from any prompt in `reference/maker-skool-prompts/prompts/` in that repo.
+
 ---
 
 ## 6. Steps
