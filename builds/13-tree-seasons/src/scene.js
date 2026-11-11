@@ -6,7 +6,7 @@
 //   scene.resize(widthPx, heightPx);
 //   scene.render({ time, year, eye, target, fovY, focus });
 
-import { createProgram, setUniforms, createBuffer, bindAttributes, createShadowTarget, createSceneTarget } from '../engine/glkit.js';
+import { createPrograms, setUniforms, createBuffer, bindAttributes, createShadowTarget, createSceneTarget } from '../engine/glkit.js';
 import * as M from '../engine/mat4.js';
 import { LEAF_STRIDE, LEAF_LAYOUT, MESH_STRIDE, mulberry32 } from '../engine/tree.js';
 import { seasonState, leafSchedule, blossomSchedule, TIMING } from '../engine/seasons.js';
@@ -54,17 +54,17 @@ export function createScene(canvas, tree, quality) {
   if (!gl) throw new Error('WebGL2 is not available in this browser.');
   const hdr = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
 
-  const P = {
-    bark: createProgram(gl, SHADERS.barkVS, SHADERS.barkFS, 'bark'),
-    barkShadow: createProgram(gl, SHADERS.barkShadowVS, SHADERS.depthOnlyFS, 'bark shadow'),
-    leaf: createProgram(gl, SHADERS.leafVS, SHADERS.leafFS, 'leaf'),
-    leafShadow: createProgram(gl, SHADERS.leafShadowVS, SHADERS.depthOnlyFS, 'leaf shadow'),
-    ground: createProgram(gl, SHADERS.groundVS, SHADERS.groundFS, 'ground'),
-    grass: createProgram(gl, SHADERS.grassVS, SHADERS.grassFS, 'grass'),
-    sky: createProgram(gl, SHADERS.screenVS, SHADERS.skyFS, 'sky'),
-    flake: createProgram(gl, SHADERS.flakeVS, SHADERS.flakeFS, 'snowflakes'),
-    post: createProgram(gl, SHADERS.screenVS, SHADERS.postFS, 'lens'),
-  };
+  const P = createPrograms(gl, {
+    bark: [SHADERS.barkVS, SHADERS.barkFS],
+    barkShadow: [SHADERS.barkShadowVS, SHADERS.depthOnlyFS],
+    leaf: [SHADERS.leafVS, SHADERS.leafFS],
+    leafShadow: [SHADERS.leafShadowVS, SHADERS.depthOnlyFS],
+    ground: [SHADERS.groundVS, SHADERS.groundFS],
+    grass: [SHADERS.grassVS, SHADERS.grassFS],
+    sky: [SHADERS.screenVS, SHADERS.skyFS],
+    flake: [SHADERS.flakeVS, SHADERS.flakeFS],
+    post: [SHADERS.screenVS, SHADERS.postFS],
+  });
 
   // --- Bark ---------------------------------------------------------------------------------
   const barkVao = gl.createVertexArray();

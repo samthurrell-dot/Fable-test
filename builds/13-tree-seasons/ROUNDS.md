@@ -51,6 +51,18 @@ Three weakest things:
 
 Measured after this round on the UHD 615, phone settings: full 1920×1080 with 4× MSAA 63 ms (was 55: the new clouds and veins cost about 8 ms); auto-tuned size (1075×605, no MSAA) 18 ms (was 17). The start-up check aims for 13 ms, so it now picks a slightly lower resolution.
 
+## Load time and the site home page (not an improvement round)
+
+Sam put the repo on GitHub Pages and found two things: the site address showed the README, not a page, and the tree took a long time to appear.
+
+- **Home page.** The repo had no `index.html` at the top, so Pages rendered the README. Added a home page that links to the build, and `.nojekyll` so Pages serves the files as they are (no Jekyll step on each push).
+- **Load time.** Measured on the live site before the change: scripts arrived in three waves (about 750 ms), then about 890 ms of work before the first picture, with a blank screen throughout. Changes:
+  - all eight scripts are preloaded together (`modulepreload`), not found one wave at a time;
+  - the nine GPU programs are compiled side by side (`createPrograms` in `engine/glkit.js`), not one after another;
+  - the start-up speed check now times two frames at half size and works out the rest (115 ms, was about 550 ms), and the answer is remembered on the device for a week (10 ms on later visits);
+  - a "Growing the tree…" line on a sky-and-grass backdrop shows at once, and start-up pauses between steps so the browser can paint it.
+- **Measured after, locally on the UHD 615:** first visit 580 ms from script start to first picture (tree 300, GPU programs 130, speed check 115); later visits 300 ms. Not measured: a truly cold first visit, where the browser has never compiled these shaders. That is likely to be slower.
+
 ## Next (rounds still owed)
 
 - Cloud cover is thin in the wide view: mostly a clean gradient. A few clear cumulus shapes would add life.

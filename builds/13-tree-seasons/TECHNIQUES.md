@@ -84,7 +84,8 @@ One-pass depth of field: a golden-angle spiral gather where each sample counts o
 
 - Draw near things first and the sky last on the far plane: saved about 25% at full resolution.
 - 4× MSAA on a half-float target costs about 30–45% on this GPU. Worth it on a strong GPU for the twigs; switched off by the start-up check on a weak one.
-- Start-up check (`frameCost` in `src/main.js`): times three frames with `readPixels` to force the GPU to finish, then sets MSAA and resolution. A running check lowers resolution further if frames stay over 21 ms.
+- Start-up check (`frameCost` in `src/main.js`): times two frames at half size, with `readPixels` to force the GPU to finish, scales the result up by a measured factor (2.5), then sets MSAA and resolution. The answer is kept in `localStorage` for a week. A running check lowers resolution further if frames stay over 21 ms. `?tune=fresh` measures again.
+- Start-up: `createPrograms` in `engine/glkit.js` starts every shader compile and link before asking for any result, so the browser can build them side by side.
 - Phone settings: 3,200 twigs, 22,400 leaves drawn 1.5× larger, 14,000 grass blades, 1024 shadow map.
 
 ## Not done yet (honest list)

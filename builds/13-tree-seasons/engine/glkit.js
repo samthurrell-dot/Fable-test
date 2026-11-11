@@ -34,6 +34,41 @@ export function createProgram(gl, vsSrc, fsSrc, label = 'program') {
   return { program, uniforms, label };
 }
 
+// Builds several programs at once: { name: [vertexSource, fragmentSource] } -> { name: program }.
+// Every compile and link is started before any result is asked for, so the browser can
+// compile them side by side instead of one after another. Much faster on a cold start.
+export function createPrograms(gl, specs) {
+  gl.getExtension('KHR_parallel_shader_compile');
+  const pending = [];
+  for (const name in specs) {
+    const [vsSrc, fsSrc] = specs[name];
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, vsSrc); gl.compileShader(vs);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fsSrc); gl.compileShader(fs);
+    const program = gl.createProgram();
+    gl.attachShader(program, vs); gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    pending.push({ name, program, vs, fs });
+  }
+  const out = {};
+  for (const p of pending) {
+    if (!gl.getProgramParameter(p.program, gl.LINK_STATUS)) {
+      const log = [gl.getShaderInfoLog(p.vs), gl.getShaderInfoLog(p.fs), gl.getProgramInfoLog(p.program)].filter(Boolean).join('\n');
+      console.error(`Program failed (${p.name})\n${log}`);
+      throw new Error(`Program failed (${p.name}): ${log}`);
+    }
+    const uniforms = {};
+    const n = gl.getProgramParameter(p.program, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(p.program, i);
+      uniforms[info.name.replace(/\[0\]$/, '')] = { loc: gl.getUniformLocation(p.program, info.name), type: info.type };
+    }
+    out[p.name] = { program: p.program, uniforms, label: p.name };
+  }
+  return out;
+}
+
 // Sets every uniform the program actually uses from a plain { name: value } object.
 // Names the program does not use are skipped, so one shared object can feed all programs.
 export function setUniforms(gl, prog, values) {

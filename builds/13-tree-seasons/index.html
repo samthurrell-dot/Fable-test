@@ -5,13 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>A tree through the seasons</title>
 <meta name="description" content="One tree, grown in code, through spring, summer, autumn and winter.">
+<link rel="modulepreload" href="src/main.js">
+<link rel="modulepreload" href="src/scene.js">
+<link rel="modulepreload" href="src/shaders.js">
+<link rel="modulepreload" href="src/sound.js">
+<link rel="modulepreload" href="engine/tree.js">
+<link rel="modulepreload" href="engine/seasons.js">
+<link rel="modulepreload" href="engine/glkit.js">
+<link rel="modulepreload" href="engine/mat4.js">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
   :root { --ink: rgba(255, 255, 255, 0.92); --soft: rgba(255, 255, 255, 0.68); --line: rgba(255, 255, 255, 0.38); }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #8fa5b8; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(#8aa0b6 0%, #b9c6cf 55%, #7f9a55 56%, #6f8b45 100%); }
   body { font-family: 'EB Garamond', Georgia, 'Times New Roman', serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
   #scene:active { cursor: grabbing; }
@@ -37,6 +45,7 @@
   input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35); }
   .ticks { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 14px; color: var(--soft); text-align: center; margin-top: -6px; }
   #stats { position: fixed; left: 20px; top: 84px; font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--ink); }
+  #loading { position: fixed; left: 0; right: 0; top: 44%; text-align: center; font-size: 20px; font-style: italic; pointer-events: none; }
   #error { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font-size: 18px; background: #26323a; }
   [hidden] { display: none !important; }
   @media (max-width: 520px) {
@@ -61,6 +70,7 @@
     <div class="ticks" aria-hidden="true"><span>Spring</span><span>Summer</span><span>Autumn</span><span>Winter</span></div>
   </div>
 </div>
+<div id="loading" class="shade" role="status">Growing the tree…</div>
 <div id="stats" class="shade" hidden></div>
 <div id="error" hidden></div>
 <script type="module" src="src/main.js"></script>

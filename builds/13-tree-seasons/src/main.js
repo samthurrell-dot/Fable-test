@@ -7,6 +7,7 @@
 //   ?view=crown      camera: wide (default), crown, ground
 //   ?stats=1         show frame rate and counts
 //   ?quality=phone   force the phone settings (or desktop)
+//   ?tune=fresh      measure this device's speed again (tune=0 skips the check)
 
 import { growTree } from '../engine/tree.js';
 import { SEASON_STILLS, seasonName } from '../engine/seasons.js';
@@ -24,6 +25,10 @@ const TARGET_FRAME_MS = 21;     // above this the picture is rendered at a lower
 const MIN_SCALE = 0.45;         // lowest internal resolution as a share of full
 const TUNE_BUDGET_MS = 13;      // start-up check: aim for a frame that costs this much
 const TUNE_MSAA_LIMIT_MS = 20;  // slower than this at start-up and multisampling is switched off
+const TUNE_PROBE_SCALE = 0.5;   // the check draws at this share of full size, so it is quick
+const TUNE_FILL_FACTOR = 2.5;   // measured: a full-size frame costs this many half-size frames
+const TUNE_MSAA_SAVING = 0.72;  // measured: frame cost with multisampling off, as a share of on
+const TUNE_KEEP_DAYS = 7;       // the result is remembered on this device for this long
 
 // Camera presets. distance and height in metres, fov in degrees.
 const VIEWS = {
@@ -50,12 +55,28 @@ const isPhone = params.get('quality') === 'phone' ||
   (params.get('quality') !== 'desktop' && (Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches));
 const quality = isPhone ? QUALITY.phone : QUALITY.desktop;
 
+// Start-up is done in steps with a pause between, so the page can paint its loading line first.
+const loading = document.getElementById('loading');
+const pause = () => new Promise((done) => {
+  const t = setTimeout(done, 60);   // a hidden tab never gets an animation frame; do not wait for one
+  requestAnimationFrame(() => { clearTimeout(t); setTimeout(done, 0); });
+});
+const boot = { start: performance.now() };
+window.__boot = boot;
+
 let scene, sound;
 try {
+  await pause();
+  let mark = performance.now();
   const tree = growTree({ twigs: quality.twigs });
+  boot.treeMs = performance.now() - mark;
+  await pause();
+  mark = performance.now();
   scene = createScene(canvas, tree, quality);
+  boot.sceneMs = performance.now() - mark;
   window.__tree = tree.stats;
 } catch (err) {
+  loading.hidden = true;
   document.getElementById('error').textContent = 'This page needs WebGL2. ' + err.message;
   document.getElementById('error').hidden = false;
   throw err;
@@ -141,25 +162,40 @@ function frameCost(n) {
   const shot = { time: 0, year: 0.38, eye: [0, v.height, v.distance], target: v.target, fovY: (v.fov * Math.PI) / 180, focus: v.distance, yearSeconds: YEAR_SECONDS };
   const px = new Uint8Array(4);
   const once = () => { scene.render(shot); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); };
-  once(); once();
+  once();   // the first frame also pays for setting up the GPU programs, so it is not timed
   const t0 = performance.now();
   for (let i = 0; i < n; i++) once();
   return (performance.now() - t0) / n;
 }
-const tune = { cost: 0, scale: 1, msaa: quality.msaa };
+const tune = { cost: 0, scale: 1, msaa: quality.msaa, from: 'off' };
+const tuneKey = `tree13-tune-${isPhone ? 'phone' : 'desktop'}-${innerWidth}x${innerHeight}@${window.devicePixelRatio || 1}`;
+const saveTune = () => {
+  try { localStorage.setItem(tuneKey, JSON.stringify({ scale, msaa: tune.msaa, when: Date.now() })); } catch (e) { /* private mode: just measure again next time */ }
+};
 if (!frozen && params.get('tune') !== '0') {
-  let cost = frameCost(3);
-  tune.cost = cost;
-  if (cost > TUNE_MSAA_LIMIT_MS) {
-    scene.setMsaa(0);
-    tune.msaa = 0;
-    cost = frameCost(2);
-  }
-  if (cost > TUNE_BUDGET_MS) {
-    scale = Math.max(MIN_SCALE, Math.min(1, Math.sqrt(TUNE_BUDGET_MS / cost)));
+  await pause();
+  const mark = performance.now();
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(tuneKey)); } catch (e) { saved = null; }
+  if (params.get('tune') !== 'fresh' && saved && saved.scale >= MIN_SCALE && saved.scale <= 1 && Date.now() - saved.when < TUNE_KEEP_DAYS * 864e5) {
+    // Seen this device and window size before: reuse the answer and skip the check.
+    if (saved.msaa === 0) { scene.setMsaa(0); tune.msaa = 0; }
+    scale = saved.scale;
+    tune.from = 'saved';
+  } else {
+    // Time two frames at half size and work out what a full-size frame would cost.
+    scale = TUNE_PROBE_SCALE;
     applySize();
+    let cost = frameCost(2) * TUNE_FILL_FACTOR;
+    tune.cost = cost;
+    if (cost > TUNE_MSAA_LIMIT_MS) { scene.setMsaa(0); tune.msaa = 0; cost *= TUNE_MSAA_SAVING; }
+    scale = Math.max(MIN_SCALE, Math.min(1, Math.sqrt(TUNE_BUDGET_MS / cost)));
+    tune.from = 'measured';
+    saveTune();
   }
+  applySize();
   tune.scale = scale;
+  boot.tuneMs = performance.now() - mark;
 }
 window.__tune = tune;
 
@@ -204,6 +240,7 @@ function frame(now) {
   const focus = Math.hypot(eye[0] - cam.target[0], eye[1] - cam.target[1], eye[2] - cam.target[2]);
 
   const st = scene.render({ time, year: y, eye, target: cam.target, fovY, focus, yearSeconds: YEAR_SECONDS });
+  if (!loading.hidden) { loading.hidden = true; boot.totalMs = performance.now() - boot.start; }
   sound.update(st);
 
   // Frame rate, and a lower internal resolution when frames take too long.
@@ -217,6 +254,7 @@ function frame(now) {
       scale = Math.max(MIN_SCALE, scale * 0.85);
       slowFrames = 0; frames = 0;
       applySize();
+      saveTune();
     }
   }
   if (statsBox && !statsBox.hidden && frames % 20 === 0) {
