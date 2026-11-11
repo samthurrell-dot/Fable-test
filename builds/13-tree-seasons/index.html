@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A tree through the seasons</title>
+<meta name="description" content="One tree, grown in code, through spring, summer, autumn and winter.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: rgba(255, 255, 255, 0.92); --soft: rgba(255, 255, 255, 0.68); --line: rgba(255, 255, 255, 0.38); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8fa5b8; }
+  body { font-family: 'EB Garamond', Georgia, 'Times New Roman', serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #scene:active { cursor: grabbing; }
+  .shade { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0, 0, 0, 0.25); }
+  header { position: fixed; left: max(20px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); pointer-events: none; max-width: min(70vw, 420px); }
+  h1 { margin: 0; font-weight: 500; font-size: 22px; letter-spacing: 0.01em; }
+  header p { margin: 4px 0 0; font-size: 15px; font-style: italic; color: var(--soft); line-height: 1.3; }
+  button { font: inherit; font-size: 15px; color: var(--ink); background: rgba(20, 28, 34, 0.28); border: 1px solid var(--line);
+    border-radius: 999px; padding: 9px 16px; min-height: 44px; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  button:hover, button:focus-visible { background: rgba(20, 28, 34, 0.45); outline: none; border-color: rgba(255, 255, 255, 0.7); }
+  #sound { position: fixed; right: max(20px, env(safe-area-inset-right)); top: max(16px, env(safe-area-inset-top)); }
+  .dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(18px, env(safe-area-inset-bottom)); width: min(620px, calc(100vw - 32px));
+    display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; }
+  #season-name { grid-column: 1; font-size: 26px; font-weight: 500; line-height: 1; }
+  #view { grid-column: 2; grid-row: 1; }
+  .track { grid-column: 1 / -1; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; margin: 0; background: transparent; cursor: pointer; touch-action: none; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--line); }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -12px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95); border: 0; box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+  input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.95); border: 0; box-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35); }
+  .ticks { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 14px; color: var(--soft); text-align: center; margin-top: -6px; }
+  #stats { position: fixed; left: 20px; top: 84px; font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--ink); }
+  #error { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font-size: 18px; background: #26323a; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) {
+    h1 { font-size: 19px; } header p { font-size: 14px; max-width: 58vw; }
+    #season-name { font-size: 22px; }
+    button { padding: 8px 13px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="A tree in a meadow, changing through the four seasons"></canvas>
+<header class="shade">
+  <h1>A tree through the seasons</h1>
+  <p>Drag the slider to change the season. Drag the picture to look around.</p>
+</header>
+<button id="sound" type="button" aria-pressed="false">Enable sound</button>
+<div class="dock shade">
+  <div id="season-name" aria-live="polite">Spring</div>
+  <button id="view" type="button">View: whole tree</button>
+  <div class="track">
+    <input id="year" type="range" min="0" max="1000" step="1" value="105" aria-label="Time of year">
+    <div class="ticks" aria-hidden="true"><span>Spring</span><span>Summer</span><span>Autumn</span><span>Winter</span></div>
+  </div>
+</div>
+<div id="stats" class="shade" hidden></div>
+<div id="error" hidden></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
