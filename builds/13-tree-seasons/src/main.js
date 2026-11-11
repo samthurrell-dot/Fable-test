@@ -10,6 +10,7 @@
 //   ?stats=1         show frame rate and counts
 //   ?quality=phone   force the phone settings (or desktop)
 //   ?tune=fresh      measure this device's speed again (tune=0 skips the check)
+//   ?pace=60         force smooth (60) or sharp (30) frames a second; left out, the page chooses
 
 import { growTree } from '../engine/tree.js';
 import { SEASON_STILLS, seasonName } from '../engine/seasons.js';
@@ -34,6 +35,12 @@ const TUNE_PROBE_SCALE = 0.5;   // the check draws at this share of full size, s
 const TUNE_FILL_FACTOR = 2.5;   // measured: a full-size frame costs this many half-size frames
 const TUNE_MSAA_SAVING = 0.72;  // measured: frame cost with multisampling off, as a share of on
 const TUNE_KEEP_DAYS = 7;       // the result is remembered on this device for this long
+// A slow graphics chip cannot give both a sharp picture and 60 frames a second. Below this share
+// of full resolution the picture is too soft to be worth it, so the page halves the frame rate
+// instead and spends the time on detail. This is a slow scene; 30 frames a second suits it.
+const SHARP_MIN_SCALE = 0.72;
+const SHARP_BUDGET_MS = 27;     // start-up check when running at 30: aim for a frame that costs this much
+const SHARP_MSAA_SCALE = 0.8;   // at 30, keep multisampling only if the picture can still be at least this size
 
 // Camera presets. distance and height in metres, fov in degrees.
 // blur scales the depth of field: a close view would otherwise blur everything but one thin slice.
@@ -177,40 +184,55 @@ function frameCost(n) {
   for (let i = 0; i < n; i++) { const t0 = performance.now(); once(); best = Math.min(best, performance.now() - t0); }
   return best;
 }
-const tune = { cost: 0, scale: 1, msaa: quality.msaa, from: 'off' };
-const tuneKey = `tree13-tune-${isPhone ? 'phone' : 'desktop'}-${innerWidth}x${innerHeight}@${window.devicePixelRatio || 1}`;
+const tune = { cost: 0, scale: 1, msaa: quality.msaa, from: 'off', pace: 60 };
+let pace = 60;   // frames a second the page aims for: 60, or 30 on a slow graphics chip
+const tuneKey = `tree13-tune2-${isPhone ? 'phone' : 'desktop'}-${innerWidth}x${innerHeight}@${window.devicePixelRatio || 1}`;
 const saveTune = () => {
-  try { localStorage.setItem(tuneKey, JSON.stringify({ scale, msaa: tune.msaa, when: Date.now() })); } catch (e) { /* private mode: just measure again next time */ }
+  try { localStorage.setItem(tuneKey, JSON.stringify({ scale, msaa: tune.msaa, pace, when: Date.now() })); } catch (e) { /* private mode: just measure again next time */ }
 };
 if (!frozen && params.get('tune') !== '0') {
   await pause();
   const mark = performance.now();
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(tuneKey)); } catch (e) { saved = null; }
-  if (params.get('tune') !== 'fresh' && saved && saved.scale >= MIN_SCALE && saved.scale <= 1 && Date.now() - saved.when < TUNE_KEEP_DAYS * 864e5) {
+  if (params.get('tune') !== 'fresh' && !params.has('pace') && saved && saved.scale >= MIN_SCALE && saved.scale <= 1 && Date.now() - saved.when < TUNE_KEEP_DAYS * 864e5) {
     // Seen this device and window size before: reuse the answer and skip the check.
     if (saved.msaa === 0) { scene.setMsaa(0); tune.msaa = 0; }
     scale = saved.scale;
+    pace = saved.pace === 30 ? 30 : 60;
     tune.from = 'saved';
   } else {
     // Time a few frames at half size and work out what a full-size frame would cost.
     scale = TUNE_PROBE_SCALE;
     applySize();
-    let cost = frameCost(3) * TUNE_FILL_FACTOR;
-    tune.cost = cost;
-    if (cost > TUNE_MSAA_LIMIT_MS) { scene.setMsaa(0); tune.msaa = 0; cost *= TUNE_MSAA_SAVING; }
-    scale = Math.max(MIN_SCALE, Math.min(1, Math.sqrt(TUNE_BUDGET_MS / cost)));
+    const full = frameCost(3) * TUNE_FILL_FACTOR;          // a full-size frame with multisampling
+    tune.cost = full;
+    const plain = full * TUNE_MSAA_SAVING;                 // the same without it
+    const fit = (budget, cost) => Math.sqrt(budget / cost);
+    const smooth = full > TUNE_MSAA_LIMIT_MS ? fit(TUNE_BUDGET_MS, plain) : fit(TUNE_BUDGET_MS, full);
+    const wantPace = params.get('pace') === '30' ? 30 : params.get('pace') === '60' ? 60 : smooth < SHARP_MIN_SCALE ? 30 : 60;
+    let msaaOn;
+    if (wantPace === 60) {
+      msaaOn = full <= TUNE_MSAA_LIMIT_MS;
+      scale = smooth;
+    } else {
+      msaaOn = fit(SHARP_BUDGET_MS, full) >= SHARP_MSAA_SCALE;
+      scale = fit(SHARP_BUDGET_MS, msaaOn ? full : plain);
+    }
+    pace = wantPace;
+    if (!msaaOn) { scene.setMsaa(0); tune.msaa = 0; }
+    scale = Math.max(MIN_SCALE, Math.min(1, scale));
     tune.from = 'measured';
     saveTune();
   }
   applySize();
-  tune.scale = scale;
+  tune.scale = scale; tune.pace = pace;
   boot.tuneMs = performance.now() - mark;
 }
 window.__tune = tune;
 
 // --- Loop -------------------------------------------------------------------------------------
-let last = performance.now(), emaMs = 16.7, slowFrames = 0, steadyFrames = 0, frames = 0;
+let last = performance.now(), emaMs = 1000 / pace, slowFrames = 0, steadyFrames = 0, frames = 0;
 let ceiling = 1;   // the highest resolution worth trying; lowered each time a step up proves too slow
 let trial = null;  // the last step down, kept until we know whether it made frames any quicker
 let capped = false; // true when frames are slow for a reason resolution cannot fix (for example a 30 fps power saver)
@@ -218,6 +240,8 @@ const stats = { fps: 60, ms: 16.7, scale: 1 };
 window.__stats = stats;
 
 function frame(now) {
+  // At 30 frames a second, draw on every other tick of a 60 Hz screen, so the frames are evenly spaced.
+  if (pace === 30 && now - last < 1000 / 30 - 5) { requestAnimationFrame(frame); return; }
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (!frozen) {
@@ -283,13 +307,14 @@ function frame(now) {
   // Frame rate, and a lower internal resolution when frames take too long.
   const ms = now - (frame.prev || now); frame.prev = now;
   if (ms > 0 && ms < 500) emaMs = emaMs * 0.92 + ms * 0.08;
-  stats.ms = emaMs; stats.fps = 1000 / emaMs; stats.scale = scale; stats.capped = capped;
+  stats.ms = emaMs; stats.fps = 1000 / emaMs; stats.scale = scale; stats.capped = capped; stats.pace = pace;
   frames++;
   if (!frozen && frames > 40) {
     // Resolution finds its own level: down a step when frames run slow, up a step after a long
     // smooth spell. A step up that fails sets a ceiling just below it, so it does not see-saw.
-    slowFrames = emaMs > TARGET_FRAME_MS ? slowFrames + 1 : 0;
-    steadyFrames = emaMs <= SMOOTH_FRAME_MS ? steadyFrames + 1 : 0;
+    const slack = pace === 30 ? 2 : 1;   // at 30 a frame has twice as long
+    slowFrames = emaMs > TARGET_FRAME_MS * slack ? slowFrames + 1 : 0;
+    steadyFrames = emaMs <= SMOOTH_FRAME_MS * slack ? steadyFrames + 1 : 0;
     if (trial && frames > 70) {
       // Did the last step down buy anything? If not, the browser is holding the frame rate down
       // itself (a power saver, a 30 Hz screen). Put the resolution back and stop adjusting.

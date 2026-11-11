@@ -6,7 +6,7 @@
 //   scene.resize(widthPx, heightPx);
 //   scene.render({ time, year, eye, target, fovY, focus });
 
-import { createPrograms, setUniforms, createBuffer, bindAttributes, createShadowTarget, createSceneTarget } from '../engine/glkit.js';
+import { createPrograms, setUniforms, createBuffer, bindAttributes, createTexture, createShadowTarget, createSceneTarget } from '../engine/glkit.js';
 import * as M from '../engine/mat4.js';
 import { LEAF_STRIDE, LEAF_LAYOUT, MESH_STRIDE, mulberry32 } from '../engine/tree.js';
 import { seasonState, leafSchedule, blossomSchedule, TIMING } from '../engine/seasons.js';
@@ -21,6 +21,8 @@ const GRASS_RADIUS = 26;        // blades are scattered inside this radius, metr
 const EXPOSURE = 0.92;          // overall brightness before the film curve
 const MOTES = 900;              // most specks of pollen and seed fluff in the summer air
 const COC_SCALE_1080 = 460;     // blur strength at 1080 px height (see shaders.js, uCocScale)
+const GLOW = 0.11;              // how much glow bright things spill round themselves (0 = none)
+const GLOW_SHRINK = 4;          // the glow is worked out at this fraction of the picture's size
 
 function leafMesh() {
   // Midrib points and edge points of one ovate leaf, zipped into triangles.
@@ -39,6 +41,26 @@ function leafMesh() {
   };
   addSide(-1); addSide(1);
   return { vertices: new Float32Array(v), indices: new Uint16Array(idx) };
+}
+
+// A 256 x 256 texture of random numbers for the shaders' noise (see NOISE in shaders.js).
+// Red is random; green is red shifted by (37, 17), which lets one lookup give two layers of 3D noise.
+function noiseTexture(gl) {
+  const N = 256, rnd = mulberry32(2024), red = new Uint8Array(N * N), px = new Uint8Array(N * N * 2);
+  for (let i = 0; i < red.length; i++) red[i] = Math.floor(rnd() * 256);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    px[(y * N + x) * 2] = red[y * N + x];
+    px[(y * N + x) * 2 + 1] = red[((y + 17) % N) * N + ((x + 37) % N)];
+  }
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG8, N, N, 0, gl.RG, gl.UNSIGNED_BYTE, px);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  return t;
 }
 
 function quadMesh() {
@@ -66,6 +88,8 @@ export function createScene(canvas, tree, quality) {
     sky: [SHADERS.screenVS, SHADERS.skyFS],
     flake: [SHADERS.flakeVS, SHADERS.flakeFS],
     post: [SHADERS.screenVS, SHADERS.postFS],
+    bright: [SHADERS.screenVS, SHADERS.brightFS],
+    blur: [SHADERS.screenVS, SHADERS.blurFS],
     critter: [SHADERS.critterVS, SHADERS.critterFS],
     critterShadow: [SHADERS.critterShadowVS, SHADERS.depthOnlyFS],
     fur: [SHADERS.furVS, SHADERS.furFS],
@@ -146,6 +170,7 @@ export function createScene(canvas, tree, quality) {
   gl.bindVertexArray(null);
 
   const wildlife = createWildlife(gl, P, tree, quality);
+  const noise = noiseTexture(gl);
 
   // --- Targets ------------------------------------------------------------------------------
   const shadow = createShadowTarget(gl, quality.shadowSize);
@@ -158,7 +183,22 @@ export function createScene(canvas, tree, quality) {
     canvas.width = w; canvas.height = h;
     target = createSceneTarget(gl, w, h, { hdr, samples });
     samples = target.samples;
+    // Two small targets for the glow: one to blur from, one to blur into.
+    for (const g of glow) { gl.deleteTexture(g.tex); gl.deleteFramebuffer(g.fbo); }
+    glow = [];
+    if (hdr) {
+      const gw = Math.max(2, Math.floor(w / GLOW_SHRINK)), gh = Math.max(2, Math.floor(h / GLOW_SHRINK));
+      for (let i = 0; i < 2; i++) {
+        const tex = createTexture(gl, gw, gh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR);
+        const fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        glow.push({ tex, fbo, w: gw, h: gh });
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
   }
+  let glow = [];
 
   const shadowBias = new Float32Array([0.5, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0.5, 0, 0.5, 0.5, 0.5, 1]);
   const info = { hdr, msaa: 0, leaves: tree.leafCount, blossoms: tree.blossomCount, triangles: 0, animals: 0 };
@@ -193,7 +233,7 @@ export function createScene(canvas, tree, quality) {
       uSnow: st.snow,
       uShadowStrength: st.shadow, uShadowTexel: 1 / shadow.size,
       uLdr: hdr ? 0 : 1,
-      uShadowMap: 0, uColor: 1, uDepth: 2,
+      uShadowMap: 0, uColor: 1, uDepth: 2, uNoise: 4,
       uYearSeconds: frame.yearSeconds,
       uGrowDur: TIMING.LEAF_GROW_DUR, uTurnDur: TIMING.LEAF_TURN_DUR,
       uSizeMul: quality.leafSizeMul,
@@ -203,6 +243,7 @@ export function createScene(canvas, tree, quality) {
       uFlakes: st.snowFall, uFlakeCentre: [frame.eye[0] * 0.5, 0, frame.eye[2] * 0.5],
       uPixels: h, uFovScale: 1 / Math.tan(frame.fovY / 2),
       uFlakeFall: 1, uFlakeScale: 1, uFlakeTint: [0.95, 0.97, 1],
+      uShadeDepth: st.shadeDepth, uFlowers: st.flowers, uWood: st.wood, uWoodBare: st.woodBare,
     };
     const life = wildlife.update(frame.time, st);
 
@@ -223,6 +264,8 @@ export function createScene(canvas, tree, quality) {
         gl.drawElementsInstanced(gl.TRIANGLES, blossoms.indexCount, gl.UNSIGNED_SHORT, 0, blossoms.count);
       }
     };
+
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, noise);
 
     // 1. Shadow map.
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadow.fbo);
@@ -291,17 +334,37 @@ export function createScene(canvas, tree, quality) {
     }
     target.resolve();
 
-    // 3. The lens.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, w, h);
+    // 3. Glow: keep the brightest parts at a quarter of the size, then blur them twice over.
     gl.disable(gl.DEPTH_TEST);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindVertexArray(emptyVao);
+    if (glow.length) {
+      const [a, b] = glow;
+      const pass = (prog, from, to, extra) => {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, to.fbo);
+        gl.viewport(0, 0, to.w, to.h);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, from);
+        gl.useProgram(prog.program);
+        setUniforms(gl, prog, { uZ: 0, uColor: 1, ...extra });
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      };
+      pass(P.bright, target.color, a, { uPx: [1 / w, 1 / h] });
+      for (const reach of [1, 2.2]) {
+        pass(P.blur, a.tex, b, { uDir: [reach / a.w, 0] });
+        pass(P.blur, b.tex, a, { uDir: [0, reach / a.h] });
+      }
+    }
+
+    // 4. The lens.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, glow.length ? glow[0].tex : null);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, target.color);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, target.depth);
     gl.useProgram(P.post.program);
     const res = h / 1080;
     setUniforms(gl, P.post, {
-      uZ: 0, uColor: 1, uDepth: 2, uPx: [1 / w, 1 / h], uNear: NEAR, uFar: FAR,
+      uZ: 0, uColor: 1, uDepth: 2, uBloom: 3, uBloomAmt: glow.length ? GLOW : 0, uPx: [1 / w, 1 / h], uNear: NEAR, uFar: FAR,
       uFocus: frame.focus, uCocScale: COC_SCALE_1080 * res * quality.blur * (frame.blur === undefined ? 1 : frame.blur),
       uMaxCoc: Math.max(2, quality.maxBlurPx * res), uRadStep: Math.max(0.8, quality.blurStep * Math.max(res, 0.6)),
       uExposure: EXPOSURE, uSat: st.saturation, uTint: st.tint, uTime: frame.time, uLdr: hdr ? 0 : 1,
@@ -310,6 +373,7 @@ export function createScene(canvas, tree, quality) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, null);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindVertexArray(null);
 

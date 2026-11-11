@@ -27,21 +27,35 @@ uniform float uSnow;
 uniform float uShadowStrength;
 uniform float uShadowTexel;
 uniform float uLdr;           // 1 when the scene target is 8-bit and colours must be squeezed
+uniform float uCloud;         // 0 clear sky .. 1 overcast
+uniform float uShadeDepth;    // how much direct sun a passing cloud takes away (0 = none)
 `;
 
 const NOISE = `
 float hash11(float n){ return fract(sin(n)*43758.5453123); }
 float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
 float hash31(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+// Smooth noise read from a small texture of random numbers (see noiseTexture in scene.js): one
+// lookup does the work of four (2D) or eight (3D) hashes. The texture's own blending does the
+// mixing; easing f first keeps it as smooth as the worked-out version.
+uniform sampler2D uNoise;
 float noise2(vec2 p){
+  vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  return texture(uNoise,(mod(i,256.)+f+0.5)/256.).r;
+}
+// The green channel holds the red channel shifted by (37,17), which stands in for the next layer up.
+float noise3(vec3 p){
+  vec3 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+  vec2 rg=texture(uNoise,(mod(i.xy+vec2(37.,17.)*i.z,256.)+f.xy+0.5)/256.).rg;
+  return mix(rg.r,rg.g,f.z);
+}
+// The worked-out version: slower, but exact. Used where one cell of noise is stretched over a
+// huge area and the texture's 256 blending steps would show as faint bands.
+float noise2h(vec2 p){
   vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
   return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x), mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x), f.y);
 }
-float noise3(vec3 p){
-  vec3 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
-  return mix(mix(mix(hash31(i),hash31(i+vec3(1,0,0)),f.x), mix(hash31(i+vec3(0,1,0)),hash31(i+vec3(1,1,0)),f.x), f.y),
-             mix(mix(hash31(i+vec3(0,0,1)),hash31(i+vec3(1,0,1)),f.x), mix(hash31(i+vec3(0,1,1)),hash31(i+vec3(1,1,1)),f.x), f.y), f.z);
-}
+float fbm2x2h(vec2 p){ return 0.667*noise2h(p)+0.333*noise2h(p*2.03+17.1); }
 float fbm2(vec2 p){ float a=0.5,s=0.; for(int i=0;i<4;i++){ s+=a*noise2(p); p=p*2.03+17.1; a*=0.5; } return s; }
 float fbm2x2(vec2 p){ return 0.667*noise2(p)+0.333*noise2(p*2.03+17.1); }   // two octaves, for broad patches
 float fbm3(vec3 p){ float a=0.5,s=0.; for(int i=0;i<4;i++){ s+=a*noise3(p); p=p*2.03+7.3; a*=0.5; } return s; }
@@ -70,12 +84,33 @@ vec3 sway(vec3 p, float t, float wind){
 }
 `;
 
+// Gusts: wide, shallow fronts of harder wind that roll across the meadow. Grass and flowers bow
+// as one passes, and the far field lightens with it, so the wind can be seen coming.
+const GUST = `
+const float GUST_SIZE = 11.;    // metres from one gust front to the next
+const float GUST_SPEED = 5.;    // metres per second they travel
+float gustAt(vec2 p){
+  vec2 q=(p-uWindDir*uTime*GUST_SPEED)/GUST_SIZE;
+  q=vec2(dot(q,uWindDir), dot(q,vec2(-uWindDir.y,uWindDir.x))*0.45);   // long across the wind, short along it
+  return smoothstep(0.45,0.85,noise2(q)*0.65+noise2(q*2.3+9.)*0.35);
+}
+`;
+
 const SHADOW = `
 uniform sampler2DShadow uShadowMap;
+// Slow patches of sun and shade from the clouds, drifting downwind over everything.
+const float CLOUD_SHADE_SIZE = 60.;   // metres across one patch
+const float CLOUD_SHADE_DRIFT = 2.4;  // metres per second
+float cloudShade(vec2 p){
+  if(uShadeDepth<0.01) return 1.;
+  float n=noise2h((p-uWindDir*uTime*CLOUD_SHADE_DRIFT)/CLOUD_SHADE_SIZE+7.);
+  float edge=mix(0.74,0.45,uCloud);      // more cloud, more of the ground in shade
+  return 1.-uShadeDepth*smoothstep(edge-0.13,edge+0.13,n);
+}
 // spread = blur radius in shadow texels. Bigger = softer edge.
 float shadowAt(vec3 wp, float spread){
   vec3 s=(uShadowMat*vec4(wp,1.)).xyz;
-  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z<0.||s.z>1.) return 1.;
+  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z<0.||s.z>1.) return cloudShade(wp.xz);
   float r=spread*uShadowTexel;
   float sum=texture(uShadowMap,s);
   sum+=texture(uShadowMap,vec3(s.xy+vec2(-0.326,-0.406)*r,s.z));
@@ -86,18 +121,18 @@ float shadowAt(vec3 wp, float spread){
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.473,-0.480)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.519, 0.767)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.185,-0.893)*r,s.z));
-  return mix(1., sum/9., uShadowStrength);
+  return mix(1., sum/9., uShadowStrength)*cloudShade(wp.xz);
 }
 // Four taps instead of nine: enough for leaves, where the crown's own noise hides the grain.
 float shadowAt4(vec3 wp, float spread){
   vec3 s=(uShadowMat*vec4(wp,1.)).xyz;
-  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z<0.||s.z>1.) return 1.;
+  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z<0.||s.z>1.) return cloudShade(wp.xz);
   float r=spread*uShadowTexel;
   float sum=texture(uShadowMap,vec3(s.xy+vec2(-0.35,-0.35)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.35,-0.35)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2(-0.35, 0.35)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.35, 0.35)*r,s.z));
-  return mix(1., sum/4., uShadowStrength);
+  return mix(1., sum/4., uShadowStrength)*cloudShade(wp.xz);
 }
 `;
 
@@ -343,10 +378,13 @@ void main(){
 }
 `;
 
-const GROUND_FS = HEAD + SHARED + NOISE + SNOW_MASK + SHADOW + OUTPUT + `
+const GROUND_FS = HEAD + SHARED + NOISE + SNOW_MASK + GUST + SHADOW + OUTPUT + `
 in vec3 vWorld;
 uniform vec3 uGrassA; uniform vec3 uGrassB; uniform vec3 uHill;
 uniform float uCanopy;
+uniform float uFlowers;    // 0 none .. 1 the meadow in full flower
+const vec3 DRIFT_YELLOW = vec3(0.62,0.55,0.08);   // far buttercups
+const vec3 DRIFT_PALE = vec3(0.62,0.60,0.56);     // far daisies and clover
 const float GROUND_HAZE = 0.3;   // the meadow hazes more slowly than the air above it, so no white band at the horizon
 const vec3 SOIL = vec3(0.07,0.05,0.035);   // worn earth at the foot of the trunk
 const float SNOW_DRIFT_SCALE = 0.22;  // size of snow drifts; smaller = broader
@@ -361,6 +399,18 @@ void main(){
   fine=mix(0.5,fine,exp(-d*0.02));
   vec3 col=mix(uGrassA,uGrassB,clamp(big*0.7+mid*0.5+(fine-0.5)*0.5,0.,1.));
   float r=length(p);
+  // Beyond the blades the meadow is paint: combed by the wind, crossed by gusts, and in the
+  // warm months washed with drifts of flowers too far off to see one by one.
+  float nearish=exp(-d*0.012);
+  vec2 across=vec2(dot(p,uWindDir)*0.06, dot(p,vec2(-uWindDir.y,uWindDir.x))*0.5);
+  col*=mix(1.,0.88+0.24*noise2(across+13.),nearish);
+  col*=1.+0.20*(gustAt(p)-0.3)*uWind*(1.-uSnow);
+  if(uFlowers>0.01){
+    float out2=smoothstep(14.,30.,r)*exp(-d*0.004)*uFlowers;
+    float speck=mix(1.,0.4+1.2*fine,exp(-d*0.03));
+    col=mix(col,DRIFT_YELLOW,smoothstep(0.62,0.88,noise2(p*0.11+31.))*0.42*out2*speck);
+    col=mix(col,DRIFT_PALE,smoothstep(0.64,0.90,noise2(p*0.16+57.))*0.30*out2*speck);
+  }
   float bare=smoothstep(1.5,0.5,r+(mid-0.5)*0.8);
   col=mix(col,SOIL,bare*0.75);
   float sh=shadowAt(vWorld+vec3(0.,0.03,0.),3.5);
@@ -371,9 +421,9 @@ void main(){
   if(uSnow>0.001){   // the snow maths is skipped for three seasons of the year
     float sn=snowMask(p);
     // Soft drifts: tilt the snow surface by the slope of a broad noise, so the low sun rakes across it.
-    float h0=fbm2x2(p*SNOW_DRIFT_SCALE+4.);
-    float hx=fbm2x2((p+vec2(0.35,0.))*SNOW_DRIFT_SCALE+4.);
-    float hz=fbm2x2((p+vec2(0.,0.35))*SNOW_DRIFT_SCALE+4.);
+    float h0=fbm2x2h(p*SNOW_DRIFT_SCALE+4.);
+    float hx=fbm2x2h((p+vec2(0.35,0.))*SNOW_DRIFT_SCALE+4.);
+    float hz=fbm2x2h((p+vec2(0.,0.35))*SNOW_DRIFT_SCALE+4.);
     vec3 ns=normalize(vec3((h0-hx)*SNOW_RELIEF,1.,(h0-hz)*SNOW_RELIEF));
     float nds=max(dot(ns,uSunDir),0.);
     float sparkle=step(0.985,hash21(floor(p*220.)))*exp(-d*0.03);
@@ -387,13 +437,14 @@ void main(){
 
 // ---------------------------------------------------------------------------------------------
 // Grass blades around the tree.
-const GRASS_VS = HEAD + SHARED + NOISE + SNOW_MASK + `
+const GRASS_VS = HEAD + SHARED + NOISE + SNOW_MASK + GUST + `
 layout(location=0) in vec2 aBlade;   // x: -1..1 across, y: 0..1 up
 layout(location=1) in vec4 iPos;     // x, z, height in metres, turn in radians
 layout(location=2) in vec2 iRnd;
 uniform float uGrassH;
 const float BLADE_WIDTH = 0.016;     // half width at the base in metres
-out float vT; out vec3 vWorld; out float vRnd; out float vSnow;
+out float vT; out vec3 vWorld; out float vRnd; out float vSnow; out float vGust;
+const float GUST_BOW = 0.55;         // how much further a blade leans as a gust passes
 void main(){
   vec2 base=iPos.xy;
   float sn=uSnow>0.001 ? snowMask(base) : 0.;
@@ -401,21 +452,23 @@ void main(){
   float c=cos(iPos.w), s=sin(iPos.w);
   float t=aBlade.y;
   float ph=uTime*1.6+base.x*0.35+base.y*0.27;
-  float bend=0.18+0.25*iRnd.x+uWind*0.22*(sin(ph)+0.5*sin(ph*2.7+iRnd.y*6.));
+  float gust=gustAt(base)*uWind;
+  float bend=0.18+0.25*iRnd.x+uWind*0.22*(sin(ph)+0.5*sin(ph*2.7+iRnd.y*6.))+GUST_BOW*gust;
   vec3 side=vec3(c,0.,s), fwd=vec3(-s,0.,c);
   vec3 lean=vec3(uWindDir.x,0.,uWindDir.y)*bend+fwd*0.3*(iRnd.y-0.5);
   vec3 p=vec3(base.x,0.,base.y);
   p+=side*aBlade.x*BLADE_WIDTH*(1.-t*0.85)+vec3(0.,1.,0.)*t*h*(1.-0.3*t*bend*bend)+lean*t*t*h;
-  vT=t; vWorld=p; vRnd=iRnd.x; vSnow=sn;
+  vT=t; vWorld=p; vRnd=iRnd.x; vSnow=sn; vGust=gust;
   gl_Position=uViewProj*vec4(p,1.);
 }
 `;
 
 const GRASS_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
-in float vT; in vec3 vWorld; in float vRnd; in float vSnow;
+in float vT; in vec3 vWorld; in float vRnd; in float vSnow; in float vGust;
 uniform vec3 uGrassA; uniform vec3 uGrassB;
 void main(){
   vec3 col=mix(uGrassA*0.75,uGrassB*1.15,vT)*(0.8+0.4*vRnd);
+  col*=1.+0.4*vGust*vT;   // bowed blades show their pale, shiny sides
   float sh=shadowAt4(vWorld+vec3(0.,0.03,0.),3.);
   vec3 V=normalize(uCam-vWorld);
   float back=pow(max(dot(-V,uSunDir),0.),3.);
@@ -442,11 +495,14 @@ const SKY_FS = HEAD + SHARED + NOISE + OUTPUT + `
 in vec2 vUv;
 uniform mat4 uInvViewProj;
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uHill;
-uniform float uCloud;
+uniform vec3 uWood;        // colour of the wood on the near ridge at this time of year
+uniform float uWoodBare;   // 1 when its trees are leafless
 const float CLOUD_RING = 3.0;        // size of cloud banks round the horizon; bigger = more, smaller banks
 const float CLOUD_RISE = 12.;        // vertical squash; bigger = flatter clouds
 const float CLOUD_LIGHT_STEP = 0.02; // how far up to look when shading cloud tops
 const float CLOUD_DRIFT = 0.008;     // speed of drift across the sky
+const float CLOUD_WISP = 0.16;       // how ragged the cloud edges are
+const float WOOD_HEIGHT = 0.026;     // how tall the wood on the near ridge stands (about 1.5 degrees)
 // Clouds live on a cylinder round the viewer, so they wrap without a seam and do not smear at the horizon.
 float cloudDensity(vec2 n2, float el){
   vec3 q=vec3(n2.x*CLOUD_RING+uTime*CLOUD_DRIFT, el*CLOUD_RISE, n2.y*CLOUD_RING);
@@ -456,7 +512,7 @@ void main(){
   vec4 farPt=uInvViewProj*vec4(vUv*2.-1.,1.,1.);
   vec3 dir=normalize(farPt.xyz/farPt.w-uCam);
   float el=dir.y;
-  vec3 col=mix(uHorizon,uZenith,pow(clamp(el,0.,1.),0.38));
+  vec3 col=mix(uHorizon,uZenith,pow(clamp(el*2.2,0.,1.),0.45));
   float sd=max(dot(dir,uSunDir),0.);
   col+=uSunCol*(pow(sd,700.)*6.+pow(sd,14.)*0.22+pow(sd,3.)*0.07)*(1.-0.6*uCloud);
   vec2 n2=normalize(dir.xz+1e-5);
@@ -466,24 +522,38 @@ void main(){
   if(el>-0.02){
     float d0=cloudDensity(n2,el);
     float d1=cloudDensity(n2,el+CLOUD_LIGHT_STEP);
+    // Two finer layers break the edges into wisps. They are left out of the lighting sample.
+    vec3 q=vec3(n2.x*CLOUD_RING+uTime*CLOUD_DRIFT, el*CLOUD_RISE, n2.y*CLOUD_RING);
+    d0+=(noise3(q*8.7+2.3)-0.5)*CLOUD_WISP+(noise3(q*17.3+5.1)-0.5)*CLOUD_WISP*0.5;
     float lo=mix(0.56,0.28,uCloud);
-    float cover=smoothstep(lo,lo+0.2,d0)*smoothstep(-0.02,0.03,el);
+    float cover=smoothstep(lo,lo+0.16,d0)*smoothstep(-0.02,0.03,el);
+    float thick=smoothstep(lo+0.05,lo+0.4,d0);
     float top=smoothstep(-0.04,0.10,d0-d1);          // bright where there is less cloud above
     vec3 sunTint=uSunCol/max(max(uSunCol.r,uSunCol.g),uSunCol.b);
-    vec3 bright=mix(vec3(1.),sunTint,0.65)*(0.80+0.25*uSunDir.y+0.45*pow(sd,2.));
-    vec3 base=mix(uZenith,uHorizon,0.6)*0.82;
-    vec3 cloudCol=mix(base,bright,top*(1.-0.45*uCloud));
-    col=mix(col,cloudCol,cover*0.93);
+    vec3 bright=mix(vec3(1.),sunTint,0.6)*(0.86+0.25*uSunDir.y+0.5*pow(sd,2.));
+    vec3 base=mix(uZenith,uHorizon,0.55)*0.74+uSkyAmb*0.08;   // the grey-blue underside
+    vec3 cloudCol=mix(base,bright,clamp(top*(1.15-0.5*thick),0.,1.)*(1.-0.45*uCloud));
+    cloudCol+=bright*0.3*(1.-thick)*(0.3+0.7*pow(sd,3.));    // thin edges let the light through
+    col=mix(col,cloudCol,cover*0.95);
   }
-  // Far hills and a nearer tree line. Sampled on a circle so there is no seam.
-  float h1=0.020+0.036*fbm2x2(n2*2.6+1.3)+0.008*noise2(n2*11.+4.);
-  float h2=0.012+0.020*noise2(n2*17.+9.)+0.008*noise2(n2*80.+2.);
-  // Haze gathers in the valleys: both layers pale towards their feet.
-  vec3 hillFar=mix(uHill,uFogCol,0.62+0.2*smoothstep(h1,0.,el));
-  vec3 hillNear=mix(uHill*0.75,uFogCol,0.30+0.45*smoothstep(h2,0.,el));
-  hillNear*=0.9+0.2*noise2(n2*140.+el*300.);
+  // Far hills and a nearer wood. Sampled on a circle so there is no seam. Skipped high in the sky.
+  if(el<0.1){
+  float h1=0.022+0.030*fbm2x2(n2*2.6+1.3)+0.016*noise2(n2*8.+4.)+0.005*noise2(n2*37.+1.);
+  // Haze gathers in the valleys: the hills pale towards their feet.
+  vec3 hillFar=mix(uHill*vec3(0.85,1.,1.3),uFogCol,0.5+0.25*smoothstep(h1,0.,el));
   col=mix(col,hillFar,smoothstep(h1+0.004,h1-0.002,el));
-  col=mix(col,hillNear,smoothstep(h2+0.003,h2-0.001,el));
+  // A wood along the near ridge: rounded crowns in clumps with gaps of hedge between, each
+  // crown its own shade, brighter on top. It turns with the seasons like the tree in front.
+  float clump=smoothstep(0.3,0.7,noise2(n2*21.+4.));
+  float crown=smoothstep(0.2,0.8,noise2(n2*64.+9.));
+  float h2=0.006+WOOD_HEIGHT*(0.25+0.75*clump)*(0.45+0.55*crown)+0.003*noise2(n2*310.+2.);
+  float tone=noise2(n2*64.+31.)*0.6+noise2(vec2(n2.x*230.,el*420.)+n2.y*190.)*0.4;
+  vec3 woodCol=uWood*(0.62+0.7*tone)*(0.8+0.5*smoothstep(h2*0.3,h2,el));
+  woodCol+=uSunCol*uWood*0.06*smoothstep(h2*0.5,h2,el);
+  woodCol=mix(woodCol,uFogCol,0.22+0.3*smoothstep(h2*0.6,0.,el));
+  float edge=mix(0.0015,0.006,uWoodBare);            // bare tops are thin and twiggy
+  col=mix(col,woodCol,smoothstep(h2+edge,h2-edge,el)*mix(1.,0.8,uWoodBare));
+  }
   if(el<0.) col=mix(uFogCol,uHill,0.25);
   fragColor=encodeOut(col);
 }
@@ -684,7 +754,7 @@ void main(){
 }
 `;
 
-const FLY_FS = HEAD + SHARED + SHADOW + OUTPUT + `
+const FLY_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
 in vec2 vUv; in vec3 vWorld; in float vKind; in float vFacing;
 void main(){
   float d=length(vec2(vUv.x*0.9+0.08,(vUv.y-0.5)*1.15));
@@ -704,7 +774,7 @@ void main(){
 
 // ---------------------------------------------------------------------------------------------
 // Meadow flowers: small flower heads that turn to the lens, opening and fading on their own dates.
-const FLOWER_VS = HEAD + SHARED + `
+const FLOWER_VS = HEAD + SHARED + NOISE + GUST + `
 layout(location=0) in vec2 aQuad;   // -1..1
 layout(location=1) in vec4 iPos;    // x, z, stem height, head size (metres)
 layout(location=2) in vec4 iRnd;    // kind, opens (year), fades (year), phase
@@ -716,7 +786,7 @@ void main(){
   if(open<0.01){ gl_Position=vec4(2.,2.,2.,1.); return; }
   float h=iPos.z*(0.6+0.4*uGrassH);
   float ph=uTime*1.6+iPos.x*0.35+iPos.y*0.27;
-  float bend=uWind*FLOWER_SWAY*(sin(ph)+0.5*sin(ph*2.7+iRnd.w*6.));
+  float bend=uWind*(FLOWER_SWAY*(sin(ph)+0.5*sin(ph*2.7+iRnd.w*6.))+0.45*gustAt(iPos.xy));
   vec3 c=vec3(iPos.x,h,iPos.y)+vec3(uWindDir.x,0.,uWindDir.y)*bend*h;
   vec3 toCam=normalize(uCam-c);
   vec3 R=normalize(cross(vec3(0.,1.,0.),toCam));
@@ -727,7 +797,7 @@ void main(){
 }
 `;
 
-const FLOWER_FS = HEAD + SHARED + SHADOW + OUTPUT + `
+const FLOWER_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
 in vec2 vUv; in float vKind; in vec3 vWorld;
 void main(){
   float r=length(vUv), a=atan(vUv.y,vUv.x);
@@ -777,6 +847,8 @@ uniform float uSat;
 uniform vec3 uTint;
 uniform float uTime;
 uniform float uLdr;
+uniform sampler2D uBloom;   // a blurred copy of the brightest parts of the picture
+uniform float uBloomAmt;    // how much of that glow is added back (0 = none)
 const float VIGNETTE = 0.5;   // darkening at the corners
 const float GRAIN = 0.02;     // film grain strength
 float linDepth(float d){ float z=d*2.-1.; return 2.*uNear*uFar/(uFar+uNear-z*(uFar-uNear)); }
@@ -801,6 +873,7 @@ void main(){
     rad+=uRadStep/rad;
   }
   col/=tot;
+  col+=texture(uBloom,vUv).rgb*uBloomAmt;
   col*=uExposure;
   float l=dot(col,vec3(0.2126,0.7152,0.0722));
   col=mix(vec3(l),col,uSat)*uTint;
@@ -810,6 +883,36 @@ void main(){
   col*=1.-dot(q,q)*VIGNETTE;
   col+=(hash21(gl_FragCoord.xy+fract(uTime)*91.7)-0.5)*GRAIN;
   fragColor=vec4(col,1.);
+}
+`;
+
+// Glow: bright things (snow in sun, blossom, cloud edges) spill a little light round themselves,
+// as they do in a camera. BRIGHT keeps only the brightest parts at quarter size; BLUR spreads them.
+const BRIGHT_FS = HEAD + `
+in vec2 vUv;
+out vec4 fragColor;
+uniform sampler2D uColor;
+uniform vec2 uPx;                 // one pixel of the full picture, in uv
+const float GLOW_FROM = 1.15;     // brightness where the glow starts (1 = white paper in full sun)
+void main(){
+  vec3 c=texture(uColor,vUv+uPx*vec2(-1.,-1.)).rgb+texture(uColor,vUv+uPx*vec2(1.,-1.)).rgb
+        +texture(uColor,vUv+uPx*vec2(-1.,1.)).rgb+texture(uColor,vUv+uPx*vec2(1.,1.)).rgb;
+  c*=0.25;
+  float l=max(c.r,max(c.g,c.b));
+  fragColor=vec4(min(c,vec3(8.))*smoothstep(GLOW_FROM,GLOW_FROM*2.4,l),1.);
+}
+`;
+
+const BLUR_FS = HEAD + `
+in vec2 vUv;
+out vec4 fragColor;
+uniform sampler2D uColor;
+uniform vec2 uDir;                // one step along the blur, in uv
+void main(){
+  vec3 c=texture(uColor,vUv).rgb*0.227;
+  c+=(texture(uColor,vUv+uDir*1.385).rgb+texture(uColor,vUv-uDir*1.385).rgb)*0.316;
+  c+=(texture(uColor,vUv+uDir*3.231).rgb+texture(uColor,vUv-uDir*3.231).rgb)*0.070;
+  fragColor=vec4(c,1.);
 }
 `;
 
@@ -841,5 +944,7 @@ export const SHADERS = {
   flakeVS: FLAKE_VS,
   flakeFS: FLAKE_FS,
   postFS: POST_FS,
+  brightFS: BRIGHT_FS,
+  blurFS: BLUR_FS,
   depthOnlyFS: DEPTH_ONLY_FS,
 };

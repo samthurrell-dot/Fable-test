@@ -97,6 +97,7 @@ export function blossomSchedule(rand1, rand2, heightNorm) {
 //   cloud         0 clear .. 1 overcast
 //   shadow        0 no visible shadow (overcast) .. 1 crisp
 //   wind          0 still .. 1 strong
+//   wood, woodBare   colour of the far wood on the ridge, and 1 when it is leafless
 //   saturation, tint   final colour grade
 const KEYS = [
   { // 0.000 early spring: cool morning, bare tree, last snow
@@ -106,7 +107,7 @@ const KEYS = [
     fog: [0.60, 0.68, 0.76], fogDensity: 0.0045,
     grassDark: [0.085, 0.11, 0.035], grassLight: [0.19, 0.19, 0.07], grassHeight: 0.45,
     hill: [0.10, 0.12, 0.10], cloud: 0.5, shadow: 0.85, wind: 0.7,
-    saturation: 0.95, tint: [1.0, 1.0, 1.03],
+    wood: [0.16, 0.15, 0.11], woodBare: 1, saturation: 0.95, tint: [1.0, 1.0, 1.03],
   },
   { // 0.125 mid spring: blossom
     sunElevation: 38, sunAzimuth: 1.5, sun: [1.0, 0.94, 0.84], sunPower: 3.2,
@@ -115,7 +116,7 @@ const KEYS = [
     fog: [0.62, 0.74, 0.86], fogDensity: 0.004,
     grassDark: [0.06, 0.17, 0.028], grassLight: [0.17, 0.34, 0.05], grassHeight: 0.8,
     hill: [0.07, 0.15, 0.07], cloud: 0.35, shadow: 1.0, wind: 0.6,
-    saturation: 1.05, tint: [1.0, 1.0, 1.0],
+    wood: [0.13, 0.26, 0.06], woodBare: 0.2, saturation: 1.05, tint: [1.0, 1.0, 1.0],
   },
   { // 0.250 early summer
     sunElevation: 48, sunAzimuth: 1.45, sun: [1.0, 0.96, 0.88], sunPower: 3.6,
@@ -123,8 +124,8 @@ const KEYS = [
     skyAmbient: [0.28, 0.40, 0.60], groundAmbient: [0.08, 0.13, 0.04],
     fog: [0.60, 0.74, 0.88], fogDensity: 0.0036,
     grassDark: [0.045, 0.15, 0.022], grassLight: [0.13, 0.30, 0.045], grassHeight: 1.0,
-    hill: [0.05, 0.13, 0.05], cloud: 0.25, shadow: 1.0, wind: 0.45,
-    saturation: 1.05, tint: [1.0, 1.0, 1.0],
+    hill: [0.05, 0.13, 0.05], cloud: 0.32, shadow: 1.0, wind: 0.45,
+    wood: [0.06, 0.17, 0.04], woodBare: 0, saturation: 1.05, tint: [1.0, 1.0, 1.0],
   },
   { // 0.375 mid summer: high sun, warm haze
     sunElevation: 52, sunAzimuth: 1.45, sun: [1.0, 0.95, 0.86], sunPower: 3.8,
@@ -132,8 +133,8 @@ const KEYS = [
     skyAmbient: [0.28, 0.38, 0.56], groundAmbient: [0.09, 0.12, 0.04],
     fog: [0.66, 0.74, 0.82], fogDensity: 0.0035,
     grassDark: [0.055, 0.14, 0.022], grassLight: [0.19, 0.28, 0.05], grassHeight: 1.0,
-    hill: [0.05, 0.12, 0.05], cloud: 0.2, shadow: 1.0, wind: 0.4,
-    saturation: 1.03, tint: [1.02, 1.0, 0.98],
+    hill: [0.05, 0.12, 0.05], cloud: 0.3, shadow: 1.0, wind: 0.4,
+    wood: [0.05, 0.14, 0.035], woodBare: 0, saturation: 1.03, tint: [1.02, 1.0, 0.98],
   },
   { // 0.500 early autumn
     sunElevation: 36, sunAzimuth: 1.8, sun: [1.0, 0.86, 0.66], sunPower: 3.4,
@@ -142,7 +143,7 @@ const KEYS = [
     fog: [0.74, 0.72, 0.66], fogDensity: 0.005,
     grassDark: [0.075, 0.13, 0.03], grassLight: [0.23, 0.25, 0.06], grassHeight: 0.9,
     hill: [0.08, 0.11, 0.05], cloud: 0.35, shadow: 1.0, wind: 0.7,
-    saturation: 1.05, tint: [1.03, 1.0, 0.96],
+    wood: [0.10, 0.15, 0.04], woodBare: 0, saturation: 1.05, tint: [1.03, 1.0, 0.96],
   },
   { // 0.625 mid autumn: low golden light, mist
     sunElevation: 22, sunAzimuth: 2.05, sun: [1.0, 0.72, 0.42], sunPower: 3.6,
@@ -151,7 +152,7 @@ const KEYS = [
     fog: [0.86, 0.70, 0.50], fogDensity: 0.007,
     grassDark: [0.095, 0.115, 0.03], grassLight: [0.27, 0.22, 0.07], grassHeight: 0.75,
     hill: [0.12, 0.10, 0.05], cloud: 0.2, shadow: 1.0, wind: 1.0,
-    saturation: 1.08, tint: [1.05, 1.0, 0.93],
+    wood: [0.32, 0.17, 0.04], woodBare: 0.25, saturation: 1.08, tint: [1.05, 1.0, 0.93],
   },
   { // 0.750 early winter: overcast, first snow
     sunElevation: 16, sunAzimuth: 2.0, sun: [0.95, 0.85, 0.78], sunPower: 1.8,
@@ -160,7 +161,7 @@ const KEYS = [
     fog: [0.72, 0.75, 0.80], fogDensity: 0.011,
     grassDark: [0.095, 0.095, 0.045], grassLight: [0.20, 0.17, 0.08], grassHeight: 0.5,
     hill: [0.10, 0.10, 0.09], cloud: 0.95, shadow: 0.45, wind: 0.8,
-    saturation: 0.88, tint: [0.98, 1.0, 1.04],
+    wood: [0.15, 0.13, 0.10], woodBare: 1, saturation: 0.88, tint: [0.98, 1.0, 1.04],
   },
   { // 0.875 mid winter: pale sun on snow
     sunElevation: 15, sunAzimuth: 1.9, sun: [1.0, 0.84, 0.68], sunPower: 3.6,
@@ -169,11 +170,12 @@ const KEYS = [
     fog: [0.78, 0.81, 0.88], fogDensity: 0.009,
     grassDark: [0.09, 0.09, 0.045], grassLight: [0.19, 0.17, 0.08], grassHeight: 0.45,
     hill: [0.10, 0.11, 0.11], cloud: 0.42, shadow: 0.92, wind: 0.5,
-    saturation: 0.9, tint: [0.98, 1.0, 1.05],
+    wood: [0.15, 0.13, 0.11], woodBare: 1, saturation: 0.9, tint: [0.98, 1.0, 1.05],
   },
 ];
 
 const SNOW_BOUNCE = [0.50, 0.56, 0.68]; // light thrown back up by lying snow
+const CLOUD_SHADE_DEPTH = 0.55;         // share of direct sun lost under a passing cloud
 const SNOW_ON_HILLS = [0.72, 0.76, 0.84];
 
 const mixN = (a, b, t) => a + (b - a) * t;
@@ -200,6 +202,11 @@ export function seasonState(y) {
   out.sunColour = out.sun.map((c) => c * out.sunPower);
   out.groundAmbient = mix3(out.groundAmbient, SNOW_BOUNCE, snow * 0.85);
   out.hill = mix3(out.hill, SNOW_ON_HILLS, snow * 0.8);
+  out.wood = mix3(out.wood, SNOW_ON_HILLS, snow * 0.4);
+  // Passing clouds take the sun off patches of the meadow. Under full overcast there is no sun to take.
+  out.shadeDepth = CLOUD_SHADE_DEPTH * (1 - smooth(0.6, 0.95, out.cloud));
+  // The far meadow is washed with flower colour from late spring to the end of summer.
+  out.flowers = smooth(0.1, 0.2, y) * (1 - smooth(0.44, 0.56, y));
   out.windDir = [0.86, 0.5]; // x, z: the way leaves drift as they fall
   out.name = seasonName(y);
   return out;
