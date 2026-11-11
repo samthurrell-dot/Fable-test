@@ -192,12 +192,18 @@ export function createWildlife(gl, P, tree, quality) {
   // --- Per frame --------------------------------------------------------------------------------
   let animals = [];
   let activity = lifeActivity(0);
+  // For sound only: which birds were in the air last frame, and what has just happened.
+  const wasFlying = new Array(LIFE.BIRDS).fill(false);
+  let events = [], flock = null, lastTime = 0;
 
   function update(time, st) {
     activity = lifeActivity(st.year);
     animals = [];
     for (let i = 0; i < LIFE.BIRDS; i++) {
       const b = birdState(i, time, activity.birds, perches, st.wind);
+      const flying = !!b && b.fold < 0.99;
+      if (flying && !wasFlying[i] && Math.abs(time - lastTime) < 0.5) events.push({ type: 'takeoff', pos: b.pos });
+      wasFlying[i] = flying;
       if (!b) continue;
       const coat = BIRD_COATS[i < 3 ? i : 3 + (i % 2)];
       animals.push({ mesh: bird, coat, model: placeModel(b.pos, b.fwd, [0, 1, 0], Math.asin(Math.max(-1, Math.min(1, b.fwd[1]))) * 0.8, BIRD_SCALE * b.scale), flap: b.flap, fold: b.fold, tail: 0 });
@@ -210,14 +216,21 @@ export function createWildlife(gl, P, tree, quality) {
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, sqMesh.vertices, 0, sqMesh.count * SQUIRREL_VERTEX_FLOATS);
       squirrel = { model: placeModel(s.pos, s.fwd, s.up, 0, SQUIRREL_SCALE * activity.squirrel), pos: s.pos, mode: s.mode, moving: s.moving, onBark: s.onBark };
     }
+    flock = null;
     if (activity.flock > 0.01) {
       for (let j = 0; j < LIFE.FLOCK; j++) {
         const f = flockState(j, time);
+        if (j === 0 && activity.flock > 0.5 && Math.abs(f.pos[0]) < 45) flock = { pos: f.pos };
         animals.push({ mesh: bird, coat: FLOCK_COAT, model: placeModel(f.pos, f.fwd, [0, 1, 0], 0, FLOCK_SCALE * activity.flock), flap: f.flap, fold: 0, tail: 0 });
       }
     }
+    lastTime = time;
+    if (events.length > 8) events.length = 8;
     return activity;
   }
+
+  // Hands over what has happened since the last call (wings at take-off), for the sound.
+  function drain() { const e = events; events = []; return e; }
 
   function drawAnimals(prog, U, extra) {
     if (!animals.length) return;
@@ -266,5 +279,5 @@ export function createWildlife(gl, P, tree, quality) {
     }
   }
 
-  return { update, draw, drawShadow, get activity() { return activity; }, get animals() { return animals.length + (squirrel ? 1 : 0); }, get squirrel() { return squirrel; }, perches, route };
+  return { update, draw, drawShadow, get activity() { return activity; }, get animals() { return animals.length + (squirrel ? 1 : 0); }, get squirrel() { return squirrel; }, get flock() { return flock; }, drain, perches, route };
 }

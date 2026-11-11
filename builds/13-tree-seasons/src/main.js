@@ -261,7 +261,24 @@ function frame(now) {
 
   const st = scene.render({ time, year: y, eye, target: aim, fovY, focus, blur: cam.blur, yearSeconds: YEAR_SECONDS });
   if (!loading.hidden) { loading.hidden = true; boot.totalMs = performance.now() - boot.start; }
-  sound.update(st);
+  // Tell the sound where the animals are: left or right of the lens, and how near.
+  const took = scene.life.drain();
+  if (sound.on) {
+    const vx = aim[0] - eye[0], vz = aim[2] - eye[2], vl = Math.hypot(vx, vz) || 1;
+    const edge = Math.tan(fovY / 2) * aspect;        // sideways reach of the frame per metre of depth
+    const hear = (p) => {
+      const dx = p[0] - eye[0], dz = p[2] - eye[2];
+      const depth = (dx * vx + dz * vz) / vl, across = (dz * vx - dx * vz) / vl;
+      const d = Math.hypot(dx, p[1] - eye[1], dz);
+      return { pan: Math.max(-1, Math.min(1, (across / Math.max(depth, 1) / edge) * 0.8)), near: Math.max(0.2, Math.min(1.5, 12 / d)) };
+    };
+    const sq = scene.life.squirrel, fl = scene.life.flock;
+    sound.update(st, {
+      squirrel: sq ? { mode: sq.mode, moving: sq.moving, onBark: sq.onBark, ...hear(sq.pos) } : null,
+      flock: fl ? hear(fl.pos) : null,
+      takeoffs: took.map((e) => hear(e.pos)),
+    });
+  }
 
   // Frame rate, and a lower internal resolution when frames take too long.
   const ms = now - (frame.prev || now); frame.prev = now;
@@ -315,6 +332,7 @@ if (params.get('stats') === '1') statsBox.hidden = false;
 // For checks in a headless or hidden browser, where requestAnimationFrame is throttled:
 // draws n frames back to back and returns the mean cost of one frame in milliseconds.
 window.__quality = quality;
+window.__sound = sound;   // __sound.audition('cuckoo') plays one phrase of that bird now
 window.__scene = scene;
 window.__bench = (n = 30, y = 0.38) => {
   const gl = scene.gl;
