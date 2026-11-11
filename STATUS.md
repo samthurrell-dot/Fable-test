@@ -5,7 +5,7 @@ Last updated: 11 Nov 2026 (Opus 5.5, setup session)
 ## Done
 - [x] Reviewed the 15 Maker Skool prompts and the video of results.
 - [x] Skill: `skills/showpiece-prompt-builder` (how the prompts are built, templates, model choice).
-- [ ] Skill: `skills/build-harvest` (turn finished build code into knowledge for other models).
+- [x] Skill: `skills/build-harvest` (turn finished build code into knowledge for other models).
 - [ ] Plan: `plan/viability.md` (which builds on Fable 5.2, which on Opus 5.5).
 - [ ] Ready prompts in `prompts/ready/`.
 
