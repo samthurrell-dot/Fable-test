@@ -23,6 +23,9 @@ const ORBIT_RATE = 0.045;       // speed of that drift
 const DRAG_YAW = 0.005;         // radians of orbit per pixel dragged
 const TARGET_FRAME_MS = 21;     // above this the picture is rendered at a lower resolution
 const MIN_SCALE = 0.45;         // lowest internal resolution as a share of full
+const SMOOTH_FRAME_MS = 17.6;   // at or under this the page is holding 60 frames a second
+const STEP_UP_AFTER = 150;      // smooth frames in a row before the resolution is tried one step higher
+const STEP_UP = 1.12;           // size of that step
 const TUNE_BUDGET_MS = 13;      // start-up check: aim for a frame that costs this much
 const TUNE_MSAA_LIMIT_MS = 20;  // slower than this at start-up and multisampling is switched off
 const TUNE_PROBE_SCALE = 0.5;   // the check draws at this share of full size, so it is quick
@@ -31,16 +34,17 @@ const TUNE_MSAA_SAVING = 0.72;  // measured: frame cost with multisampling off, 
 const TUNE_KEEP_DAYS = 7;       // the result is remembered on this device for this long
 
 // Camera presets. distance and height in metres, fov in degrees.
+// blur scales the depth of field: a close view would otherwise blur everything but one thin slice.
 const VIEWS = {
-  wide: { label: 'Whole tree', distance: 46, height: 3.2, target: [0, 4.9, 0], fov: 17, fitWidth: 13.5 },
-  crown: { label: 'Crown', distance: 21, height: 6.4, target: [1.4, 6.7, 0], fov: 15, fitWidth: 5 },
-  ground: { label: 'Ground', distance: 13, height: 0.9, target: [0.4, 1.5, 0], fov: 25, fitWidth: 5 },
+  wide: { label: 'Whole tree', distance: 46, height: 3.2, target: [0, 4.9, 0], fov: 17, fitWidth: 13.5, blur: 1 },
+  crown: { label: 'Crown', distance: 21, height: 6.4, target: [1.4, 6.7, 0], fov: 15, fitWidth: 5, blur: 0.6 },
+  ground: { label: 'Ground', distance: 13, height: 0.9, target: [0.9, 1.5, 0], fov: 25, fitWidth: 5, blur: 0.4 },
 };
 const VIEW_ORDER = ['wide', 'crown', 'ground'];
 
 const QUALITY = {
-  desktop: { twigs: 8000, leafSizeMul: 1, grassBlades: 50000, snowflakes: 6000, shadowSize: 2048, msaa: 4, maxDpr: 2, blur: 1, maxBlurPx: 11, blurStep: 1.4 },
-  phone: { twigs: 3200, leafSizeMul: 1.5, grassBlades: 14000, snowflakes: 2000, shadowSize: 1024, msaa: 4, maxDpr: 1.5, blur: 1, maxBlurPx: 7, blurStep: 2.2 },
+  desktop: { twigs: 8000, leafSizeMul: 1, grassBlades: 50000, flowers: 9000, butterflies: 30, snowflakes: 6000, shadowSize: 2048, msaa: 4, maxDpr: 2, blur: 1, maxBlurPx: 11, blurStep: 1.4 },
+  phone: { twigs: 3200, leafSizeMul: 1.5, grassBlades: 14000, flowers: 3500, butterflies: 20, snowflakes: 2000, shadowSize: 1024, msaa: 4, maxDpr: 1.5, blur: 1, maxBlurPx: 7, blurStep: 2.2 },
 };
 
 const params = new URLSearchParams(location.search);
@@ -162,10 +166,11 @@ function frameCost(n) {
   const shot = { time: 0, year: 0.38, eye: [0, v.height, v.distance], target: v.target, fovY: (v.fov * Math.PI) / 180, focus: v.distance, yearSeconds: YEAR_SECONDS };
   const px = new Uint8Array(4);
   const once = () => { scene.render(shot); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); };
-  once();   // the first frame also pays for setting up the GPU programs, so it is not timed
-  const t0 = performance.now();
-  for (let i = 0; i < n; i++) once();
-  return (performance.now() - t0) / n;
+  once(); once();   // the first frames also pay for setting up the GPU programs, so they are not timed
+  // Take the quickest of n frames: a slow one is a hiccup somewhere else, not the cost of the scene.
+  let best = 1e9;
+  for (let i = 0; i < n; i++) { const t0 = performance.now(); once(); best = Math.min(best, performance.now() - t0); }
+  return best;
 }
 const tune = { cost: 0, scale: 1, msaa: quality.msaa, from: 'off' };
 const tuneKey = `tree13-tune-${isPhone ? 'phone' : 'desktop'}-${innerWidth}x${innerHeight}@${window.devicePixelRatio || 1}`;
@@ -183,10 +188,10 @@ if (!frozen && params.get('tune') !== '0') {
     scale = saved.scale;
     tune.from = 'saved';
   } else {
-    // Time two frames at half size and work out what a full-size frame would cost.
+    // Time a few frames at half size and work out what a full-size frame would cost.
     scale = TUNE_PROBE_SCALE;
     applySize();
-    let cost = frameCost(2) * TUNE_FILL_FACTOR;
+    let cost = frameCost(3) * TUNE_FILL_FACTOR;
     tune.cost = cost;
     if (cost > TUNE_MSAA_LIMIT_MS) { scene.setMsaa(0); tune.msaa = 0; cost *= TUNE_MSAA_SAVING; }
     scale = Math.max(MIN_SCALE, Math.min(1, Math.sqrt(TUNE_BUDGET_MS / cost)));
@@ -200,7 +205,10 @@ if (!frozen && params.get('tune') !== '0') {
 window.__tune = tune;
 
 // --- Loop -------------------------------------------------------------------------------------
-let last = performance.now(), emaMs = 16.7, slowFrames = 0, frames = 0;
+let last = performance.now(), emaMs = 16.7, slowFrames = 0, steadyFrames = 0, frames = 0;
+let ceiling = 1;   // the highest resolution worth trying; lowered each time a step up proves too slow
+let trial = null;  // the last step down, kept until we know whether it made frames any quicker
+let capped = false; // true when frames are slow for a reason resolution cannot fix (for example a 30 fps power saver)
 const stats = { fps: 60, ms: 16.7, scale: 1 };
 window.__stats = stats;
 
@@ -225,6 +233,7 @@ function frame(now) {
   cam.height += (v.height - cam.height) * k;
   cam.fov += (v.fov - cam.fov) * k;
   cam.fitWidth += (v.fitWidth - cam.fitWidth) * k;
+  cam.blur += (v.blur - cam.blur) * k;
   for (let i = 0; i < 3; i++) cam.target[i] += (v.target[i] - cam.target[i]) * k;
   parX += (parTX - parX) * (frozen ? 0 : Math.min(1, dt * 3));
   parY += (parTY - parY) * (frozen ? 0 : Math.min(1, dt * 3));
@@ -239,20 +248,48 @@ function frame(now) {
   fovY = Math.max(fovY, fitFov);
   const focus = Math.hypot(eye[0] - cam.target[0], eye[1] - cam.target[1], eye[2] - cam.target[2]);
 
-  const st = scene.render({ time, year: y, eye, target: cam.target, fovY, focus, yearSeconds: YEAR_SECONDS });
+  const st = scene.render({ time, year: y, eye, target: cam.target, fovY, focus, blur: cam.blur, yearSeconds: YEAR_SECONDS });
   if (!loading.hidden) { loading.hidden = true; boot.totalMs = performance.now() - boot.start; }
   sound.update(st);
 
   // Frame rate, and a lower internal resolution when frames take too long.
   const ms = now - (frame.prev || now); frame.prev = now;
   if (ms > 0 && ms < 500) emaMs = emaMs * 0.92 + ms * 0.08;
-  stats.ms = emaMs; stats.fps = 1000 / emaMs; stats.scale = scale;
+  stats.ms = emaMs; stats.fps = 1000 / emaMs; stats.scale = scale; stats.capped = capped;
   frames++;
   if (!frozen && frames > 40) {
+    // Resolution finds its own level: down a step when frames run slow, up a step after a long
+    // smooth spell. A step up that fails sets a ceiling just below it, so it does not see-saw.
     slowFrames = emaMs > TARGET_FRAME_MS ? slowFrames + 1 : 0;
-    if (slowFrames > 45 && scale > MIN_SCALE) {
+    steadyFrames = emaMs <= SMOOTH_FRAME_MS ? steadyFrames + 1 : 0;
+    if (trial && frames > 70) {
+      // Did the last step down buy anything? If not, the browser is holding the frame rate down
+      // itself (a power saver, a 30 Hz screen). Put the resolution back and stop adjusting.
+      if (emaMs <= trial.ms * 0.93) {
+        trial = null;                       // it helped: carry on as normal
+      } else if (trial.tries < 2 && scale > MIN_SCALE) {
+        // A screen shows whole frames only, so one step can fail to cross the line. Try one more.
+        trial.tries++;
+        scale = Math.max(MIN_SCALE, scale * 0.85);
+        frames = 0;
+        applySize();
+      } else {
+        scale = trial.scale; capped = true; trial = null;
+        applySize();
+        saveTune();
+      }
+    } else if (capped || trial) {
+      // nothing to do
+    } else if (slowFrames > 45 && scale > MIN_SCALE) {
+      trial = { ms: emaMs, scale, tries: 1 };
+      ceiling = Math.max(MIN_SCALE, scale * 0.95);
       scale = Math.max(MIN_SCALE, scale * 0.85);
-      slowFrames = 0; frames = 0;
+      slowFrames = 0; steadyFrames = 0; frames = 0;
+      applySize();
+      saveTune();
+    } else if (steadyFrames > STEP_UP_AFTER && scale < ceiling - 0.02) {
+      scale = Math.min(ceiling, scale * STEP_UP);
+      steadyFrames = 0; frames = 0;
       applySize();
       saveTune();
     }

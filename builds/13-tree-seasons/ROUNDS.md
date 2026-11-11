@@ -1,6 +1,6 @@
 # 13 – A tree through the seasons: rounds
 
-State: **draft**. v1 plus three rounds are done (two on the look, one on speed). The prompt asks for at least 4 improvement rounds, so at least one is still owed (see "Next" at the bottom).
+State: v1 plus four rounds are done (three on the look, one on speed), which meets the prompt's minimum of four. It is still short of finished: see "Next" at the bottom.
 
 Checked in the desktop app's browser pane on this PC (Intel UHD Graphics 615, a low-power laptop chip). The pane was hidden during the run, so frame rate was measured with `window.__bench()` (draws frames back to back and waits for the GPU) and not from the live loop.
 
@@ -63,8 +63,36 @@ Sam put the repo on GitHub Pages and found two things: the site address showed t
   - a "Growing the tree…" line on a sky-and-grass backdrop shows at once, and start-up pauses between steps so the browser can paint it.
 - **Measured after, locally on the UHD 615:** first visit 580 ms from script start to first picture (tree 300, GPU programs 130, speed check 115); later visits 300 ms. Not measured: a truly cold first visit, where the browser has never compiled these shaders. That is likely to be slower.
 
-## Next (rounds still owed)
+## Round 4 (life) – Sam's brief
 
+Sam, after looking at round 3: the tree itself is good; the wind sounds like road noise; the bird sounds are liked; spend this pass on ground detail and ambient life. "The beauty of a tree is the life that it holds."
+
+Three weakest things:
+1. **Nothing lived in the picture.** Added, all as pure functions of time so they scrub and freeze like the rest (`engine/life.js`, `src/wildlife.js`):
+   - up to nine small birds (robin, blackbird, blue tit, sparrows, chaffinches) that sit on real branches, look about, hop, fly to other perches in bursts-and-glides, and loop out round the tree; two or three stay through winter;
+   - a red squirrel that forages in the grass, bounds to the trunk, climbs it, runs out along a bough, sits up and flicks its tail, then comes back down (absent in deep winter);
+   - 20–30 butterflies over the meadow and at the crown's edge from late spring to early autumn;
+   - a flock of eleven geese that crosses above the crown in autumn;
+   - pollen and seed fluff hanging in the summer air.
+2. **The ground was bare grass.** Added: drifts of daisies, buttercups, red clover and poppies that open and fade on their own dates; a few tall seed-head stems; surface roots snaking out from the trunk; troops of toadstools near the roots in autumn.
+3. **The wind sounded like a road.** It was low, steady, filtered noise. Rebuilt as leaves: a bright hiss that swells and dies in slow, uneven gusts and falls nearly silent between them, a quiet body of moving air under it, and a thin breath through bare twigs in winter. Kept the chirps Sam liked and added two more singers (a two-note see-saw and a slow, low fluting phrase) plus a lone winter singer.
+
+Fixed on the way:
+- Flower heads were drawn at twice the intended size (the quad is centred, so "size" was a radius). Halved.
+- The squirrel's foraging spot was out of frame in the ground view and far out of focus. Moved to the right of the trunk, level with it.
+- Close views blurred everything but a thin slice. Each view now has its own depth-of-field strength.
+- Snow-covered roots looked like white claws. Roots are lower and thinner.
+- The autumn flock was hidden behind the crown, edge-on and blurred away. It now flies just above the crown, 30 m behind it, angled a little towards the lens.
+- The start-up speed check had become too cautious and pinned resolution at the minimum. Resolution now also steps back up after a long smooth spell, and stops adjusting if a step down buys nothing (a browser power saver holding 30 fps).
+
+Measured after this round on the UHD 615, phone settings, early summer with ten animals out: full 1920×1080 with 4× MSAA 56 ms; 1075×605 without MSAA 16.7 ms. No measurable cost from the wildlife.
+
+Not checked: the sound has still not been heard by me, only run for errors. The live frame rate in this app's browser pane sits at a flat 30 fps whatever the resolution, so the new step-up logic is tested only for not misbehaving there.
+
+## Next
+
+- Birds are hard to pick out while perched inside the leaves; they read best in flight and in winter. The squirrel and birds are simple shapes: fine at this distance, plain close up.
+- No mating of sound to sight yet (a bird that sings is not the bird you see).
 - Cloud cover is thin in the wide view: mostly a clean gradient. A few clear cumulus shapes would add life.
 - Leaves have no serrated edge; the autumn leaf fall still reads as a sheet on the downwind side.
 - Winter: tree shadow on snow is still faint from the wide view; no snow build-up shape on the ground at the trunk.

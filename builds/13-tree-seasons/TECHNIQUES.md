@@ -76,6 +76,21 @@ A long lens only sees the few degrees above the horizon. Clouds projected on a f
 
 The sun's compass direction is a per-season key (`sunAzimuth`): side light models the summer crown; light from behind makes autumn leaves glow.
 
+## 5c. Animals as pure functions of time (`engine/life.js`)
+
+**What:** no animal has stored state. `birdState(i, t, …)` works out from the clock alone which perch a bird left, which it is heading for and how far along it is. Time is cut into cycles per bird; a hash of (bird, cycle) picks the perch, so cycle k ends where cycle k+1 begins. Flights are cubic Bezier curves; the tangent gives the heading. The squirrel follows a path built from the tree's own skeleton (grass, trunk surface, bough) with a table of [seconds, metres along the path]; equal distances in a row are pauses.
+
+**Why:** the whole build can be frozen (`?t=`) and scrubbed. A simulation with stored state cannot. It also costs nothing: about twenty small matrix builds per frame.
+
+**Key parameters:** the `LIFE` table (cycle lengths, speeds, share of looping flights, squirrel stride) and `lifeActivity(y)` (who is about at each time of year).
+
+**Details that mattered:**
+- Perches are found on the tree: fairly level, finger-thick branches. Perched birds add the same sway as the branch (`swayOffset` mirrors the GLSL), or they float.
+- Small birds fly in bursts: a few beats, a short glide, and a glide in to land. Wings fold on landing.
+- Animals are drawn larger than life (birds 1.8×, squirrel 1.4×). At true size from 46 m they are three pixels.
+- A flat-winged bird seen exactly side-on is a line. The far flock flies angled towards the lens for this reason.
+- Butterflies and flowers are instanced and worked out wholly in the vertex shader from a seed.
+
 ## 6. Lens (`POST_FS`)
 
 One-pass depth of field: a golden-angle spiral gather where each sample counts only if its own blur circle reaches the centre pixel. Then exposure, per-season saturation and tint, a filmic curve, vignette and grain. Measured cost: too small to see (removing it did not lower frame time).
@@ -85,6 +100,7 @@ One-pass depth of field: a golden-angle spiral gather where each sample counts o
 - Draw near things first and the sky last on the far plane: saved about 25% at full resolution.
 - 4× MSAA on a half-float target costs about 30–45% on this GPU. Worth it on a strong GPU for the twigs; switched off by the start-up check on a weak one.
 - Start-up check (`frameCost` in `src/main.js`): times two frames at half size, with `readPixels` to force the GPU to finish, scales the result up by a measured factor (2.5), then sets MSAA and resolution. The answer is kept in `localStorage` for a week. A running check lowers resolution further if frames stay over 21 ms. `?tune=fresh` measures again.
+- Live adjustment: resolution steps down after 45 slow frames and up after 150 smooth ones. A failed step up sets a ceiling just below it. If two steps down in a row buy nothing, the frame rate is being held by the browser, not the GPU; the resolution is put back and left alone.
 - Start-up: `createPrograms` in `engine/glkit.js` starts every shader compile and link before asking for any result, so the browser can build them side by side.
 - Phone settings: 3,200 twigs, 22,400 leaves drawn 1.5× larger, 14,000 grass blades, 1024 shadow map.
 

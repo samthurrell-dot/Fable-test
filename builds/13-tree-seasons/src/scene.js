@@ -11,6 +11,7 @@ import * as M from '../engine/mat4.js';
 import { LEAF_STRIDE, LEAF_LAYOUT, MESH_STRIDE, mulberry32 } from '../engine/tree.js';
 import { seasonState, leafSchedule, blossomSchedule, TIMING } from '../engine/seasons.js';
 import { SHADERS } from './shaders.js';
+import { createWildlife } from './wildlife.js';
 
 const NEAR = 2;                 // metres
 const FAR = 4000;               // metres
@@ -18,6 +19,7 @@ const GROUND_HALF = 1500;       // half size of the ground square, metres
 const SHADOW_DEPTH_RANGE = 170; // metres the shadow camera covers along the sun's direction
 const GRASS_RADIUS = 26;        // blades are scattered inside this radius, metres
 const EXPOSURE = 0.92;          // overall brightness before the film curve
+const MOTES = 900;              // most specks of pollen and seed fluff in the summer air
 const COC_SCALE_1080 = 460;     // blur strength at 1080 px height (see shaders.js, uCocScale)
 
 function leafMesh() {
@@ -64,6 +66,10 @@ export function createScene(canvas, tree, quality) {
     sky: [SHADERS.screenVS, SHADERS.skyFS],
     flake: [SHADERS.flakeVS, SHADERS.flakeFS],
     post: [SHADERS.screenVS, SHADERS.postFS],
+    critter: [SHADERS.critterVS, SHADERS.critterFS],
+    critterShadow: [SHADERS.critterShadowVS, SHADERS.depthOnlyFS],
+    fly: [SHADERS.flyVS, SHADERS.flyFS],
+    flower: [SHADERS.flowerVS, SHADERS.flowerFS],
   });
 
   // --- Bark ---------------------------------------------------------------------------------
@@ -113,7 +119,7 @@ export function createScene(canvas, tree, quality) {
     const r = 0.5 + GRASS_RADIUS * Math.pow(rnd(), 0.7), a = rnd() * Math.PI * 2;
     blades[i * 6] = Math.cos(a) * r;
     blades[i * 6 + 1] = Math.sin(a) * r;
-    blades[i * 6 + 2] = 0.16 + 0.3 * rnd() * rnd() + (r < 2 ? -0.06 : 0);
+    blades[i * 6 + 2] = (0.16 + 0.3 * rnd() * rnd() + (r < 2 ? -0.06 : 0)) * (rnd() < 0.06 ? 2.1 : 1);   // a few tall seed-head stems
     blades[i * 6 + 3] = rnd() * Math.PI * 2;
     blades[i * 6 + 4] = rnd();
     blades[i * 6 + 5] = rnd();
@@ -135,6 +141,8 @@ export function createScene(canvas, tree, quality) {
   const emptyVao = gl.createVertexArray();
   gl.bindVertexArray(null);
 
+  const wildlife = createWildlife(gl, P, tree, quality);
+
   // --- Targets ------------------------------------------------------------------------------
   const shadow = createShadowTarget(gl, quality.shadowSize);
   let target = null;
@@ -149,7 +157,7 @@ export function createScene(canvas, tree, quality) {
   }
 
   const shadowBias = new Float32Array([0.5, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0.5, 0, 0.5, 0.5, 0.5, 1]);
-  const info = { hdr, msaa: 0, leaves: tree.leafCount, blossoms: tree.blossomCount, triangles: 0 };
+  const info = { hdr, msaa: 0, leaves: tree.leafCount, blossoms: tree.blossomCount, triangles: 0, animals: 0 };
 
   function render(frame) {
     const st = seasonState(frame.year);
@@ -190,7 +198,9 @@ export function createScene(canvas, tree, quality) {
       uZenith: st.zenith, uHorizon: st.horizon, uHill: st.hill, uCloud: st.cloud,
       uFlakes: st.snowFall, uFlakeCentre: [frame.eye[0] * 0.5, 0, frame.eye[2] * 0.5],
       uPixels: h, uFovScale: 1 / Math.tan(frame.fovY / 2),
+      uFlakeFall: 1, uFlakeScale: 1, uFlakeTint: [0.95, 0.97, 1],
     };
+    const life = wildlife.update(frame.time, st);
 
     const leavesOut = y > TIMING.LEAF_GROW_START && y < TIMING.LEAF_FADE[1];
     const blossomOut = y > TIMING.BLOSSOM_OPEN_START && y < TIMING.BLOSSOM_FADE[1];
@@ -223,6 +233,7 @@ export function createScene(canvas, tree, quality) {
     gl.bindVertexArray(barkVao);
     gl.drawElements(gl.TRIANGLES, barkIndexCount, gl.UNSIGNED_INT, 0);
     drawFoliage(P.leafShadow, { uViewProj: shadowVP });
+    wildlife.drawShadow(U, shadowVP);
     gl.disable(gl.POLYGON_OFFSET_FILL);
 
     // 2. The scene.
@@ -245,6 +256,7 @@ export function createScene(canvas, tree, quality) {
     gl.drawElementsInstanced(gl.TRIANGLES, 9, gl.UNSIGNED_SHORT, 0, bladeCount);
 
     drawFoliage(P.leaf);
+    wildlife.draw(U, y);
 
     gl.useProgram(P.ground.program);
     setUniforms(gl, P.ground, U);
@@ -259,13 +271,18 @@ export function createScene(canvas, tree, quality) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.depthMask(true);
 
-    if (st.snowFall > 0.001) {
+    // Things that hang in the air: snow in winter, pollen and seed fluff in the warm months.
+    if (st.snowFall > 0.001 || life.motes > 0.01) {
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.depthMask(false);
       gl.useProgram(P.flake.program);
       setUniforms(gl, P.flake, U);
       gl.bindVertexArray(flakeVao);
-      gl.drawArrays(gl.POINTS, 0, flakeCount);
+      if (st.snowFall > 0.001) gl.drawArrays(gl.POINTS, 0, flakeCount);
+      if (life.motes > 0.01) {
+        setUniforms(gl, P.flake, { uFlakes: 0.6 * life.motes, uFlakeFall: 0.03, uFlakeScale: 0.5, uFlakeTint: [1.6, 1.35, 0.8] });
+        gl.drawArrays(gl.POINTS, 0, Math.min(flakeCount, MOTES));
+      }
       gl.disable(gl.BLEND); gl.depthMask(true);
     }
     target.resolve();
@@ -281,7 +298,7 @@ export function createScene(canvas, tree, quality) {
     const res = h / 1080;
     setUniforms(gl, P.post, {
       uZ: 0, uColor: 1, uDepth: 2, uPx: [1 / w, 1 / h], uNear: NEAR, uFar: FAR,
-      uFocus: frame.focus, uCocScale: COC_SCALE_1080 * res * quality.blur,
+      uFocus: frame.focus, uCocScale: COC_SCALE_1080 * res * quality.blur * (frame.blur === undefined ? 1 : frame.blur),
       uMaxCoc: Math.max(2, quality.maxBlurPx * res), uRadStep: Math.max(0.8, quality.blurStep * Math.max(res, 0.6)),
       uExposure: EXPOSURE, uSat: st.saturation, uTint: st.tint, uTime: frame.time, uLdr: hdr ? 0 : 1,
     });
@@ -293,6 +310,7 @@ export function createScene(canvas, tree, quality) {
     gl.bindVertexArray(null);
 
     info.msaa = samples;
+    info.animals = wildlife.animals;
     info.triangles = barkIndexCount / 3 + (leavesOut ? leaves.count * leaves.indexCount / 3 : 0) + (blossomOut ? blossoms.count * 2 : 0) + bladeCount * 3;
     return st;
   }

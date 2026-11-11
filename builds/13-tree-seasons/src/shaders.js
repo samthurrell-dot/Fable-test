@@ -496,15 +496,17 @@ layout(location=0) in vec4 aSeed;
 uniform vec3 uFlakeCentre;
 uniform float uPixels;       // screen height in pixels
 uniform float uFovScale;     // 1 / tan(fov / 2)
+uniform float uFlakeFall;    // 1 = falling snow, about 0.03 = pollen and seed fluff hanging in the air
+uniform float uFlakeScale;   // size against a snowflake
 const vec3 FLAKE_BOX = vec3(90.,24.,90.);  // metres; flakes wrap round inside this box
 const float FLAKE_SIZE = 0.055;            // metres
 out float vFade;
 void main(){
   vec3 p=aSeed.xyz*FLAKE_BOX;
-  p.y=mod(p.y-uTime*(1.1+aSeed.w*0.9),FLAKE_BOX.y);
+  p.y=mod(p.y-uTime*(1.1+aSeed.w*0.9)*uFlakeFall,FLAKE_BOX.y);
   p.xz=mod(p.xz+uWindDir*uTime*0.8+vec2(sin(uTime*0.7+aSeed.w*30.),cos(uTime*0.6+aSeed.w*17.))*0.5,FLAKE_BOX.xz)-FLAKE_BOX.xz*0.5+uFlakeCentre.xz;
   gl_Position=uViewProj*vec4(p,1.);
-  float px=FLAKE_SIZE*(0.6+0.8*aSeed.w)*uFovScale*uPixels/max(gl_Position.w,0.1);
+  float px=FLAKE_SIZE*uFlakeScale*(0.6+0.8*aSeed.w)*uFovScale*uPixels/max(gl_Position.w,0.1);
   vFade=clamp(px,0.,1.);
   gl_PointSize=clamp(px,1.,24.);
 }
@@ -513,10 +515,188 @@ void main(){
 const FLAKE_FS = HEAD + SHARED + OUTPUT + `
 in float vFade;
 uniform float uFlakes;
+uniform vec3 uFlakeTint;
 void main(){
   float a=smoothstep(0.5,0.15,length(gl_PointCoord-0.5))*uFlakes*vFade;
-  vec3 c=vec3(0.95,0.97,1.)*(uSkyAmb*1.25+uSunCol*0.22);
+  vec3 c=uFlakeTint*(uSkyAmb*1.25+uSunCol*0.22);
   fragColor=vec4(uLdr>0.5 ? c/(1.+c) : c, a);
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
+// Small animals (birds, squirrel). One mesh per kind, drawn once per animal with its own matrix.
+const CRITTER_VS_BODY = `
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aInfo;   // part (0 body, 1 left wing, 2 right wing, 3 tail), colour region
+uniform mat4 uModel;
+uniform float uFlap;   // wing angle in radians (0 = level, positive = up)
+uniform float uFold;   // 1 = wings shut against the body
+uniform float uTail;   // tail swing in radians
+const vec2 WING_ROOT = vec2(0.040, 0.016);   // height and half width of the wing joint in the bird model
+const vec2 TAIL_ROOT = vec2(-0.095, 0.050);  // where the squirrel's tail joins the body (x, y)
+#ifndef SHADOW_PASS
+out vec3 vWorld; out vec3 vNrm; out vec3 vLocal; out float vRegion;
+#endif
+void main(){
+  vec3 p=aPos, n=aNrm;
+  if(aInfo.x>0.5 && aInfo.x<2.5){
+    float side=aInfo.x<1.5 ? 1. : -1.;
+    float up=p.y-WING_ROOT.x;
+    float outw=(p.z-side*WING_ROOT.y)*side;
+    p.x-=uFold*outw*0.45;                 // a shut wing lies back along the body
+    outw*=mix(1.,0.12,uFold);
+    float a=uFlap*(1.-uFold);
+    float c=cos(a), s=sin(a);
+    p.y=WING_ROOT.x+up*c+outw*s;
+    p.z=side*(WING_ROOT.y+outw*c-up*s);
+    n=normalize(vec3(0.,c,-side*s));
+  } else if(aInfo.x>2.5){
+    vec2 d=p.xy-TAIL_ROOT;
+    float a=uTail*min(length(d)*7.,1.5);  // the tip swings further than the root
+    float c=cos(a), s=sin(a);
+    p.xy=TAIL_ROOT+vec2(d.x*c-d.y*s, d.x*s+d.y*c);
+  }
+  vec4 w=uModel*vec4(p,1.);
+  gl_Position=uViewProj*w;
+#ifndef SHADOW_PASS
+  vWorld=w.xyz; vNrm=mat3(uModel)*n; vLocal=aPos; vRegion=aInfo.y;
+#endif
+}
+`;
+
+const CRITTER_FS = HEAD + SHARED + NOISE + SHADOW + OUTPUT + `
+in vec3 vWorld; in vec3 vNrm; in vec3 vLocal; in float vRegion;
+uniform vec3 uColA;   // back
+uniform vec3 uColB;   // belly and breast
+uniform vec3 uColC;   // beak, feet
+uniform vec3 uColD;   // wings and tail
+const float COAT_GRAIN = 220.;   // fineness of the fur or feather speckle
+void main(){
+  vec3 N=normalize(vNrm);
+  if(!gl_FrontFacing) N=-N;
+  vec3 base=vRegion<0.5 ? uColA : vRegion<1.5 ? uColB : vRegion<2.5 ? uColC : uColD;
+  base*=0.82+0.36*noise3(vLocal*COAT_GRAIN);
+  float sh=shadowAt4(vWorld+N*0.03,1.5);
+  float ndl=max(dot(N,uSunDir),0.);
+  vec3 lit=base*(ndl*sh*uSunCol*0.85+mix(uGroundAmb,uSkyAmb,N.y*0.5+0.5)*1.1);
+  vec3 V=normalize(uCam-vWorld);
+  lit+=uSunCol*0.05*pow(1.-max(dot(N,V),0.),3.)*sh;   // a thin rim so small animals read against the grass
+  fragColor=encodeOut(applyFog(lit,vWorld));
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
+// Butterflies: each is two flapping quads, its whole flight worked out here from time and a seed.
+const FLY_VS = HEAD + SHARED + `
+layout(location=0) in vec3 aWing;   // x: along the body -1..1, y: out along the wing 0..1, z: side -1 or 1
+layout(location=1) in vec4 iSeed;
+uniform float uPresence;            // 0 none .. 1 all of them out
+const float FLY_SIZE = 0.10;        // length of one wing in metres (larger than life, to read from far off)
+const float FLY_FLAP_HZ = 8.;       // wingbeats per second
+const float FLY_ROAM = 1.5;         // metres a butterfly wanders from its home spot
+out vec2 vUv; out vec3 vWorld; out float vKind; out float vFacing;
+vec3 flyPath(float t, vec4 s){
+  float ang=s.x*6.2831+t*0.05*(s.y-0.5);
+  float rad=3.0+s.y*9.0;
+  // Most stay over the meadow; one in five works the lower edge of the crown.
+  vec3 home=vec3(cos(ang)*rad, 0.45+s.z*1.5+step(0.8,s.w)*3.2, sin(ang)*rad);
+  vec3 w=vec3(sin(t*0.83+s.x*40.)+0.6*sin(t*1.9+s.y*30.),
+              0.45*sin(t*1.31+s.z*50.)+0.25*sin(t*3.7+s.x*9.),
+              cos(t*0.71+s.w*40.)+0.6*sin(t*2.3+s.z*20.));
+  return home+w*vec3(FLY_ROAM,0.5,FLY_ROAM);
+}
+void main(){
+  float show=smoothstep(0.,0.12,uPresence-iSeed.y*0.85);
+  if(show<=0.){ gl_Position=vec4(2.,2.,2.,1.); return; }
+  float t=uTime*(0.7+0.5*iSeed.z);
+  vec3 p0=flyPath(t,iSeed), p1=flyPath(t+0.08,iSeed);
+  vec3 F=normalize(vec3(p1.x-p0.x,0.3*(p1.y-p0.y),p1.z-p0.z)+1e-5);
+  vec3 S=normalize(cross(F,vec3(0.,1.,0.)));
+  vec3 Up=cross(S,F);
+  float ph=uTime*FLY_FLAP_HZ*6.2831*(0.8+0.4*iSeed.w)+iSeed.x*50.;
+  float a=0.25+1.05*(0.5+0.5*sin(ph));     // from nearly flat to nearly shut over the back
+  p0.y+=0.03*sin(ph);                       // each beat lifts the body a little
+  vec3 wingDir=S*aWing.z*cos(a)+Up*sin(a);
+  vec3 wp=p0+(F*aWing.x*0.55+wingDir*aWing.y)*FLY_SIZE*show;
+  gl_Position=uViewProj*vec4(wp,1.);
+  vUv=aWing.xy; vWorld=wp; vKind=iSeed.w;
+  vFacing=abs(dot(normalize(cross(F,wingDir)),uSunDir));
+}
+`;
+
+const FLY_FS = HEAD + SHARED + SHADOW + OUTPUT + `
+in vec2 vUv; in vec3 vWorld; in float vKind; in float vFacing;
+void main(){
+  float d=length(vec2(vUv.x*0.9+0.08,(vUv.y-0.5)*1.15));
+  if(d>0.6) discard;
+  if(vUv.y>0.5 && abs(vUv.x+0.12)<(vUv.y-0.5)*0.22) discard;   // the notch between fore and hind wing
+  vec3 base; float border;
+  if(vKind<0.35){ base=vec3(0.95,0.95,0.90); border=0.25; }        // white
+  else if(vKind<0.6){ base=vec3(0.95,0.84,0.22); border=0.1; }     // yellow
+  else if(vKind<0.85){ base=vec3(0.90,0.40,0.07); border=0.95; }   // orange with a dark edge
+  else { base=vec3(0.32,0.48,0.95); border=0.6; }                  // blue
+  base=mix(base,vec3(0.06,0.05,0.04),smoothstep(0.44,0.58,d)*border);
+  float sh=shadowAt4(vWorld,2.);
+  vec3 lit=base*(uSunCol*sh*(0.3+0.5*vFacing)+uSkyAmb*1.1);
+  fragColor=encodeOut(applyFog(lit,vWorld));
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
+// Meadow flowers: small flower heads that turn to the lens, opening and fading on their own dates.
+const FLOWER_VS = HEAD + SHARED + `
+layout(location=0) in vec2 aQuad;   // -1..1
+layout(location=1) in vec4 iPos;    // x, z, stem height, head size (metres)
+layout(location=2) in vec4 iRnd;    // kind, opens (year), fades (year), phase
+uniform float uGrassH;
+const float FLOWER_SWAY = 0.2;      // how far a flower head leans in the wind, as a share of its height
+out vec2 vUv; out float vKind; out vec3 vWorld;
+void main(){
+  float open=smoothstep(iRnd.y,iRnd.y+0.035,uYear)*(1.-smoothstep(iRnd.z,iRnd.z+0.05,uYear));
+  if(open<0.01){ gl_Position=vec4(2.,2.,2.,1.); return; }
+  float h=iPos.z*(0.6+0.4*uGrassH);
+  float ph=uTime*1.6+iPos.x*0.35+iPos.y*0.27;
+  float bend=uWind*FLOWER_SWAY*(sin(ph)+0.5*sin(ph*2.7+iRnd.w*6.));
+  vec3 c=vec3(iPos.x,h,iPos.y)+vec3(uWindDir.x,0.,uWindDir.y)*bend*h;
+  vec3 toCam=normalize(uCam-c);
+  vec3 R=normalize(cross(vec3(0.,1.,0.),toCam));
+  vec3 Up=normalize(mix(vec3(0.,1.,0.),cross(toCam,R),0.75));
+  vec3 wp=c+(R*aQuad.x+Up*aQuad.y)*iPos.w*open;
+  gl_Position=uViewProj*vec4(wp,1.);
+  vUv=aQuad; vKind=iRnd.x; vWorld=wp;
+}
+`;
+
+const FLOWER_FS = HEAD + SHARED + SHADOW + OUTPUT + `
+in vec2 vUv; in float vKind; in vec3 vWorld;
+void main(){
+  float r=length(vUv), a=atan(vUv.y,vUv.x);
+  vec3 col; float edge;
+  if(vKind<0.45){          // daisy: white rays, yellow eye
+    edge=0.55+0.45*abs(cos(a*6.));
+    col=mix(vec3(0.95,0.78,0.10),vec3(0.97,0.97,0.94),smoothstep(0.2,0.3,r));
+  } else if(vKind<0.75){   // buttercup
+    edge=0.8+0.2*abs(cos(a*2.5));
+    col=vec3(0.98,0.80,0.06)*(0.8+0.2*smoothstep(0.,0.6,r));
+  } else if(vKind<0.92){   // red clover
+    edge=0.72+0.1*abs(cos(a*9.));
+    col=mix(vec3(0.60,0.20,0.48),vec3(0.82,0.48,0.72),r);
+  } else if(vKind<0.99){   // poppy
+    edge=0.85+0.15*abs(cos(a*2.));
+    col=mix(vec3(0.04),vec3(0.85,0.08,0.05),smoothstep(0.12,0.22,r));
+  } else {                 // autumn toadstool, seen from the side: a domed cap on a pale stem
+    bool cap=vUv.y>0. && length(vec2(vUv.x,vUv.y*1.7))<0.95;
+    bool stem=vUv.y<=0.05 && abs(vUv.x)<0.2;
+    if(!cap && !stem) discard;
+    float spots=step(0.78,fract(sin(dot(floor(vUv*5.+3.),vec2(12.9,78.2)))*43758.5));
+    col=cap ? mix(vec3(0.55,0.06,0.03),vec3(0.85,0.82,0.75),spots) : vec3(0.72,0.68,0.58);
+    edge=2.;
+  }
+  if(r>edge) discard;
+  float sh=shadowAt4(vWorld,3.);
+  vec3 lit=col*(uSunCol*sh*(0.25+0.4*max(uSunDir.y,0.))+uSkyAmb*1.0);
+  fragColor=encodeOut(applyFog(lit,vWorld));
 }
 `;
 
@@ -589,6 +769,13 @@ export const SHADERS = {
   grassFS: GRASS_FS,
   screenVS: SCREEN_VS,
   skyFS: SKY_FS,
+  critterVS: HEAD + SHARED + CRITTER_VS_BODY,
+  critterShadowVS: HEAD + '#define SHADOW_PASS\n' + SHARED + CRITTER_VS_BODY,
+  critterFS: CRITTER_FS,
+  flyVS: FLY_VS,
+  flyFS: FLY_FS,
+  flowerVS: FLOWER_VS,
+  flowerFS: FLOWER_FS,
   flakeVS: FLAKE_VS,
   flakeFS: FLAKE_FS,
   postFS: POST_FS,

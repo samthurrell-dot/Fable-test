@@ -10,7 +10,7 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 - [x] Ready prompts in `prompts/ready/`.
 
 ## In progress
-- **13-tree-seasons** – DRAFT. v1 + round 1 (look) + round 2 (speed) + round 3 (look) done and working on `main`. At least 1 improvement round still owed. What to fix next is listed at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
+- **13-tree-seasons** – v1 + round 1 (look) + round 2 (speed) + round 3 (look) + round 4 (life: birds, squirrel, butterflies, flowers, roots, new wind sound) done and working on `main`. The prompt's four rounds are met. Sam is steering it by eye now: read his brief at the top of round 4 in ROUNDS.md before changing the look. What to fix next is listed at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
   - Why 13 was run first and not 06: it is the shortest Fable-ranked run (55 min cap), needs no Blender and no downloads, and has the highest reuse score in `plan/viability.md`. 06 and 15 are still to run.
 
 ## Site
@@ -18,11 +18,11 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 
 ## Next
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
-- Check 13 on a real phone and a stronger GPU; listen to the sound.
+- Check 13 on a real phone and a stronger GPU. Sam has heard the sound: the old wind was "like road noise" (rebuilt in round 4, not yet heard again); the bird chirps were liked.
 - Then 06 lightbulb and 15 pop-up book from `prompts/ready/`.
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
 ## Build log
 | Build | Model + effort | State | Rounds done | Link |
 |---|---|---|---|---|
-| 13-tree-seasons | Fable 5.2, default effort | Draft, works | v1 + 3 of 4 | https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/ |
+| 13-tree-seasons | Fable 5.2, default effort | Works; still being polished | v1 + 4 of 4 | https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/ |

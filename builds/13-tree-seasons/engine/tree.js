@@ -46,6 +46,8 @@ export const TREE_DEFAULTS = {
   tipRadius: 0.015,      // radius of the thinnest branch
   pipeExponent: 2.0,     // parent area = sum of child radii to this power; 2 = da Vinci, 3 = Murray
   taperPerNode: 0.04,    // extra thickness gained per segment, in tip areas
+  roots: 6,              // surface roots that run out from the foot of the trunk (0 = none)
+  rootLength: 1.5,       // how far they run before they dive under the ground, metres
   rootFlare: 0.55,       // how far the trunk spreads at the ground (0 = none)
   twigs: 8000,           // fine twigs added to thin branches; each carries leaves
   twigHostRadius: 0.04,  // twigs only grow from branches thinner than this
@@ -292,6 +294,30 @@ function buildBranchTubes(skel, mesh) {
   }
 }
 
+// Surface roots: thick at the trunk, snaking out and sinking into the ground.
+function buildRoots(skel, mesh, rnd) {
+  const { radius, options: o } = skel;
+  const R = radius[0];
+  for (let k = 0; k < o.roots; k++) {
+    const a = (k + rnd() * 0.7) / o.roots * Math.PI * 2;
+    const len = o.rootLength * (0.6 + 0.8 * rnd());
+    const bend = (rnd() - 0.5) * 0.9;
+    const pts = [];
+    const steps = 6;
+    for (let j = 0; j <= steps; j++) {
+      const f = j / steps;
+      const d = R * 0.5 + f * (R * 1.2 + len);
+      const ang = a + bend * f * f;
+      pts.push({
+        x: Math.cos(ang) * d, z: Math.sin(ang) * d,
+        y: 0.24 * Math.pow(1 - f, 2.2) - 0.09 * f,
+        r: R * (0.34 * Math.pow(1 - f, 1.3) + 0.03),
+      });
+    }
+    addTube(mesh, pts, 7, 0);
+  }
+}
+
 // ---------------------------------------------------------------------------------------
 // 3. Twigs, leaves and blossom.
 function growTwigs(skel, mesh, rnd) {
@@ -415,6 +441,7 @@ export function growTree(options = {}) {
   const skeleton = growSkeleton(o, rnd);
   const mesh = new MeshBuilder();
   buildBranchTubes(skeleton, mesh);
+  if (o.roots > 0) buildRoots(skeleton, mesh, rnd);
   const branchVertexCount = mesh.count;
   const foliage = growTwigs(skeleton, mesh, rnd);
   let top = 0, reach = 0;
