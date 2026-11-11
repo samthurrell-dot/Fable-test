@@ -49,7 +49,7 @@ I will open your build on screen and show it to an audience for 20 to 60 seconds
 This code will be reused by other models and projects. While you build:
 - Put each engine in its own ES module with a small, documented API (for example `engine/fold.js`, `engine/pathtrace.js`). Keep scene content, UI and engine apart.
 - Name every magic number as a constant with a one-line comment on what it changes.
-- Keep a `TECHNIQUES.md` in the repo root. For each technique: what it does, why you chose it over the alternatives, key parameters and safe ranges, performance cost measured, and the mistakes you made and fixed during the improvement rounds.
+- Keep a `TECHNIQUES.md` in the build folder. For each technique: what it does, why you chose it over the alternatives, key parameters and safe ranges, performance cost measured, and the mistakes you made and fixed during the improvement rounds.
 - Keep a `ROUNDS.md`: for each improvement round, the three weakest things you named and what you changed.
 - Add `demo/<engine>.html` pages that show each engine alone with sliders for its main parameters.
 This must not lower the quality of the build itself.
