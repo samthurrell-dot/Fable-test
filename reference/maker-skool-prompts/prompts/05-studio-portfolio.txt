@@ -1,0 +1,49 @@
+# My studio: a portfolio you can walk into
+
+I will open your build on screen and show it to an audience for 20 to 60 seconds. Quality is the goal. Take the time that quality needs.
+
+## Your build: My studio: a portfolio you can walk into
+
+The request: "a 3d portfolio site in three.js that is my studio with a computer flickering on that you can actually go into, and that computer runs a mini-OS that you can do fun things on (bake in high quality renders so it's fast, and auto-loop to optimize at least 4-5x before presenting)".
+
+This is my portfolio site.
+
+The room: my recording studio at dusk, in three.js. A desk with a wide curved monitor and a laptop, a camera on an arm, a key light with a softbox, a microphone, a chair, shelves with objects, plants, a window with a lake and hills at dusk, a YouTube silver play button on the wall. [Change this list to your own room. If you have a photo of your room, attach it and add: use this photo for the wall colour and the mood.] Do not model me or any person. Do not show an address or a city name.
+
+Baked light: build the room in Blender with Python, light it well (window dusk light, warm practical lamps, the monitor glow), bake the lighting to textures with Cycles, and export glTF plus the baked maps. three.js then draws the baked room with unlit materials, so it looks path-traced and runs at 60 fps. Keep a few live parts on top: the monitor light that flickers on, dust in the light, a plant that moves, reflections on glass.
+
+Blender jobs: keep each job under 10 minutes. Test with small sizes and few samples first.
+
+The visit: a slow camera with limits and a little parallax. Objects on the shelves are my work, and a click opens a small card for each. Facts that you may use: [your name and what you do. Your channels and follower counts. Your products, companies and sites. Your course or video topics.] Use no revenue figures, no email, no phone, and no other numbers.
+
+The computer: a moment after load the monitor flickers on like a tube and then shows a desktop. A click on it flies the camera into the screen until the screen is the whole window. The viewer is now inside a small operating system, drawn sharp at full resolution. Escape, or a button, flies back out to the room.
+
+The mini-OS: a boot animation, a desktop, a dock, windows that drag, resize and stack. Programs that are fun in ten seconds: a terminal with real commands and a few jokes, a paint program, a synth or drum pad (sound only after "Enable sound"), one small game, a notes program with my "about" text, a videos program that lists my course topics, settings with wallpapers. Fast and playful. Everything must work.
+
+Loop and improve at least five times before you show it to me.
+
+## Tools and files
+
+- Work in the current folder. The entry file is `index.html`. Put your other files (modules, shaders, baked images, textures, video) in a subfolder beside it.
+- Use three.js or raw WebGL2, whichever gives the better picture. Keep a local copy of three.js in the folder (my builds used r186). No CDN. The only network request that the finished page may make is Google Fonts.
+- CC0 assets from Poly Haven (HDRI skies, PBR textures) are allowed when they clearly raise realism. The subject of your build must be geometry that you make in code, unless the build section names a model.
+- Use Blender only if the build section tells you to.
+- Check your work in a headless browser on the real GPU (for example Playwright with Chrome): load the page, send input steps (move, click, drag, key, wheel), take screenshots and measure the frame rate. Read every screenshot that you take.
+
+## Hard rules
+
+- The page looks alive at load with no input: motion or an attract mode from the first frame. It reacts to the mouse or the keyboard in the first second of input.
+- It fills the window. Target 60 fps at 1920x1080 on a recent laptop GPU. Cap the device pixel ratio at 2, and lower the internal resolution when a frame takes too long.
+- Games, scenes and experiments: a quiet title and one hint line at the top left. Websites and videos: no HUD. The build is the picture.
+- Sound: start muted. Show a clear "Enable sound" control and make no sound before a click on it. Make all sound in code (WebAudio). The build must look complete with the sound off.
+- Make time controllable: `?t=<seconds>` freezes the animation at that time, and `?view=<name>` selects a camera or a state where that helps. Use them to look at exact moments.
+- Original work only. No copy of a specific existing game, film, brand, character, logo or site. Genres, techniques, real places and public buildings are fine.
+- Copy: real words for the subject, sentence case, no lorem ipsum, no emoji as icons. State only facts that you are sure of.
+
+## Process
+
+1. Build a complete v1. Check it in the headless browser. Fix every error.
+2. Run at least 5 improvement rounds. In each round: take three or more screenshots of different moments, views and input states. Read them. Judge them as a harsh art director who compares the picture with the best work of this kind. Name the three weakest things. Fix them. Check again.
+3. Measure the frame rate. Under 50 fps at 1920x1080: make it faster before you add anything.
+4. Stop when one more round would not show on camera, or at 110 minutes from your start.
+5. Final reply, five lines or fewer: what to do in the first five seconds, the best moment and how to reach it, what you used, any known flaw.
