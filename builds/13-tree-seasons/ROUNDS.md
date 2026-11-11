@@ -87,7 +87,9 @@ Fixed on the way:
 
 Measured after this round on the UHD 615, phone settings, early summer with ten animals out: full 1920×1080 with 4× MSAA 56 ms; 1075×605 without MSAA 16.7 ms. No measurable cost from the wildlife.
 
-Not checked: the sound has still not been heard by me, only run for errors. The live frame rate in this app's browser pane sits at a flat 30 fps whatever the resolution, so the new step-up logic is tested only for not misbehaving there.
+Sound: Sam listened after this round and said the new wind sounds right. (I cannot hear it; I only ran it for errors.) Leave the wind recipe in `src/sound.js` alone unless he asks.
+
+Not checked: The live frame rate in this app's browser pane sits at a flat 30 fps whatever the resolution, so the new step-up logic is tested only for not misbehaving there.
 
 ## Next
 

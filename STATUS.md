@@ -18,7 +18,7 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 
 ## Next
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
-- Check 13 on a real phone and a stronger GPU. Sam has heard the sound: the old wind was "like road noise" (rebuilt in round 4, not yet heard again); the bird chirps were liked.
+- Check 13 on a real phone and a stronger GPU. Sam has heard the sound: the old wind was "like road noise" (rebuilt in round 4; Sam heard the new one on 11 Nov 2026 and said it sounds right); the bird chirps were liked.
 - Then 06 lightbulb and 15 pop-up book from `prompts/ready/`.
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
