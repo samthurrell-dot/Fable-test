@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seasons demo</title>
+<style>
+  body { margin: 0; padding: 16px; font: 15px/1.4 system-ui, sans-serif; background: #f3f1ea; color: #222; max-width: 760px; }
+  h1 { font-size: 18px; margin: 0 0 4px; } p { margin: 0 0 12px; color: #555; }
+  input[type=range] { width: 100%; height: 40px; }
+  .row { display: grid; grid-template-columns: 130px 1fr; gap: 8px; align-items: center; margin: 4px 0; }
+  .sw { height: 26px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.15); }
+  .bar { height: 12px; background: #ddd; border-radius: 6px; overflow: hidden; } .bar i { display: block; height: 100%; background: #456; }
+  canvas { width: 100%; height: 120px; display: block; margin-top: 12px; background: #fff; border: 1px solid #ddd; }
+</style>
+</head>
+<body>
+<h1>Seasons</h1>
+<p>The calendar in <code>engine/seasons.js</code> on its own. One number, the time of year, gives every colour and amount below. The chart shows the share of leaves that are growing, turned and fallen.</p>
+<input id="y" type="range" min="0" max="1" step="0.001" value="0.38" aria-label="Time of year">
+<div id="out"></div>
+<canvas id="chart" width="1400" height="240"></canvas>
+<script type="module">
+import { seasonState, leafSchedule, TIMING } from '../engine/seasons.js';
+
+const COLOURS = ['sun', 'zenith', 'horizon', 'skyAmbient', 'groundAmbient', 'fog', 'grassDark', 'grassLight', 'hill'];
+const AMOUNTS = ['snow', 'snowFall', 'canopy', 'cloud', 'shadow', 'wind', 'grassHeight'];
+const css = (c) => `rgb(${c.map((v) => Math.round(255 * Math.pow(Math.min(1, v), 1 / 2.2))).join(',')})`;
+const out = document.getElementById('out'), input = document.getElementById('y');
+
+function show() {
+  const st = seasonState(+input.value);
+  let html = `<div class="row"><b>${st.name}</b><span>y = ${(+input.value).toFixed(3)} · sun ${st.sunElevation.toFixed(0)}° up</span></div>`;
+  for (const k of COLOURS) html += `<div class="row"><span>${k}</span><div class="sw" style="background:${css(st[k])}"></div></div>`;
+  for (const k of AMOUNTS) html += `<div class="row"><span>${k} ${st[k].toFixed(2)}</span><div class="bar"><i style="width:${Math.min(100, st[k] * 100)}%"></i></div></div>`;
+  out.innerHTML = html;
+  chart(+input.value);
+}
+
+// 400 sample leaves, to chart the crown through the year.
+const sample = [];
+for (let i = 0; i < 400; i++) sample.push(leafSchedule(Math.random(), Math.random(), Math.random(), Math.random()));
+function chart(now) {
+  const c = document.getElementById('chart'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  const line = (fn, colour) => {
+    g.strokeStyle = colour; g.lineWidth = 3; g.beginPath();
+    for (let x = 0; x <= 200; x++) {
+      const y = x / 200; let n = 0;
+      for (const s of sample) if (fn(s, y)) n++;
+      g.lineTo((x / 200) * c.width, c.height - 6 - (n / sample.length) * (c.height - 12));
+    }
+    g.stroke();
+  };
+  line((s, y) => y > s[0] && y < TIMING.LEAF_FADE[1], '#3a8a2a');
+  line((s, y) => y > s[1] + TIMING.LEAF_TURN_DUR && y < TIMING.LEAF_FADE[1], '#d9861c');
+  line((s, y) => y > s[2] && y < TIMING.LEAF_FADE[1], '#7a4a22');
+  g.fillStyle = '#222'; g.fillRect(now * c.width - 1, 0, 2, c.height);
+}
+input.addEventListener('input', show);
+show();
+</script>
+</body>
+</html>

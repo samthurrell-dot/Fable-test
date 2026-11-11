@@ -6,20 +6,20 @@
 
 // --- Timings, all in years (1 = the whole cycle) -------------------------------------------
 export const TIMING = {
-  BLOSSOM_OPEN_START: 0.045,  // first flowers open
-  BLOSSOM_OPEN_SPREAD: 0.055, // the last flower opens this long after the first
+  BLOSSOM_OPEN_START: 0.04,   // first flowers open
+  BLOSSOM_OPEN_SPREAD: 0.05,  // the last flower opens this long after the first
   BLOSSOM_OPEN_DUR: 0.03,     // time for one flower to open
   BLOSSOM_FALL_START: 0.165,  // first petals drop
   BLOSSOM_FALL_SPREAD: 0.075, // petal drop is spread over this long
   BLOSSOM_FADE: [0.29, 0.36], // fallen petals shrink away between these times
-  LEAF_GROW_START: 0.07,      // first leaf buds break
+  LEAF_GROW_START: 0.105,     // first leaf buds break
   LEAF_GROW_SPREAD: 0.09,     // bud break is spread over this long
   LEAF_GROW_DUR: 0.12,        // time for a leaf to reach full size
-  LEAF_TURN_START: 0.49,      // first leaf starts to change colour
-  LEAF_TURN_SPREAD: 0.14,     // the last leaf starts this long after the first
+  LEAF_TURN_START: 0.50,      // first leaf starts to change colour
+  LEAF_TURN_SPREAD: 0.10,     // the last leaf starts this long after the first
   LEAF_TURN_DUR: 0.07,        // time for one leaf to change colour
-  LEAF_HANG_MIN: 0.04,        // shortest time a turned leaf stays on the tree
-  LEAF_HANG_SPREAD: 0.075,    // extra hanging time, random per leaf
+  LEAF_HANG_MIN: 0.06,        // shortest time a turned leaf stays on the tree
+  LEAF_HANG_SPREAD: 0.09,     // extra hanging time, random per leaf
   LEAF_STUBBORN: 0.02,        // share of leaves that hang on into early winter
   LEAF_FADE: [0.80, 0.90],    // fallen leaves vanish under the snow between these times
   SNOW_BUILD: [0.77, 0.86],   // snow cover rises from 0 to 1
@@ -31,7 +31,7 @@ export const TIMING = {
 
 export const SEASON_NAMES = ['Spring', 'Summer', 'Autumn', 'Winter'];
 // A good still moment in each season.
-export const SEASON_STILLS = { spring: 0.15, summer: 0.38, autumn: 0.645, winter: 0.885 };
+export const SEASON_STILLS = { spring: 0.135, summer: 0.38, autumn: 0.605, winter: 0.885 };
 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -59,7 +59,7 @@ export function snowFall(y) {
 // How much leaf is on the tree, 0..1. Used to shade the ground under the crown.
 export function canopy(y) {
   y = wrap(y);
-  return smooth(0.08, 0.26, y) * (1 - smooth(0.56, 0.75, y));
+  return smooth(0.11, 0.30, y) * (1 - smooth(0.58, 0.75, y));
 }
 
 // Per-leaf timings: [growStart, turnStart, fallStart].
@@ -127,7 +127,7 @@ const KEYS = [
   },
   { // 0.375 mid summer: high sun, warm haze
     sunElevation: 52, sun: [1.0, 0.95, 0.86], sunPower: 3.8,
-    zenith: [0.10, 0.28, 0.72], horizon: [0.56, 0.70, 0.86],
+    zenith: [0.07, 0.24, 0.72], horizon: [0.50, 0.68, 0.90],
     skyAmbient: [0.28, 0.38, 0.56], groundAmbient: [0.09, 0.12, 0.04],
     fog: [0.66, 0.74, 0.82], fogDensity: 0.0035,
     grassDark: [0.055, 0.14, 0.022], grassLight: [0.19, 0.28, 0.05], grassHeight: 1.0,
@@ -149,7 +149,7 @@ const KEYS = [
     skyAmbient: [0.36, 0.36, 0.42], groundAmbient: [0.13, 0.10, 0.05],
     fog: [0.86, 0.70, 0.50], fogDensity: 0.007,
     grassDark: [0.095, 0.115, 0.03], grassLight: [0.27, 0.22, 0.07], grassHeight: 0.75,
-    hill: [0.12, 0.10, 0.05], cloud: 0.4, shadow: 1.0, wind: 1.0,
+    hill: [0.12, 0.10, 0.05], cloud: 0.2, shadow: 1.0, wind: 1.0,
     saturation: 1.08, tint: [1.05, 1.0, 0.93],
   },
   { // 0.750 early winter: overcast, first snow
@@ -167,7 +167,7 @@ const KEYS = [
     skyAmbient: [0.50, 0.60, 0.80], groundAmbient: [0.12, 0.13, 0.12],
     fog: [0.78, 0.81, 0.88], fogDensity: 0.009,
     grassDark: [0.09, 0.09, 0.045], grassLight: [0.19, 0.17, 0.08], grassHeight: 0.45,
-    hill: [0.10, 0.11, 0.11], cloud: 0.6, shadow: 0.75, wind: 0.5,
+    hill: [0.10, 0.11, 0.11], cloud: 0.42, shadow: 0.92, wind: 0.5,
     saturation: 0.9, tint: [0.98, 1.0, 1.05],
   },
 ];

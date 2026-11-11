@@ -43,6 +43,7 @@ float noise3(vec3 p){
              mix(mix(hash31(i+vec3(0,0,1)),hash31(i+vec3(1,0,1)),f.x), mix(hash31(i+vec3(0,1,1)),hash31(i+vec3(1,1,1)),f.x), f.y), f.z);
 }
 float fbm2(vec2 p){ float a=0.5,s=0.; for(int i=0;i<4;i++){ s+=a*noise2(p); p=p*2.03+17.1; a*=0.5; } return s; }
+float fbm2x2(vec2 p){ return 0.667*noise2(p)+0.333*noise2(p*2.03+17.1); }   // two octaves, for broad patches
 float fbm3(vec3 p){ float a=0.5,s=0.; for(int i=0;i<4;i++){ s+=a*noise3(p); p=p*2.03+7.3; a*=0.5; } return s; }
 `;
 
@@ -86,6 +87,17 @@ float shadowAt(vec3 wp, float spread){
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.519, 0.767)*r,s.z));
   sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.185,-0.893)*r,s.z));
   return mix(1., sum/9., uShadowStrength);
+}
+// Four taps instead of nine: enough for leaves, where the crown's own noise hides the grain.
+float shadowAt4(vec3 wp, float spread){
+  vec3 s=(uShadowMat*vec4(wp,1.)).xyz;
+  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z<0.||s.z>1.) return 1.;
+  float r=spread*uShadowTexel;
+  float sum=texture(uShadowMap,vec3(s.xy+vec2(-0.35,-0.35)*r,s.z));
+  sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.35,-0.35)*r,s.z));
+  sum+=texture(uShadowMap,vec3(s.xy+vec2(-0.35, 0.35)*r,s.z));
+  sum+=texture(uShadowMap,vec3(s.xy+vec2( 0.35, 0.35)*r,s.z));
+  return mix(1., sum/4., uShadowStrength);
 }
 `;
 
@@ -158,7 +170,7 @@ void main(){
   float lich=smoothstep(0.58,0.78,fbm3(vRest*3.1+7.))*thick;
   col=mix(col,LICHEN*(0.7+0.5*fine),lich*0.5);
   float moss=smoothstep(1.5,0.0,vRest.y)*smoothstep(0.35,0.7,fbm3(vRest*5.+3.));
-  col=mix(col,MOSS,moss*0.7);
+  col=mix(col,MOSS,moss*0.7*(1.-uSnow));
 
   float sh=shadowAt(vWorld+N*0.05,1.5);
   float ndl=max(dot(Nb,uSunDir),0.);
@@ -189,10 +201,10 @@ uniform float uYearSeconds;  // length of the year on screen
 uniform float uGrowDur;      // time to reach full size (years)
 uniform float uTurnDur;      // time to change colour (years)
 uniform float uSizeMul;      // phones draw fewer, larger leaves
-const float FALL_SPEED = 2.3;      // metres per second
+const float FALL_SPEED = 3.6;      // metres per second
 const float DRIFT_PER_M = 0.5;     // metres carried downwind per metre fallen
 const float SCATTER = 3.2;         // radius of the random landing spread in metres
-const float FLUTTER = 0.55;        // side-to-side swing while falling, metres
+const float FLUTTER = 0.4;         // side-to-side swing while falling, metres
 const float LEAF_HALF_WIDTH = 0.31; // half width as a share of length
 const float LEAF_FOLD = 0.13;      // how far the edges lift (V fold along the midrib)
 const float LEAF_CURL = 0.16;      // how far the tip droops
@@ -206,7 +218,7 @@ void main(){
   float f=clamp((uYear-iSched.z)/fallDur,0.,1.);
   float gone=smoothstep(uFade.x,uFade.y,uYear);
   float size=iRand.w*uSizeMul*grow*(1.-gone);
-  if(uKind>0.5) size*=mix(1.,0.6,f);
+  if(uKind>0.5) size*=mix(1.,0.5,f);
   if(size<0.0005){ gl_Position=vec4(2.,2.,2.,1.); return; }
 
   vec3 attach=iPos+sway(iPos,uTime,uWind);
@@ -275,7 +287,7 @@ void main(){
   if(uKind<0.5){
     // Colour creeps in from the edges and tip, so half-turned leaves are two-tone.
     float t=clamp(turn+(abs(vLocal.x)*0.6+vLocal.y*0.3-0.45)*0.7*sin(turn*3.14159),0.,1.);
-    float mature=smoothstep(0.10,0.34,uYear);
+    float mature=smoothstep(0.14,0.36,uYear);
     vec3 green=mix(LEAF_FRESH,LEAF_DEEP,mature)*(0.78+0.44*vParam.y);
     float r=vParam.y;
     vec3 aut=r<0.5 ? mix(LEAF_YELLOW,LEAF_ORANGE,r*2.) : mix(LEAF_ORANGE,LEAF_RED,(r-0.5)*2.);
@@ -293,13 +305,14 @@ void main(){
     if(r>petal) discard;
     base=mix(PETAL_HEART,PETAL_EDGE,smoothstep(0.1,0.7,r));
     base=mix(base,vec3(0.85,0.62,0.12),smoothstep(0.2,0.06,r));
-    through=base; trans=0.5; gloss=0.;
+    through=base; trans=0.9; gloss=0.;
   }
   float ndl=dot(N,L);
-  float sh=shadowAt(vWorld+N*0.06,1.2);
+  float sh=shadowAt4(vWorld+N*0.06,1.6);
   float ao=mix(vParam.z,1.,landed);
   vec3 direct=uSunCol*sh;
   vec3 amb=mix(uGroundAmb,uSkyAmb,N.y*0.5+0.5)*ao;
+  if(uKind>0.5) amb=uSkyAmb*1.2;   // petals are thin and bright from every side
   vec3 col=base*(max(ndl,0.)*direct+amb);
   float towardSun=pow(max(dot(-V,L),0.),2.);
   col+=through*max(-ndl,0.)*direct*trans*(0.55+1.2*towardSun);
@@ -325,15 +338,16 @@ void main(){
 
 const GROUND_FS = HEAD + SHARED + NOISE + SNOW_MASK + SHADOW + OUTPUT + `
 in vec3 vWorld;
-uniform vec3 uGrassA; uniform vec3 uGrassB;
+uniform vec3 uGrassA; uniform vec3 uGrassB; uniform vec3 uHill;
 uniform float uCanopy;
+const float GROUND_HAZE = 0.3;   // the meadow hazes more slowly than the air above it, so no white band at the horizon
 const vec3 SOIL = vec3(0.07,0.05,0.035);   // worn earth at the foot of the trunk
 const float SHADE_UNDER_CROWN = 0.25;       // how much skylight the full crown blocks
 void main(){
   vec2 p=vWorld.xz;
   float d=length(vWorld-uCam);
-  float big=fbm2(p*0.07);
-  float mid=fbm2(p*0.9+3.);
+  float big=fbm2x2(p*0.07);
+  float mid=fbm2x2(p*0.9+3.);
   float fine=noise2(p*38.)*0.6+noise2(p*90.)*0.4;
   fine=mix(0.5,fine,exp(-d*0.02));
   vec3 col=mix(uGrassA,uGrassB,clamp(big*0.7+mid*0.5+(fine-0.5)*0.5,0.,1.));
@@ -344,13 +358,16 @@ void main(){
   float ao=mix(1., 1.-SHADE_UNDER_CROWN*(1.-smoothstep(1.,7.5,r)), uCanopy);
   ao*=0.55+0.45*smoothstep(0.25,1.3,r);     // contact shadow at the trunk
   float ndl=max(uSunDir.y,0.);
-  vec3 lit=col*(ndl*sh*uSunCol*0.9+uSkyAmb*0.95*ao);
-  float sn=snowMask(p);
-  float drift=fbm2(p*0.5+4.);
-  float sparkle=step(0.985,hash21(floor(p*220.)))*exp(-d*0.03);
-  vec3 snowLit=SNOW_ALBEDO*(ndl*sh*uSunCol*(0.95+sparkle*2.)+uSkyAmb*ao)*(0.9+0.2*drift);
-  lit=mix(lit,snowLit,sn);
-  fragColor=encodeOut(applyFog(lit,vWorld));
+  vec3 lit=col*(ndl*sh*uSunCol*0.9+uSkyAmb*1.4*ao);
+  if(uSnow>0.001){   // the snow maths is skipped for three seasons of the year
+    float sn=snowMask(p);
+    float drift=fbm2x2(p*0.5+4.);
+    float sparkle=step(0.985,hash21(floor(p*220.)))*exp(-d*0.03);
+    vec3 snowLit=SNOW_ALBEDO*(ndl*sh*uSunCol*(0.95+sparkle*2.)+uSkyAmb*ao)*(0.82+0.36*drift);
+    lit=mix(lit,snowLit,sn);
+  }
+  float haze=1.-exp(-max(d-FOG_START,0.)*uFogDensity*GROUND_HAZE);
+  fragColor=encodeOut(mix(lit,mix(uFogCol,uHill,0.25),haze));
 }
 `;
 
@@ -365,7 +382,7 @@ const float BLADE_WIDTH = 0.016;     // half width at the base in metres
 out float vT; out vec3 vWorld; out float vRnd; out float vSnow;
 void main(){
   vec2 base=iPos.xy;
-  float sn=snowMask(base);
+  float sn=uSnow>0.001 ? snowMask(base) : 0.;
   float h=iPos.z*uGrassH*(1.-0.8*sn);
   float c=cos(iPos.w), s=sin(iPos.w);
   float t=aBlade.y;
@@ -385,10 +402,10 @@ in float vT; in vec3 vWorld; in float vRnd; in float vSnow;
 uniform vec3 uGrassA; uniform vec3 uGrassB;
 void main(){
   vec3 col=mix(uGrassA*0.75,uGrassB*1.15,vT)*(0.8+0.4*vRnd);
-  float sh=shadowAt(vWorld+vec3(0.,0.03,0.),2.5);
+  float sh=shadowAt4(vWorld+vec3(0.,0.03,0.),3.);
   vec3 V=normalize(uCam-vWorld);
   float back=pow(max(dot(-V,uSunDir),0.),3.);
-  vec3 lit=col*(uSunCol*sh*(0.35+0.45*uSunDir.y+0.9*back*vT)+uSkyAmb*(0.35+0.5*vT));
+  vec3 lit=col*(uSunCol*sh*(0.35+0.45*uSunDir.y+0.9*back*vT)+uSkyAmb*(0.6+0.6*vT));
   vec3 snowLit=SNOW_ALBEDO*(max(uSunDir.y,0.)*sh*uSunCol+uSkyAmb);
   lit=mix(lit,snowLit,vSnow*(1.-vT)*0.7);
   fragColor=encodeOut(applyFog(lit,vWorld));
@@ -399,10 +416,11 @@ void main(){
 // Sky, clouds and far hills. Drawn first, as one big triangle.
 const SCREEN_VS = HEAD + `
 out vec2 vUv;
+uniform float uZ;   // 1 puts the triangle on the far plane, so it only fills pixels nothing else covered
 void main(){
   vec2 p=vec2(float((gl_VertexID<<1)&2), float(gl_VertexID&2));
   vUv=p;
-  gl_Position=vec4(p*2.-1.,0.,1.);
+  gl_Position=vec4(p*2.-1.,uZ,1.);
 }
 `;
 
@@ -420,24 +438,24 @@ void main(){
   col+=uSunCol*(pow(sd,700.)*6.+pow(sd,14.)*0.22+pow(sd,3.)*0.07)*(1.-0.6*uCloud);
   if(el>0.){
     vec2 cp=dir.xz/(el+0.08)*0.9+uTime*vec2(0.006,0.002);
-    float c=fbm2(cp*1.3)+0.5*fbm2(cp*3.1+5.);
+    float c=fbm2(cp*1.3)+0.5*fbm2x2(cp*3.1+5.);
     float lo=mix(0.95,0.35,uCloud);
     float cover=smoothstep(lo,lo+0.45,c)*smoothstep(0.,0.1,el);
-    vec3 cloudCol=mix(uHorizon*1.1,vec3(1.),0.45)*(0.75+0.25*uSunDir.y)+uSunCol*0.06*pow(sd,2.);
+    vec3 cloudCol=mix(uHorizon*1.1,vec3(1.),0.45)*(0.75+0.25*uSunDir.y)+uSunCol*(0.04+0.12*pow(sd,2.));
     cloudCol*=mix(1.,0.78,uCloud*smoothstep(0.8,1.4,c));
     col=mix(col,cloudCol,cover*0.9);
   }
   // Far hills and a nearer tree line. Sampled on a circle so there is no seam.
   vec2 n2=normalize(dir.xz+1e-5);
-  float h1=0.030+0.045*fbm2(n2*2.6+1.3)+0.010*noise2(n2*11.+4.);
+  float h1=0.020+0.036*fbm2x2(n2*2.6+1.3)+0.008*noise2(n2*11.+4.);
   float h2=0.012+0.020*noise2(n2*17.+9.)+0.008*noise2(n2*80.+2.);
   // Haze gathers in the valleys: both layers pale towards their feet.
   vec3 hillFar=mix(uHill,uFogCol,0.62+0.2*smoothstep(h1,0.,el));
-  vec3 hillNear=mix(uHill*0.75,uFogCol,0.30+0.3*smoothstep(h2,0.,el));
+  vec3 hillNear=mix(uHill*0.75,uFogCol,0.30+0.45*smoothstep(h2,0.,el));
   hillNear*=0.9+0.2*noise2(n2*140.+el*300.);
   col=mix(col,hillFar,smoothstep(h1+0.004,h1-0.002,el));
   col=mix(col,hillNear,smoothstep(h2+0.003,h2-0.001,el));
-  if(el<0.) col=mix(uHill*0.75,uFogCol,0.6);
+  if(el<0.) col=mix(uFogCol,uHill,0.25);
   fragColor=encodeOut(col);
 }
 `;
@@ -450,7 +468,7 @@ uniform vec3 uFlakeCentre;
 uniform float uPixels;       // screen height in pixels
 uniform float uFovScale;     // 1 / tan(fov / 2)
 const vec3 FLAKE_BOX = vec3(90.,24.,90.);  // metres; flakes wrap round inside this box
-const float FLAKE_SIZE = 0.035;            // metres
+const float FLAKE_SIZE = 0.055;            // metres
 out float vFade;
 void main(){
   vec3 p=aSeed.xyz*FLAKE_BOX;

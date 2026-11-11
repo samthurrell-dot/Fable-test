@@ -22,7 +22,7 @@ export const LEAF_LAYOUT = {
   random: 9,     // 4: three random numbers in 0..1, then the length in metres
   heightNorm: 13, // 1: 0 at the bottom of the crown, 1 at the top
   outerness: 14,  // 1: 0 at the crown centre, 1 at the outer shell
-  ao: 15,         // 1: ambient light reaching this point, 0.25 (deep inside) to 1 (outside)
+  ao: 15,         // 1: ambient light reaching this point, about 0.1 (deep inside) to 1 (outside)
 };
 
 export const TREE_DEFAULTS = {
@@ -46,7 +46,7 @@ export const TREE_DEFAULTS = {
   tipRadius: 0.015,      // radius of the thinnest branch
   pipeExponent: 2.0,     // parent area = sum of child radii to this power; 2 = da Vinci, 3 = Murray
   taperPerNode: 0.04,    // extra thickness gained per segment, in tip areas
-  rootFlare: 0.85,       // how far the trunk spreads at the ground (0 = none)
+  rootFlare: 0.55,       // how far the trunk spreads at the ground (0 = none)
   twigs: 8000,           // fine twigs added to thin branches; each carries leaves
   twigHostRadius: 0.04,  // twigs only grow from branches thinner than this
   twigLength: 0.5,       // mean twig length in metres
@@ -323,7 +323,7 @@ function growTwigs(skel, mesh, rnd) {
     arr[o2 + 6] = nx; arr[o2 + 7] = ny; arr[o2 + 8] = nz;
     arr[o2 + 9] = rnd(); arr[o2 + 10] = rnd(); arr[o2 + 11] = rnd(); arr[o2 + 12] = size;
     arr[o2 + 13] = hN; arr[o2 + 14] = out;
-    arr[o2 + 15] = (0.25 + 0.75 * sm * sm * (3 - 2 * sm)) * (0.72 + 0.28 * hN);
+    arr[o2 + 15] = (0.15 + 0.85 * sm * sm * (3 - 2 * sm)) * (0.72 + 0.28 * hN);
   };
 
   for (let t = 0; t < T; t++) {

@@ -1,3 +1,12 @@
+Run notes (not part of the prompt)
+- Model: Claude Fable 5.2 (claude-fable-5-2), in Claude Code (desktop app). Effort level: the session default; it was not set or shown.
+- Date: 11 Nov 2026.
+- Sam's instruction for this run: "Select the most viable prompt to complete within my session limit and create a draft." So this is a draft: v1 plus two rounds, not the full four improvement rounds.
+- Changes from the prompt as written: raw WebGL2 was used, so there is no three.js copy in the folder. No Poly Haven textures were downloaded.
+- The prompt below is the exact text of prompts/ready/13-tree-seasons-fable.txt.
+
+==========================================================================================
+
 # A tree through the seasons
 
 I will open your build on screen and show it to an audience for 20 to 60 seconds. Quality is the goal. Take the time that quality needs.

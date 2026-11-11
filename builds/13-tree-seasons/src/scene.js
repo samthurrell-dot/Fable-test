@@ -233,18 +233,7 @@ export function createScene(canvas, tree, quality) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, shadow.depth);
 
-    gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
-    gl.useProgram(P.sky.program);
-    setUniforms(gl, P.sky, U);
-    gl.bindVertexArray(emptyVao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
-
-    gl.useProgram(P.ground.program);
-    setUniforms(gl, P.ground, U);
-    gl.bindVertexArray(groundVao);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
+    // Nearest things first, so the depth test saves shading the ground and sky behind them.
     gl.useProgram(P.bark.program);
     setUniforms(gl, P.bark, U);
     gl.bindVertexArray(barkVao);
@@ -256,6 +245,19 @@ export function createScene(canvas, tree, quality) {
     gl.drawElementsInstanced(gl.TRIANGLES, 9, gl.UNSIGNED_SHORT, 0, bladeCount);
 
     drawFoliage(P.leaf);
+
+    gl.useProgram(P.ground.program);
+    setUniforms(gl, P.ground, U);
+    gl.bindVertexArray(groundVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    gl.depthMask(false);
+    gl.useProgram(P.sky.program);
+    setUniforms(gl, P.sky, U);
+    setUniforms(gl, P.sky, { uZ: 1 });
+    gl.bindVertexArray(emptyVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.depthMask(true);
 
     if (st.snowFall > 0.001) {
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -278,7 +280,7 @@ export function createScene(canvas, tree, quality) {
     gl.useProgram(P.post.program);
     const res = h / 1080;
     setUniforms(gl, P.post, {
-      uColor: 1, uDepth: 2, uPx: [1 / w, 1 / h], uNear: NEAR, uFar: FAR,
+      uZ: 0, uColor: 1, uDepth: 2, uPx: [1 / w, 1 / h], uNear: NEAR, uFar: FAR,
       uFocus: frame.focus, uCocScale: COC_SCALE_1080 * res * quality.blur,
       uMaxCoc: Math.max(2, quality.maxBlurPx * res), uRadStep: Math.max(0.8, quality.blurStep * Math.max(res, 0.6)),
       uExposure: EXPOSURE, uSat: st.saturation, uTint: st.tint, uTime: frame.time, uLdr: hdr ? 0 : 1,
@@ -295,5 +297,11 @@ export function createScene(canvas, tree, quality) {
     return st;
   }
 
-  return { gl, resize, render, info };
+  // Turn multisampling on or off after start-up (0 = off). The target is rebuilt on the next resize.
+  function setMsaa(n) {
+    samples = n;
+    if (target) { const w = target.w, h = target.h; target.dispose(); target = null; resize(w, h); }
+  }
+
+  return { gl, resize, render, info, setMsaa };
 }

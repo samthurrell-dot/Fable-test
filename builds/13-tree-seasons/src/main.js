@@ -14,14 +14,16 @@ import { createScene } from './scene.js';
 import { createSound } from './sound.js';
 
 const YEAR_SECONDS = 64;        // length of the automatic year
-const START_YEAR = 0.105;       // the page opens as the blossom opens
+const START_YEAR = 0.07;        // the page opens as the blossom opens
 const HOLD_CREEP = 0.15;        // speed of the year just after the slider is let go (1 = normal)
 const HOLD_SECONDS = 4;         // how long the slow creep lasts before the cycle picks up again
 const ORBIT_SWING = 0.38;       // radians the camera drifts either side of its start
 const ORBIT_RATE = 0.045;       // speed of that drift
 const DRAG_YAW = 0.005;         // radians of orbit per pixel dragged
 const TARGET_FRAME_MS = 21;     // above this the picture is rendered at a lower resolution
-const MIN_SCALE = 0.5;          // lowest internal resolution as a share of full
+const MIN_SCALE = 0.45;         // lowest internal resolution as a share of full
+const TUNE_BUDGET_MS = 13;      // start-up check: aim for a frame that costs this much
+const TUNE_MSAA_LIMIT_MS = 20;  // slower than this at start-up and multisampling is switched off
 
 // Camera presets. distance and height in metres, fov in degrees.
 const VIEWS = {
@@ -131,6 +133,36 @@ function applySize() {
 addEventListener('resize', applySize);
 applySize();
 
+// Start-up check: time a few real frames and pick a resolution this GPU can hold.
+// Skipped when time is frozen (?t=), so stills are always drawn at full quality.
+function frameCost(n) {
+  const gl = scene.gl;
+  const v = VIEWS.wide;
+  const shot = { time: 0, year: 0.38, eye: [0, v.height, v.distance], target: v.target, fovY: (v.fov * Math.PI) / 180, focus: v.distance, yearSeconds: YEAR_SECONDS };
+  const px = new Uint8Array(4);
+  const once = () => { scene.render(shot); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); };
+  once(); once();
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) once();
+  return (performance.now() - t0) / n;
+}
+const tune = { cost: 0, scale: 1, msaa: quality.msaa };
+if (!frozen && params.get('tune') !== '0') {
+  let cost = frameCost(3);
+  tune.cost = cost;
+  if (cost > TUNE_MSAA_LIMIT_MS) {
+    scene.setMsaa(0);
+    tune.msaa = 0;
+    cost = frameCost(2);
+  }
+  if (cost > TUNE_BUDGET_MS) {
+    scale = Math.max(MIN_SCALE, Math.min(1, Math.sqrt(TUNE_BUDGET_MS / cost)));
+    applySize();
+  }
+  tune.scale = scale;
+}
+window.__tune = tune;
+
 // --- Loop -------------------------------------------------------------------------------------
 let last = performance.now(), emaMs = 16.7, slowFrames = 0, frames = 0;
 const stats = { fps: 60, ms: 16.7, scale: 1 };
@@ -193,4 +225,20 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 if (params.get('stats') === '1') statsBox.hidden = false;
+
+// For checks in a headless or hidden browser, where requestAnimationFrame is throttled:
+// draws n frames back to back and returns the mean cost of one frame in milliseconds.
+window.__quality = quality;
+window.__scene = scene;
+window.__bench = (n = 30, y = 0.38) => {
+  const gl = scene.gl;
+  const eye = [0, VIEWS.wide.height, VIEWS.wide.distance];
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    scene.render({ time: i / 60, year: y, eye, target: VIEWS.wide.target, fovY: (VIEWS.wide.fov * Math.PI) / 180, focus: VIEWS.wide.distance, yearSeconds: YEAR_SECONDS });
+    gl.finish();
+  }
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+  return { msPerFrame: (performance.now() - t0) / n, width: canvas.width, height: canvas.height, quality: isPhone ? 'phone' : 'desktop', leaves: scene.info.leaves, msaa: scene.info.msaa, hdr: scene.info.hdr };
+};
 requestAnimationFrame(frame);
