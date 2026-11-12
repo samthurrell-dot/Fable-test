@@ -8,8 +8,11 @@
 //
 // Each bird is a singer with its own place (left or right, near or far), its own few phrases
 // that it repeats, as real birds do, and its own months. Far singers are quieter, duller and
-// carry more echo. Some sounds are tied to what is on screen: the squirrel's claws on bark,
-// wings at take-off, geese as the flock goes over.
+// carry more echo. Some sounds are tied to what is on screen: the squirrel's claws on bark
+// and wings at take-off.
+//
+// Only small songbirds sing. Big-bird calls made this way (cuckoo, wood pigeon, crow, geese,
+// a woodpecker's drumming) were tried in round 5 and sounded fake to Sam, so they were taken out.
 
 const MASTER_GAIN = 0.55;        // overall loudness
 const LEAF_HISS = 0.085;         // loudness of the leaves at the top of a gust, in full leaf
@@ -36,17 +39,13 @@ const SINGERS = [
   { kind: 'chaffinch', pan: 0.8, far: 0.45, gap: [7, 14], months: (y) => hump(y, 0.05, 0.38, 0.05) },
   { kind: 'blueTit', pan: -0.75, far: 0.2, gap: [6, 13], months: (y) => Math.max(hump(y, 0, 0.45, 0.06), 0.3 * hump(y, 0.8, 1.1)) },
   { kind: 'chiffchaff', pan: 0.1, far: 0.6, gap: [8, 16], months: (y) => hump(y, 0.06, 0.3, 0.04) },
-  { kind: 'pigeon', pan: -0.6, far: 0.8, gap: [10, 22], months: (y) => hump(y, 0.12, 0.6, 0.06) },
-  { kind: 'cuckoo', pan: 0.5, far: 1, gap: [18, 40], months: (y) => hump(y, 0.1, 0.24, 0.03) },
-  { kind: 'woodpecker', pan: -0.85, far: 0.9, gap: [14, 30], months: (y) => Math.max(hump(y, -0.1, 0.12, 0.04), hump(y, 0.93, 1.1, 0.04)) },
-  { kind: 'crow', pan: 0.7, far: 0.95, gap: [12, 28], months: (y) => hump(y, 0.5, 1.02, 0.06) },
 ];
 
 export function createSound() {
   let ctx = null, master = null, white = null, on = false;
   let leafL = null, leafR = null, air = null, twigs = null;
   let echo = null, hush = null, near = null, singers = [];
-  let nextRustle = 0, nextBee = 0, nextHopper = 0, nextClaw = 0, nextHonk = 0, lastMode = '';
+  let nextRustle = 0, nextBee = 0, nextHopper = 0, nextClaw = 0, lastMode = '';
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -171,7 +170,7 @@ export function createSound() {
     osc.start(t0); osc.stop(t0 + dur + 0.02);
   }
 
-  // A short burst of filtered hiss: wings, claws, leaves, a woodpecker's knock.
+  // A short burst of filtered hiss: wings, claws, leaves.
   function puff(out, t0, dur, level, type, freq, q = 1) {
     const src = ctx.createBufferSource();
     src.buffer = white;
@@ -183,21 +182,6 @@ export function createSound() {
     g.gain.exponentialRampToValueAtTime(0.0005, t0 + dur);
     src.connect(f); f.connect(g); g.connect(out);
     src.start(t0, Math.random() * 2); src.stop(t0 + dur + 0.02);
-  }
-
-  // A rough voice (crow, goose): a buzzy tone squeezed through a narrow band.
-  function squawk(out, t0, f0, f1, dur, level, band) {
-    const osc = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(f0, t0);
-    osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
-    f.type = 'bandpass'; f.frequency.value = band; f.Q.value = 2.2;
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(level, t0 + 0.03);
-    g.gain.setValueAtTime(level, t0 + dur * 0.6);
-    g.gain.exponentialRampToValueAtTime(0.0005, t0 + dur);
-    osc.connect(f); f.connect(g); g.connect(out);
-    osc.start(t0); osc.stop(t0 + dur + 0.02);
   }
 
   // --- Songs --------------------------------------------------------------------------------------
@@ -244,17 +228,6 @@ export function createSound() {
         n.push([at, f * 1.1, f * 0.9, 0.085, 0.03, {}]);
         at += rand(0.2, 0.25);
       }
-    } else if (kind === 'pigeon') {    // five soft hoots from deep in a far tree
-      for (const [gap, f, d, l] of [[0, 445, 0.3, 0.6], [0.42, 470, 0.55, 1], [0.62, 425, 0.4, 0.8], [0.62, 430, 0.26, 0.6], [0.32, 420, 0.3, 0.6]]) {
-        at += gap;
-        n.push([at, f, f * 0.95, d, 0.11 * l, { attack: 0.07, hold: 0.6 }]);
-      }
-    } else if (kind === 'cuckoo') {    // two notes, a falling third, from far across the meadow
-      const times = 3 + Math.floor(Math.random() * 4);
-      for (let i = 0; i < times; i++) {
-        n.push([at, 585, 580, 0.17, 0.1, { type: 'triangle', attack: 0.02, hold: 0.6 }], [at + 0.3, 465, 455, 0.3, 0.1, { type: 'triangle', attack: 0.02, hold: 0.6 }]);
-        at += 1.25;
-      }
     }
     return n;
   }
@@ -269,16 +242,6 @@ export function createSound() {
         note(s.out, t + i * (0.09 + Math.random() * 0.05), f, f * (Math.random() < 0.5 ? 1.35 : 0.75), 0.085, 0.035 + Math.random() * 0.03);
       }
       return 0.7;
-    }
-    if (kind === 'woodpecker') {       // a roll of knocks on dead wood that tails off
-      const knocks = 12 + Math.floor(Math.random() * 6);
-      for (let i = 0; i < knocks; i++) puff(s.out, t + i * 0.048 * (1 + i * 0.004), 0.03, 0.9 * Math.sin((Math.PI * (i + 2)) / (knocks + 3)), 'bandpass', 950, 5);
-      return 1;
-    }
-    if (kind === 'crow') {             // two to four hoarse caws
-      const caws = 2 + Math.floor(Math.random() * 3);
-      for (let i = 0; i < caws; i++) squawk(s.out, t + i * 0.52, rand(400, 440), rand(330, 360), 0.3, 0.3, 1350);
-      return caws * 0.52;
     }
     // Everyone else has a small set of phrases. Robins know more of them.
     const most = kind === 'robin' ? 5 : 2;
@@ -335,7 +298,7 @@ export function createSound() {
 
   // Call once per frame with the season state from engine/seasons.js.
   // heard (optional) says what is happening on screen:
-  //   { squirrel: { mode, moving, onBark, pan, near }, flock: { pan }, takeoffs: [{ pan, near }] }
+  //   { squirrel: { mode, moving, onBark, pan, near }, takeoffs: [{ pan, near }] }
   // pan is -1 left .. 1 right; near is loudness for distance (1 = about 12 m away).
   function update(st, heard = {}) {
     if (!ctx || !on) return;
@@ -391,12 +354,6 @@ export function createSound() {
     }
     for (const w of heard.takeoffs || []) {                  // a flurry of wings
       for (let i = 0; i < 6; i++) puff(master, t + 0.01 + i * 0.062, 0.03, 0.04 * w.near * (1 - i * 0.1), 'bandpass', 1500, 0.9);
-    }
-    if (heard.flock && t > nextHonk) {                       // geese calling to each other as they go over
-      const out = singers[heard.flock.pan < 0 ? 7 : 10].out;
-      const hz = rand(360, 430);
-      squawk(out, t + 0.02, hz, hz * 1.22, rand(0.16, 0.24), 0.32, 1150);
-      nextHonk = t + rand(0.25, 1.1);
     }
   }
 

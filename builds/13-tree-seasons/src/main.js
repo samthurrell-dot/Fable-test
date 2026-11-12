@@ -307,10 +307,9 @@ function frame(now) {
       const d = Math.hypot(dx, p[1] - eye[1], dz);
       return { pan: Math.max(-1, Math.min(1, (across / Math.max(depth, 1) / edge) * 0.8)), near: Math.max(0.2, Math.min(1.5, 12 / d)) };
     };
-    const sq = scene.life.squirrel, fl = scene.life.flock;
+    const sq = scene.life.squirrel;
     sound.update(st, {
       squirrel: sq ? { mode: sq.mode, moving: sq.moving, onBark: sq.onBark, ...hear(sq.pos) } : null,
-      flock: fl ? hear(fl.pos) : null,
       takeoffs: took.map((e) => hear(e.pos)),
     });
   }

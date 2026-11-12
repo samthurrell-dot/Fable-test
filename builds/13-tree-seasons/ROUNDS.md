@@ -117,7 +117,9 @@ Sound levels were measured in the page (peak after the master gain): each singer
 
 Not checked: I still cannot hear anything; the levels are measured, the character is not. The squirrel was checked as stills of each pose, not as watched motion. The preview pane here stops drawing when it is hidden, so the 30 frames a second pacing was seen working only in short bursts. No real phone, no faster GPU.
 
-Sam's verdict (12 Nov 2026): the squirrel "looks right" in motion. No word yet on the new bird sounds or on sharp mode.
+Sam's verdict (12 Nov 2026): the squirrel "looks right" in motion. The small chirps are "really good", but the larger bird calls (he named the cuckoo and "maybe a goose") "sound very fake": better to leave them out and keep only the little chirps.
+
+Done the same day: wood pigeon, cuckoo, crow, geese and the woodpecker's drumming are removed. Seven small songbirds are left (sparrow, robin, blackbird, great tit, chaffinch, blue tit, chiffchaff). The blackbird is the lowest and slowest of these; if it also sounds false, drop it from `SINGERS` in `src/sound.js`. Bees, grasshoppers and the squirrel and wing sounds are still in; Sam has not commented on them. No word yet on sharp mode.
 
 ## Next
 

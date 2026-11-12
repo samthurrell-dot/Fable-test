@@ -124,6 +124,7 @@ The sun's compass direction is a per-season key (`sunAzimuth`): side light model
 
 **Details that mattered:**
 - Wind must not be a steady low rush (that is a road). It is a bright hiss that swells in slow, uneven gusts and falls almost silent between them. Sam approved this; leave it.
+- Keep to small songbirds. Short, high, quick whistles made from sine waves pass for real birds. Big-bird calls made the same way (cuckoo, wood pigeon, crow, geese) do not: a long, low, steady tone gives the ear time to hear that it is a machine. Sam heard them and asked for them out.
 - WebAudio's compressor adds its own make-up gain; it is only there to catch pile-ups.
 - Measure levels in the page with an `AnalyserNode` when you cannot listen: `__sound.audition('cuckoo')` plays one phrase of any singer.
 - Sounds tied to the picture (claws, wings, geese) take a pan and a nearness worked out from the camera in `src/main.js`.
