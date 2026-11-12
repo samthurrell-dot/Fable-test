@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>A tree through the seasons</title>
-<meta name="description" content="One tree, grown in code, through spring, summer, autumn and winter.">
+<meta name="description" content="One tree, grown entirely in code, through blossom, full leaf, leaf fall and snow, with the birds, butterflies and red squirrel that live in it.">
+<meta name="theme-color" content="#5c7f3a">
+<meta property="og:type" content="website">
+<meta property="og:title" content="A tree through the seasons">
+<meta property="og:description" content="One tree, grown entirely in code, through blossom, full leaf, leaf fall and snow, with the life that lives in it. Drag the slider to change the season.">
+<meta property="og:image" content="https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/share/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23dfe9d2'/%3E%3Cpath d='M15 28v-9h2v9z' fill='%235b4332'/%3E%3Ccircle cx='16' cy='13' r='9' fill='%233d7a2c'/%3E%3Ccircle cx='12' cy='11' r='4' fill='%234f9638'/%3E%3C/svg%3E">
 <link rel="modulepreload" href="src/main.js">
 <link rel="modulepreload" href="src/scene.js">
 <link rel="modulepreload" href="src/shaders.js">
@@ -24,7 +33,13 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(#8aa0b6 0%, #b9c6cf 55%, #7f9a55 56%, #6f8b45 100%); }
   body { font-family: 'EB Garamond', Georgia, 'Times New Roman', serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
-  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; opacity: 0; transition: opacity 1.4s ease; }
+  .ready #scene { opacity: 1; }
+  /* After a few still seconds the words step back and leave the picture. Any movement brings them back. */
+  header, #sound, .dock { transition: opacity 0.8s ease; }
+  .idle header { opacity: 0; }
+  .idle #sound, .idle .dock { opacity: 0.32; }
+  @media (prefers-reduced-motion: reduce) { #scene, header, #sound, .dock { transition: none; } }
   #scene:active { cursor: grabbing; }
   .shade { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0, 0, 0, 0.25); }
   header { position: fixed; left: max(20px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); pointer-events: none; max-width: min(70vw, 420px); }

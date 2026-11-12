@@ -78,7 +78,7 @@ The sun's compass direction is a per-season key (`sunAzimuth`): side light model
 
 ## 5c. Animals as pure functions of time (`engine/life.js`)
 
-**What:** no animal has stored state. `birdState(i, t, …)` works out from the clock alone which perch a bird left, which it is heading for and how far along it is. Time is cut into cycles per bird; a hash of (bird, cycle) picks the perch, so cycle k ends where cycle k+1 begins. Flights are cubic Bezier curves; the tangent gives the heading. The squirrel follows a path built from the tree's own skeleton (grass, trunk surface, bough) with a table of [seconds, metres along the path]; equal distances in a row are pauses.
+**What:** no animal has stored state. `birdState(i, t, …)` works out from the clock alone which perch a bird left, which it is heading for and how far along it is. Time is cut into cycles per bird; a hash of (bird, cycle) picks the perch, so cycle k ends where cycle k+1 begins. Flights are cubic Bezier curves; the tangent gives the heading. The squirrel's path is built from the tree's own skeleton (grass, trunk surface, bough); what it does along that path is in 5d.
 
 **Why:** the whole build can be frozen (`?t=`) and scrubbed. A simulation with stored state cannot. It also costs nothing: about twenty small matrix builds per frame.
 
@@ -91,9 +91,52 @@ The sun's compass direction is a per-season key (`sunAzimuth`): side light model
 - A flat-winged bird seen exactly side-on is a line. The far flock flies angled towards the lens for this reason.
 - Butterflies and flowers are instanced and worked out wholly in the vertex shader from a seed.
 
+## 5d. An animal rebuilt in its pose every frame (`engine/squirrel.js`)
+
+**What:** the squirrel has no fixed model and no skinning. A pose is about twenty numbers (where the hips and chest are, how far the back humps, where the nose points, where each pair of feet is, how the tail curls). Each frame the body is built from them: oval rings swept along the spine, head, tail and each leg, about 850 vertices, sent to the GPU with one `bufferSubData`.
+
+**Why:** blending two postures is blending twenty numbers, so every change of activity eases for free. Legs are solved backwards from where the feet are (two bones and a joint), so planted feet stay planted. A spine that is a curve can stretch and hump, which a rigid model cannot.
+
+**Key parameters:** the `SQUIRREL` table (speeds, stride, blend and turn times) and the posture tables `STAND`, `SIT`, `SNIFF`, `ALERT`, `CLING`.
+
+**Details that mattered:**
+- The gait is a bound, not a trot: `gaitPose(g)` takes the phase of one bound. Each pair of feet is planted for a share of it and slides back under the body by exactly the ground covered in that time (`footCycle`), so they do not skate.
+- The day is a list of stretches (`buildPlan`): stay here doing this, or go there. Each go is a whole number of bounds. The gait fades in and out with speed.
+- The head looks about in snaps and holds (`glance`), never in smooth sweeps. The tail flicks in bursts. Small animals move like this; smooth motion reads as a toy.
+- It turns about the surface it stands on, so the same code spins it on grass, on the trunk and on a bough, and it comes down the trunk head first.
+- Fur: hairs are noise stretched along the body. Pixels at glancing angles are thrown away by a noise test, which gives a ragged outline; the tips that remain are lit more when the sun is behind.
+- A "coat coordinate" that stays with the skin is sent with each vertex, so the fur pattern does not swim as the body bends.
+- Cost: nothing measurable.
+
+## 5e. Weather you can see: cloud shadows and gusts (`SHADOW`, `GUST` in `src/shaders.js`)
+
+**What:** `cloudShade(p)` is one slow noise over the ground, drifting downwind, multiplied into the sun wherever a shadow is looked up, so every lit thing gets it with no extra code. `gustAt(p)` is a faster noise stretched across the wind; grass blades and flowers lean further as it passes and the far meadow lightens with it.
+
+**Why:** a still meadow under an even sun looks like a backdrop. Light that comes and goes, and wind you can see arriving, are most of what makes a landscape feel outdoors. Each is one noise lookup per pixel.
+
+**Key parameters:** `CLOUD_SHADE_SIZE`, `CLOUD_SHADE_DRIFT`, `GUST_SIZE`, `GUST_SPEED`, `GUST_BOW`, and `CLOUD_SHADE_DEPTH` in `engine/seasons.js` (none under overcast).
+
+## 5f. Sound: singers, not samples (`src/sound.js`)
+
+**What:** every sound is made in code. Each bird is a singer with a place (`pan`, `far`), months (`months(y)`) and a few phrases it makes up once and then repeats with small changes. One `place()` chain per singer sets loudness, dullness and how much goes to the echo. The echo is a made-up impulse: 1.5 s of dulled, fading noise with five distinct returns.
+
+**Why:** real birds repeat their own phrases, sing from fixed perches, and are heard at different distances. Random chirps from the centre sound like a machine. Distance is three things at once: quieter, duller, more echo.
+
+**Details that mattered:**
+- Wind must not be a steady low rush (that is a road). It is a bright hiss that swells in slow, uneven gusts and falls almost silent between them. Sam approved this; leave it.
+- WebAudio's compressor adds its own make-up gain; it is only there to catch pile-ups.
+- Measure levels in the page with an `AnalyserNode` when you cannot listen: `__sound.audition('cuckoo')` plays one phrase of any singer.
+- Sounds tied to the picture (claws, wings, geese) take a pan and a nearness worked out from the camera in `src/main.js`.
+
 ## 6. Lens (`POST_FS`)
 
 One-pass depth of field: a golden-angle spiral gather where each sample counts only if its own blur circle reaches the centre pixel. Then exposure, per-season saturation and tint, a filmic curve, vignette and grain. Measured cost: too small to see (removing it did not lower frame time).
+
+## 6b. Glow (`BRIGHT_FS`, `BLUR_FS`)
+
+**What:** the brightest parts of the picture (above 1.15, where 1 is white paper in full sun) are copied at quarter size, blurred twice, and added back at 11%.
+
+**Why:** snow in sun, blossom and cloud edges spill a little light in a real lens. Without it they look cut out. At a sixteenth of the pixels the cost is too small to measure.
 
 ## 7. Speed
 
@@ -101,6 +144,8 @@ One-pass depth of field: a golden-angle spiral gather where each sample counts o
 - 4× MSAA on a half-float target costs about 30–45% on this GPU. Worth it on a strong GPU for the twigs; switched off by the start-up check on a weak one.
 - Start-up check (`frameCost` in `src/main.js`): times two frames at half size, with `readPixels` to force the GPU to finish, scales the result up by a measured factor (2.5), then sets MSAA and resolution. The answer is kept in `localStorage` for a week. A running check lowers resolution further if frames stay over 21 ms. `?tune=fresh` measures again.
 - Live adjustment: resolution steps down after 45 slow frames and up after 150 smooth ones. A failed step up sets a ceiling just below it. If two steps down in a row buy nothing, the frame rate is being held by the browser, not the GPU; the resolution is put back and left alone.
+- Noise from a texture: `noise2` and `noise3` read a 256×256 texture of random numbers (red, and green = red shifted by (37, 17)) with the fraction eased first. One lookup replaces four or eight hashes. This took a quarter off the whole frame. Where one noise cell is stretched over a huge area (cloud shadow, snow drifts) the texture's 256 blending steps could show as faint bands, so those two use the worked-out `noise2h`.
+- Sharp mode: if 60 frames a second would need the picture below 72% size, run at 30 and spend the time on resolution (`SHARP_MIN_SCALE` in `src/main.js`). Frames are drawn on every other screen refresh so they stay evenly spaced.
 - Start-up: `createPrograms` in `engine/glkit.js` starts every shader compile and link before asking for any result, so the browser can build them side by side.
 - Phone settings: 3,200 twigs, 22,400 leaves drawn 1.5× larger, 14,000 grass blades, 1024 shadow map.
 

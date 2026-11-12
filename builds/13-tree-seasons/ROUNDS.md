@@ -1,6 +1,6 @@
 # 13 – A tree through the seasons: rounds
 
-State: v1 plus four rounds are done (three on the look, one on speed), which meets the prompt's minimum of four. It is still short of finished: see "Next" at the bottom.
+State: v1 plus five rounds are done (the prompt asks for at least four). Rounds 4 and 5 follow Sam's own briefs. What is still open is under "Next" at the bottom.
 
 Checked in the desktop app's browser pane on this PC (Intel UHD Graphics 615, a low-power laptop chip). The pane was hidden during the run, so frame rate was measured with `window.__bench()` (draws frames back to back and waits for the GPU) and not from the live loop.
 
@@ -91,13 +91,39 @@ Sound: Sam listened after this round and said the new wind sounds right. (I cann
 
 Not checked: The live frame rate in this app's browser pane sits at a flat 30 fps whatever the resolution, so the new step-up logic is tested only for not misbehaving there.
 
+## Round 5 (polish) – Sam's brief
+
+Sam, after round 4: the squirrel's movement is "a bit basic"; the sounds are "okay" but could be better; the birds are good; turn up the polish and visual fidelity, because this is a showcase piece he will share.
+
+Three weakest things:
+1. **The squirrel was one stiff shape that slid along a line.** Rebuilt from nothing (`engine/squirrel.js`). Its body is now built afresh in its pose every frame: a spine that stretches and humps, a head that turns on its own, four jointed legs, a tail that curls and ripples, ears with tufts, eyes, pale belly. It bounds as squirrels do (hind feet together, stretch, front paws down, back humps), sniffs and digs, sits up to eat with a nut in its paws, washes its face on the bough, clings flat to the trunk with its head lifted out, comes down head first, bolts upright when alert, and swings round with a small hop when it changes direction. Fur shader with a ragged outline and lit tips. A fourth camera view follows it.
+2. **The sound was wind plus three generic bird noises.** Now eleven singers, each a named bird with its own few phrases that it repeats, its own place (left or right, near or far) and its own months: house sparrow (Sam's liked chirps, unchanged), robin (all winter too), blackbird, great tit, chaffinch, blue tit, chiffchaff, wood pigeon, cuckoo in late spring, a woodpecker drumming at winter's end, crows in autumn and winter. Far birds are quieter, duller and carry more echo (a short open-air echo made in code). Bees and grasshoppers in summer. Tied to the picture: claws on bark and swishes in grass as the squirrel moves, its scolding call when it bolts upright, wings at take-off, geese calling as the flock passes. Snow dulls everything. The wind recipe Sam approved is unchanged, but its two halves now sit left and right and gust a moment apart.
+3. **The wider picture was static and plain past the tree.** Added: patches of cloud shadow that drift over meadow and tree; gusts that roll through the grass and flowers as visible waves; far drifts of flower colour; a wood on the near ridge that turns with the seasons (green, gold, bare, snowed); two ranges of blue far hills; fuller clouds with ragged, lit edges; a soft glow round the brightest things (snow in sun, blossom, cloud edges); shorter grass in the crown's shade; grass and flowers out to 32 m.
+
+Also:
+- All shader noise now comes from one small texture of random numbers (one lookup, not four or eight hashes). This more than paid for everything above: see the table.
+- "Sharp" mode. A slow graphics chip cannot give both a sharp picture and 60 frames a second. If 60 would need the picture below 72% size, the page now runs at 30 frames a second and spends the time on resolution. `?pace=60` or `?pace=30` forces either.
+- For sharing: a link-preview picture (the four seasons side by side), preview tags, an icon, real pictures of the four seasons on the site home page. The scene fades in; the words and controls step back after six still seconds.
+
+Measured on the UHD 615 at 1536×1152, phone settings, ms per frame:
+
+| | round 4 | round 5 effects, old noise | round 5 |
+|---|---|---|---|
+| Summer, 4× MSAA | 60.0 | 73.4 | 54.4 |
+| Summer, no MSAA | 35.9 | 46.1 | 34.7 |
+| Winter, no MSAA | 40.4 | 45.9 | 29.3 |
+
+Sound levels were measured in the page (peak after the master gain): each singer peaks at 0.03 to 0.05, so none drowns the rest. Wing flutter was three times that and was turned down.
+
+Not checked: I still cannot hear anything; the levels are measured, the character is not. The squirrel was checked as stills of each pose, not as watched motion. The preview pane here stops drawing when it is hidden, so the 30 frames a second pacing was seen working only in short bursts. No real phone, no faster GPU.
+
 ## Next
 
-- Birds are hard to pick out while perched inside the leaves; they read best in flight and in winter. The squirrel and birds are simple shapes: fine at this distance, plain close up.
-- No mating of sound to sight yet (a bird that sings is not the bird you see).
-- Cloud cover is thin in the wide view: mostly a clean gradient. A few clear cumulus shapes would add life.
+- The squirrel's hind feet do not turn backwards when it comes down the trunk head first, as a real one's do. Its movement has not been watched at full speed by anyone but Sam.
+- A singing bird is still not the bird you see; only take-offs, the flock and the squirrel are tied to the picture.
+- Birds are hard to pick out while perched inside the leaves; they read best in flight and in winter.
 - Leaves have no serrated edge; the autumn leaf fall still reads as a sheet on the downwind side.
 - Winter: tree shadow on snow is still faint from the wide view; no snow build-up shape on the ground at the trunk.
-- Grass blades in shade read as dark spikes at the edge of the shadow.
-- Not checked: a real phone, a real desktop GPU, the sound (written, never heard), dragging the slider by touch.
+- The far hills are smooth bands; the ground is flat. A gentle roll in the land would add depth but touches everything that sits on the ground.
+- Not checked: a real phone, a real desktop GPU, the sound by ear (Sam has the only ears), dragging the slider by touch.
 - Bark and ground use only code-made textures. Poly Haven bark would raise realism (needs a download).

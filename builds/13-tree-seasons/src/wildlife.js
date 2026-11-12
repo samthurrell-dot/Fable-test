@@ -12,7 +12,7 @@ const BIRD_SCALE = 1.8;        // small birds are drawn this much larger than li
 const SQUIRREL_SCALE = 1.4;
 const FLOCK_SCALE = 4.5;       // the far flock is larger birds (geese)
 const TOADSTOOLS = 40;         // autumn toadstools near the trunk
-const FLOWER_RADIUS = 24;      // flowers are scattered inside this radius, metres
+const FLOWER_RADIUS = 30;      // flowers are scattered inside this radius, metres
 const FLOWER_SIZE = 0.75;      // head sizes below are diameters; the quad is drawn from its centre, hence under 1
 
 // Colours are linear RGB: back, belly, beak, wings.

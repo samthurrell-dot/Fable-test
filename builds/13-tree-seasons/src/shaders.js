@@ -404,12 +404,12 @@ void main(){
   float nearish=exp(-d*0.012);
   vec2 across=vec2(dot(p,uWindDir)*0.06, dot(p,vec2(-uWindDir.y,uWindDir.x))*0.5);
   col*=mix(1.,0.88+0.24*noise2(across+13.),nearish);
-  col*=1.+0.20*(gustAt(p)-0.3)*uWind*(1.-uSnow);
+  col*=1.+0.13*(gustAt(p)-0.3)*uWind*(1.-uSnow);
   if(uFlowers>0.01){
     float out2=smoothstep(14.,30.,r)*exp(-d*0.004)*uFlowers;
     float speck=mix(1.,0.4+1.2*fine,exp(-d*0.03));
     col=mix(col,DRIFT_YELLOW,smoothstep(0.62,0.88,noise2(p*0.11+31.))*0.42*out2*speck);
-    col=mix(col,DRIFT_PALE,smoothstep(0.64,0.90,noise2(p*0.16+57.))*0.30*out2*speck);
+    col=mix(col,DRIFT_PALE,smoothstep(0.64,0.90,noise2(p*0.16+57.))*0.20*out2*speck);
   }
   float bare=smoothstep(1.5,0.5,r+(mid-0.5)*0.8);
   col=mix(col,SOIL,bare*0.75);
@@ -538,9 +538,13 @@ void main(){
   }
   // Far hills and a nearer wood. Sampled on a circle so there is no seam. Skipped high in the sky.
   if(el<0.1){
-  float h1=0.022+0.030*fbm2x2(n2*2.6+1.3)+0.016*noise2(n2*8.+4.)+0.005*noise2(n2*37.+1.);
+  float h1=0.022+0.030*fbm2x2(n2*2.6+1.3)+0.024*noise2(n2*8.+4.)+0.005*noise2(n2*37.+1.);
   // Haze gathers in the valleys: the hills pale towards their feet.
-  vec3 hillFar=mix(uHill*vec3(0.85,1.,1.3),uFogCol,0.5+0.25*smoothstep(h1,0.,el));
+  // Two ranges of far hills. Distance turns them blue and pale: the further range more so.
+  vec3 hillBlue=mix(uHill,uZenith,0.45);
+  float h0=0.034+0.030*noise2(n2*3.3+7.)+0.024*noise2(n2*11.+2.);
+  col=mix(col,mix(hillBlue,uFogCol,0.58),smoothstep(h0+0.004,h0-0.002,el)*0.9);
+  vec3 hillFar=mix(hillBlue,uFogCol,0.30+0.34*smoothstep(h1,0.,el));
   col=mix(col,hillFar,smoothstep(h1+0.004,h1-0.002,el));
   // A wood along the near ridge: rounded crowns in clumps with gaps of hedge between, each
   // crown its own shade, brighter on top. It turns with the seasons like the tree in front.

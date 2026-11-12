@@ -54,8 +54,8 @@ const VIEWS = {
 const VIEW_ORDER = ['wide', 'crown', 'ground', 'squirrel'];
 
 const QUALITY = {
-  desktop: { twigs: 8000, leafSizeMul: 1, grassBlades: 50000, flowers: 9000, butterflies: 30, snowflakes: 6000, shadowSize: 2048, msaa: 4, maxDpr: 2, blur: 1, maxBlurPx: 11, blurStep: 1.4 },
-  phone: { twigs: 3200, leafSizeMul: 1.5, grassBlades: 14000, flowers: 3500, butterflies: 20, snowflakes: 2000, shadowSize: 1024, msaa: 4, maxDpr: 1.5, blur: 1, maxBlurPx: 7, blurStep: 2.2 },
+  desktop: { twigs: 8000, leafSizeMul: 1, grassBlades: 64000, flowers: 11500, butterflies: 30, snowflakes: 6000, shadowSize: 2048, msaa: 4, maxDpr: 2, blur: 1, maxBlurPx: 11, blurStep: 1.4 },
+  phone: { twigs: 3200, leafSizeMul: 1.5, grassBlades: 18000, flowers: 4500, butterflies: 20, snowflakes: 2000, shadowSize: 1024, msaa: 4, maxDpr: 1.5, blur: 1, maxBlurPx: 7, blurStep: 2.2 },
 };
 
 const params = new URLSearchParams(location.search);
@@ -155,6 +155,17 @@ addEventListener('keydown', (e) => {
     setView(VIEW_ORDER[+e.key - 1]);
   }
 });
+// The words and controls fade back when nothing has been touched for a while.
+const IDLE_SECONDS = 6;
+let idleTimer = 0;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (!holding && !dragging) document.body.classList.add('idle'); }, IDLE_SECONDS * 1000);
+}
+for (const type of ['pointermove', 'pointerdown', 'keydown', 'focusin']) addEventListener(type, wake, { passive: true });
+wake();
+
 viewButton.addEventListener('click', () => setView(VIEW_ORDER[(VIEW_ORDER.indexOf(viewName) + 1) % VIEW_ORDER.length]));
 soundButton.addEventListener('click', () => {
   if (sound.on) { sound.stop(); soundButton.textContent = 'Enable sound'; soundButton.setAttribute('aria-pressed', 'false'); }
@@ -284,7 +295,7 @@ function frame(now) {
   const focus = Math.hypot(eye[0] - aim[0], eye[1] - aim[1], eye[2] - aim[2]);
 
   const st = scene.render({ time, year: y, eye, target: aim, fovY, focus, blur: cam.blur, yearSeconds: YEAR_SECONDS });
-  if (!loading.hidden) { loading.hidden = true; boot.totalMs = performance.now() - boot.start; }
+  if (!loading.hidden) { loading.hidden = true; document.body.classList.add('ready'); boot.totalMs = performance.now() - boot.start; }
   // Tell the sound where the animals are: left or right of the lens, and how near.
   const took = scene.life.drain();
   if (sound.on) {
