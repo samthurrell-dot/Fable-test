@@ -117,9 +117,11 @@ Sound levels were measured in the page (peak after the master gain): each singer
 
 Not checked: I still cannot hear anything; the levels are measured, the character is not. The squirrel was checked as stills of each pose, not as watched motion. The preview pane here stops drawing when it is hidden, so the 30 frames a second pacing was seen working only in short bursts. No real phone, no faster GPU.
 
+Sam's verdict (12 Nov 2026): the squirrel "looks right" in motion. No word yet on the new bird sounds or on sharp mode.
+
 ## Next
 
-- The squirrel's hind feet do not turn backwards when it comes down the trunk head first, as a real one's do. Its movement has not been watched at full speed by anyone but Sam.
+- The squirrel's hind feet do not turn backwards when it comes down the trunk head first, as a real one's do. Sam is happy with its movement as it is.
 - A singing bird is still not the bird you see; only take-offs, the flock and the squirrel are tied to the picture.
 - Birds are hard to pick out while perched inside the leaves; they read best in flight and in winter.
 - Leaves have no serrated edge; the autumn leaf fall still reads as a sheet on the downwind side.

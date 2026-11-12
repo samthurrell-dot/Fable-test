@@ -18,7 +18,7 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 
 ## Next
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
-- Check 13 on a real phone and a stronger GPU. Sam has not yet seen or heard round 5 (new squirrel, new bird sounds, sharp mode): wait for his view before more changes.
+- Check 13 on a real phone and a stronger GPU. Sam watched the round 5 squirrel on 12 Nov 2026 and said it looks right: leave its movement alone unless he asks. He has not yet said anything about the new bird sounds or the sharp 30 fps mode.
 - Then 06 lightbulb and 15 pop-up book from `prompts/ready/`.
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
