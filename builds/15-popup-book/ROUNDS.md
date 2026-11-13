@@ -95,7 +95,7 @@ Final state of the checks: `book.check()` rigid to 9e-16, glue seams to 4e-15 cm
 
 ## Not checked, and known flaws
 
-- **Sound by ear.** Levels are measured; whether the paper noises and the music box sound right is not known. Sam has the only ears.
+- **Sound.** I could only measure levels. Sam's verdict (13 Nov 2026), after turning it on: it "sounds right". He did not say which parts he listened to, so the paper noises and the music box are both left as they are.
 - **A real phone and a stronger GPU.** Phone layout was checked in a 375×812 window on this PC with made-up touch events. Frame rate on other machines is not measured.
 - **Dragging by hand.** Page turning, the tabs, the slider and both wheels were driven with made-up pointer events and their values read back. They were not felt.
 - Card has no springiness: a page stopped half way stays exactly where it was left, and pieces do not bow.
@@ -107,6 +107,5 @@ Final state of the checks: `book.check()` rigid to 9e-16, glue seams to 4e-15 cm
 
 ## Next
 
-- Hear it and tune the sound.
 - Try it on a real phone.
 - Harvest: `engine/fold.js` with `engine/spine.js` is the part worth a card first (see `skills/build-harvest`), then the renderer.
