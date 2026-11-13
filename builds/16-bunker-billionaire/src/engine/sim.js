@@ -295,7 +295,7 @@ function beginDay(st, inc) {
     else cams = 'Cameras: everyone was where they should be.';
   }
   const band = Math.min(4, Math.floor(st.unrest / 20));
-  st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), rumours, informant, cams, faces, delta: { ...st.delta } };
+  st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), tense: band >= 3, rumours, informant, cams, faces, delta: { ...st.delta } };
   st.orderUsed = false; st.orderText = ''; st.result = null;
   st.event = pickEvent(st, g);
   st.phase = 'report';

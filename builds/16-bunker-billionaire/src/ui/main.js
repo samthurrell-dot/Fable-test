@@ -71,7 +71,7 @@ const TOOL_INFO = {
 };
 const toolInfo = (id) => { const i = TOOL_INFO[id === 'cameras' && st.cameras ? 'camerasOff' : id]; return i ? `<dl class="trade"><dt>What you get</dt><dd>${i[0]}</dd><dt>What it costs</dt><dd>${i[1]}</dd></dl>` : ''; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const num = (v) => (v > 0 ? '+' : '−') + Math.abs(Math.round(v));
+const num = (v) => (v > 0 ? '+' : '−') + Math.round(Math.abs(v));
 const chips = (delta) => Object.entries(delta || {}).filter(([, v]) => Math.abs(v) >= 0.5).map(([k, v]) => `<span class="chip r-${k} ${v > 0 ? 'up' : 'down'}">${ICON[k]}${num(v)}</span>`).join('');
 const person = (role) => st.staff.find((p) => p.role === role);
 const moodOf = (p) => (p.status === 'dead' ? 'dead' : p.status === 'exiled' ? 'flat' : p.face || 'flat');
@@ -198,6 +198,7 @@ function renderReport() {
     ${first}
     ${r.inc.length ? `<ul class="incidents">${r.inc.map((i) => `<li class="${i.kind}">${rich(i.text)}</li>`).join('')}</ul>` : ''}
     <p class="mood">${esc(r.mood)}</p>
+    ${r.tense && promiseList(st).some((o) => o.ok) ? '<p class="hintline">A promise would calm this today, and cost nothing until it falls due.</p>' : ''}
     ${facesLine(r.faces)}
     ${r.cams ? `<p class="cams-line">${rich(r.cams)}</p>` : ''}
     ${r.informant ? `<p class="informant-line">${rich(r.informant.text)}</p>` : ''}

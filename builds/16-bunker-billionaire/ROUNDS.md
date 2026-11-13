@@ -49,3 +49,9 @@ Checked: two whole runs clicked through the real buttons with no errors (founder
 - Not opened on a real phone.
 - Left out of the outline on purpose for a first prototype: bugged rooms and the planted spy (two of the nine tools), air as its own resource, and factions with names. The outline's open questions were answered this way: one day a turn; the silo is a picture and the staff list at once; loyalty is never shown exactly (a test tells you loyal or not, once); the outside world appears as two cards (a voice on the radio, knocking at the hatch).
 - The hooks for the full game are in place but unused: a starting card is plain data (`src/data/cards.js`) with its promises and its grudge, so Act 1 could deal one.
+
+## After round 1 (small)
+
+- The morning report now says when a promise would help: if the corridors are in the two worst bands and there is something left to promise, one line points at it. The outline: "When unrest spikes, you can make a promise instead of spending resources."
+- A change of half a unit showed as "−0" in the bar. Fixed.
+- Checked in the real flow, with motion on: sound enabled and a day played (the output peaked at 0.15, the same range as build 15), cameras switched on through its sheet, lights out, and the next morning's report naming who the cameras saw in the stores. No errors.
