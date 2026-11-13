@@ -218,6 +218,8 @@ export class CardMesh {
   //   mat            material id for the shader
   //   hasBack, hasWalls, hasRim   switch faces off for parts glued flat or cut from thick stock
   //   bend           width of the bent strip at the crease (fold parts)
+  //   foldEdge       (p, q) -> true for an edge that is a fold into another sheet, not a cut:
+  //                  it gets no white wall and no pressed rim
   addPart(groupId, spec) {
     const g = this._group(groupId);
     const s = {
@@ -240,7 +242,8 @@ export class CardMesh {
     this._bend(g, s, outline, wh);
   }
 
-  _sheet(g, s, frame, outline, holes, skipEdge) {
+  _sheet(g, s, frame, outline, holes, atCrease) {
+    const skipEdge = s.foldEdge ? (p, q) => atCrease(p, q) || s.foldEdge(p, q) : atCrease;
     const { pts, tris } = triangulate(outline, holes);
     const dens = (p) => (s.screen ? Math.max(0, Math.min(255, Math.round(s.screen(p[0], p[1]) * 255))) : 0);
     let base = this.count;

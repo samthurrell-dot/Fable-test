@@ -3,10 +3,14 @@
 // that spread files use to add card parts and mechanisms. Kinematics come from engine/fold.js,
 // triangles from engine/cardmesh.js, print from engine/atlas.js.
 //
+// A page's Frame is its printed surface (z = 0); the sheet lies below it. See engine/spine.js for how
+// the leaves are hinged and how the two stacks rest on the table.
+//
 // One number drives everything: book.turn in 0..5. At a whole number k, spread k lies open.
 // Between k and k + 1, leaf k is in the air: spread k is closing while spread k + 1 opens.
 
 import { Rig, hingeOfFold, vec } from '../engine/fold.js';
+import { createSpine } from '../engine/spine.js';
 import { CardMesh, crossingsX } from '../engine/cardmesh.js';
 import { buildAtlas } from '../engine/atlas.js';
 import { C, hexRgb, rect } from './art.js';
@@ -22,6 +26,7 @@ export const BOOK = {
   COVER_OVER: 0.4,    // cm the covers stand proud of the pages
   GUTTER_BEND: 0.5,   // cm of sheet that bends at the spine
   TAB_W: 0.85,        // cm, width of a glue tab
+  TAB_T: 0.02,        // cm a glue tab stands above the sheet it is stuck to (it is pressed flat)
   OPEN_MIN: 0.045,    // radians: below this a spread counts as shut and its pop-ups are not drawn
 };
 export const MAT = { CARD: 0, BOARD: 1, TAB: 2, WOOD: 3 };
@@ -35,6 +40,7 @@ class Builder {
     this.pagesGroup = k > 0 ? `pg${k}` : 'base';
     this.popGroup = k > 0 ? `pop${k}` : 'base';
     this.parts = []; this.creases = []; this.tabs = []; this.labels = []; this.controls = []; this.mechs = [];
+    this.stands = new Set();   // frames whose y = 0 line is a fold into a glue tab
     this.W = BOOK.W; this.H = BOOK.H;
   }
 
@@ -44,7 +50,7 @@ class Builder {
   // level 0 is the card itself, +1 is glued to its front, -1 to its back.
   _z(frame, level) {
     const t = BOOK.CARD_T;
-    if (this._isPage(frame)) return [BOOK.PAGE_T + (level - 1) * t, BOOK.PAGE_T + level * t];
+    if (this._isPage(frame)) return [(level - 1) * t, level * t];
     if (level === 0) return [-t / 2, t / 2];
     return level > 0 ? [t / 2 + (level - 1) * t, t / 2 + level * t] : [-t / 2 + level * t, -t / 2 + (level + 1) * t];
   }
@@ -65,6 +71,13 @@ class Builder {
       hasBack: !page, hasWalls: true, hasRim: true, ...spec,
       frame, frameB: fold ? fold.B : undefined, z: spec.z || this._z(frame, level),
     };
+    // Where a standing piece meets its glue tab the card is folded, not cut.
+    const near = (a, b) => Math.abs(a - b) < 1e-4;
+    if (!p.foldEdge && level === 0) {
+      if (fold && fold.kind === 'v') { const base = this.base(fold); p.foldEdge = (a, b) => near(a[1], base(a[0])) && near(b[1], base(b[0])); }
+      else if (fold && fold.kind === 'p') p.foldEdge = (a, b) => (near(a[0], -fold.p) && near(b[0], -fold.p)) || (near(a[0], fold.q) && near(b[0], fold.q));
+      else if (!fold && this.stands.has(frame.id)) p.foldEdge = (a, b) => near(a[1], 0) && near(b[1], 0);
+    }
     this.parts.push(p);
     if (fold && fold !== this.gutter && !spec.noCrease) {
       const ys = crossingsX(p.shape, 0);
@@ -79,7 +92,7 @@ class Builder {
   // The printed sheet of both pages. print(ctx) draws in spread units: x from -W to W, y from 0 to H.
   page(color, print, holes = []) {
     return this.part({
-      on: this.gutter, shape: rect(-BOOK.W, 0, BOOK.W, BOOK.H), holes, z: [0, BOOK.PAGE_T], color, print,
+      on: this.gutter, shape: rect(-BOOK.W, 0, BOOK.W, BOOK.H), holes, z: [-BOOK.PAGE_T, 0], color, print,
       group: this.pagesGroup, mat: MAT.BOARD, hasBack: false, bend: BOOK.GUTTER_BEND, edge: C.snow,
     });
   }
@@ -95,9 +108,10 @@ class Builder {
     tx /= l; ty /= l;
     const c = Math.min(width * 0.6, l * 0.3);
     const shape = [[a[0], a[1]], [b[0], b[1]], [b[0] + s[0] * width - tx * c, b[1] + s[1] * width - ty * c], [a[0] + s[0] * width + tx * c, a[1] + s[1] * width + ty * c]];
-    this.part({ on: host, shape, level: 1, color: C.white, mat: MAT.TAB, hasBack: false });
-    this.tabs.push({ frame: host, shape, z: this._z(host, 1)[1] });
-    this.creases.push({ frame: host, a: [a[0], a[1], this._z(host, 1)[0]], b: [b[0], b[1], this._z(host, 1)[0]], kind: 'glue' });
+    const tz = this._z(host, 1)[0];
+    this.part({ on: host, shape, z: [tz, tz + BOOK.TAB_T], color: C.white, mat: MAT.TAB, hasBack: false, foldEdge: (p, q) => (p === shape[0] && q === shape[1]) || (p === shape[1] && q === shape[0]) || (Math.hypot(p[0] - shape[0][0], p[1] - shape[0][1]) + Math.hypot(q[0] - shape[1][0], q[1] - shape[1][1]) < 1e-4) || (Math.hypot(q[0] - shape[0][0], q[1] - shape[0][1]) + Math.hypot(p[0] - shape[1][0], p[1] - shape[1][1]) < 1e-4) });
+    this.tabs.push({ frame: host, shape, z: tz + BOOK.TAB_T });
+    this.creases.push({ frame: host, a: [a[0], a[1], tz], b: [b[0], b[1], tz], kind: 'glue' });
   }
 
   // V-fold on the spine (or on opts.hinge). y: where its point sits on the spine, alpha and beta in
@@ -135,6 +149,7 @@ class Builder {
     const hinge = vf.glueHinge(side, { front: o.front !== false, r0: o.r });
     const L = this.rig.parallel(hinge, { a: o.a, b: o.b, p: o.b, q: o.a });
     this.mechs.push(L);
+    this.stands.add(L.stand.id);
     const H = hinge();
     const w = o.w ?? 1.6, x0 = o.x0 ?? -w, x1 = o.x1 ?? w;
     this.part({ on: L.strut, shape: rect(-w / 2, 0, w / 2, o.a), color: o.strut || C.white, back: o.strut || C.white });
@@ -168,6 +183,7 @@ class Builder {
     for (const side of ['A', 'B']) {
       const host = g[side], sx = side === 'A' ? -o.d : o.d;
       const leg = F.leg(side, o.d);
+      this.stands.add(leg.id);
       const p0 = host.point(sx, o.y0, 0), p1 = host.point(sx, o.y1, 0);
       this.part({ on: leg, shape: span(leg, p0, p1), color: o.legColor || C.white, back: o.legColor || C.white, print: o.legPrint });
       this._tab(host, p0, p1, side === 'A' ? host.x : neg(host.x));
@@ -197,28 +213,30 @@ export function createBook(content, opts = {}) {
   const N = BOOK.SPREADS;
   const rig = new Rig();
   const book = { rig, turn: 0, folds: [], pageFrames: new Set(), spreads: [], controls: [] };
-  const origin = [0, BOOK.COVER_T, BOOK.H / 2];
-  const restR = (j) => (N - j) * BOOK.FAN, restL = (j) => Math.PI - j * BOOK.FAN;
-  book.leafAngle = (j, turn = book.turn) => {
-    const t = Math.max(0, Math.min(1, turn - j));
-    return j >= N ? restR(j) : restR(j) + (restL(j) - restR(j)) * t;
-  };
-  book.restAngles = (j) => [restR(j), restL(j)];
+  // Leaf thickness: two sheets back to back; the first and last leaf are a sheet on a cover board.
+  const thickness = [];
+  for (let j = 0; j <= N; j++) thickness.push(j === 0 || j === N ? BOOK.PAGE_T + BOOK.COVER_T : 2 * BOOK.PAGE_T);
+  const spine = createSpine({ thickness, fan: BOOK.FAN, reach: BOOK.W + BOOK.COVER_OVER });
+  book.spine = spine;
+  book.restAngles = (j) => [spine.restR[j], spine.restL[j]];
+  // front[j] is the face of leaf j that is up when it lies on the right; back[j] its other face.
   const front = [], back = [];
   for (let j = 0; j <= N; j++) { front.push(rig.frame()); back.push(rig.frame()); }
   rig.step(() => {
+    spine.pose(book.turn);
+    const z = BOOK.H / 2;
     for (let j = 0; j <= N; j++) {
-      const a = book.leafAngle(j), c = Math.cos(a), s = Math.sin(a);
-      front[j].set(origin, [c, s, 0], [0, 0, -1]);
-      back[j].set(origin, [-c, -s, 0], [0, 0, -1]);
+      const a = spine.phi[j], c = Math.cos(a), s = Math.sin(a), t = thickness[j];
+      front[j].set([spine.px[j], spine.py[j], z], [c, s, 0], [0, 0, -1]);
+      back[j].set([spine.px[j] + s * t, spine.py[j] - c * t, z], [-c, -s, 0], [0, 0, -1]);
     }
   });
   for (const f of [...front, ...back]) book.pageFrames.add(f.id);
-  book.front = front; book.back = back; book.origin = origin;
+  book.front = front; book.back = back;
   for (let k = 1; k <= N; k++) book.folds[k] = { A: back[k - 1], B: front[k] };
 
-  // Opening of spread k in radians.
-  book.opening = (k) => book.leafAngle(k - 1) - book.leafAngle(k);
+  // Opening of spread k in radians, as last solved.
+  book.opening = (k) => spine.phi[k - 1] - spine.phi[k];
   book.isOpen = (k) => book.opening(k) > BOOK.OPEN_MIN;
   book.setTurn = (t) => { book.turn = Math.max(0, Math.min(N, t)); };
   book.update = () => rig.update((g) => g === 0 || book.isOpen(g));
@@ -261,7 +279,7 @@ export function createBook(content, opts = {}) {
         frame: p.frame.id, frameB: p.frameB ? p.frameB.id : undefined, outline: p.shape, holes: p.holes || [],
         z0: p.z[0], z1: p.z[1], front: hexRgb(p.color), back: hexRgb(p.back), edge: hexRgb(p.edge),
         uv: i >= 0 ? uv[i] : null, screen: p.screen || null, ink: hexRgb(p.ink || C.deep), mat: p.mat,
-        hasBack: p.hasBack, hasWalls: p.hasWalls, hasRim: p.hasRim, ...(p.bend ? { bend: p.bend } : {}),
+        hasBack: p.hasBack, hasWalls: p.hasWalls, hasRim: p.hasRim, foldEdge: p.foldEdge, ...(p.bend ? { bend: p.bend } : {}),
       });
     });
     book.spreads[k] = { parts: b.parts.length, creases: b.creases, tabs: b.tabs, labels: b.labels, controls: b.controls, list: b.parts, mechs: b.mechs };

@@ -70,7 +70,7 @@ export function buildSpread1(b) {
   const strip = b.planar(b.R, () => ({ y: -tab.value * TAB_TRAVEL }));
   const boatY = 9.6;
   b.part({
-    on: strip, z: [0.006, 0.03], color: C.water, hasRim: false, mat: MAT.BOARD, sticksOut: true,
+    on: strip, z: [-0.045, -0.02], color: C.water, hasRim: false, mat: MAT.BOARD, sticksOut: true,
     shape: [[5.15, -1.4], [5.65, -1.9], [6.85, -1.9], [7.35, -1.4], [7.35, 17.6], [5.15, 17.6]],
     print: (c) => {
       fill(c, rect(4.9, -2.2, 7.6, boatY - 0.9), tint(C.sand, 0.1));
@@ -83,8 +83,8 @@ export function buildSpread1(b) {
       fill(c, [[5.85, -1.1], [6.65, -1.1], [6.25, -1.65]], C.red);
     },
   });
-  b.part({ on: strip, z: [0.03, 0.085], shape: shift(boatHull(0, 0, 1.9), 6.25, boatY - 0.5), color: C.red, hasRim: true });
-  b.part({ on: strip, z: [0.085, 0.13], shape: shift(boatSail(0, 0, 1.9), 6.25, boatY - 0.52), color: C.snow });
+  b.part({ on: strip, z: [-0.02, 0.045], shape: shift(boatHull(0, 0, 1.9), 6.25, boatY - 0.5), color: C.red, hasRim: true });
+  b.part({ on: strip, z: [0.045, 0.09], shape: shift(boatSail(0, 0, 1.9), 6.25, boatY - 0.52), color: C.snow });
   b.label(b.R, [8.4, 2.2, 0.2], 'Pull tab');
 
   // --- Far peaks, with the sun rising behind them ---------------------------------------------------

@@ -24,6 +24,7 @@ import { buildSpread3 } from './spreads/s3.js';
 import { buildSpread4 } from './spreads/s4.js';
 import { buildSpread5 } from './spreads/s5.js';
 import { createEngineer } from './engineer.js';
+import { createSound } from './sound.js';
 
 const FOV = 24;                  // lens angle in degrees: a long lens, as a photographer would use
 const APERTURE = 0.4;           // cm, lens radius for the finished still (depth of field)
@@ -37,12 +38,13 @@ const STILL_AFTER = 0.18;        // seconds without movement before the picture 
 const FLICK = 0.55;              // turns per second: a release faster than this carries the page over
 const KEY_TURN_RATE = 3.2;       // how briskly a page follows an arrow key or button
 const ORBIT_YAW = 0.006, ORBIT_PITCH = 0.005;   // radians per pixel dragged
+const PORTRAIT_FIT = 0.84;        // on a tall screen the page edges may touch the sides, so the pop-up is larger
 const PITCH_MIN = 0.16, PITCH_MAX = 1.45, YAW_MAX = 1.5, ZOOM_MIN = 0.45, ZOOM_MAX = 1.9;
 const TARGET_MS = 21, SMOOTH_MS = 17.6, MIN_SCALE = 0.5;   // resolution steps down above TARGET_MS, up below SMOOTH_MS
 
 // Where the camera stands for each whole turn: 0 is the shut book, 1..5 the spreads.
 const SHOTS = [
-  { target: [12.6, 0.6, -0.5], fit: 47, pitch: 0.92 },
+  { target: [12.6, 0.6, 0.6], fit: 76, pitch: 0.98 },
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.6, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
@@ -143,17 +145,19 @@ let blendFrom = null;   // control values at the moment the run took over, so th
 
 // --- Camera -----------------------------------------------------------------------------------------
 const view = { eye: [0, 40, 80], target: [0, 5, 0], fovY: (FOV * Math.PI) / 180, aperture: APERTURE, near: 4, far: 900 };
+const COVER_APERTURE = 0.3;      // share of the lens opening used on the shut book, so the whole cover is sharp
 function placeCamera() {
   const i = Math.min(SHOTS.length - 2, Math.floor(turn)), f = ease(turn - i);
   const a = SHOTS[i], b = SHOTS[i + 1];
   const mix = (x, y) => x + (y - x) * f;
   const aspect = canvas.width / canvas.height;
-  const fit = mix(a.fit, b.fit);
+  const fit = mix(a.fit, b.fit) * (aspect < 0.8 ? PORTRAIT_FIT : 1);
   // Far enough back for the width to fit, and on a wide screen for the height to fit too.
   const half = Math.tan(view.fovY / 2);
   const dist = Math.max(fit / (2 * half * aspect), (fit * 0.5) / (2 * half)) * cam.zoom;
   const pitch = clamp(mix(a.pitch, b.pitch) + cam.pitch + (aspect < 0.8 ? 0.12 : 0), PITCH_MIN, PITCH_MAX);
   view.target = [mix(a.target[0], b.target[0]), mix(a.target[1], b.target[1]), mix(a.target[2], b.target[2])];
+  view.aperture = APERTURE * (COVER_APERTURE + (1 - COVER_APERTURE) * ease(Math.min(turn, 1)));
   view.eye = [view.target[0] + Math.sin(cam.yaw) * Math.cos(pitch) * dist, view.target[1] + Math.sin(pitch) * dist, view.target[2] + Math.cos(cam.yaw) * Math.cos(pitch) * dist];
 }
 function viewProj() { return renderer.viewProjOf(view); }
@@ -196,7 +200,7 @@ function pickControl(ray, slopPx) {
   let best = null;
   for (const c of book.controls) {
     if (book.opening(c.spread) < 2.4) continue;
-    const l = onFrame(ray, c.parent, c.z || 0.08);
+    const l = onFrame(ray, c.parent, c.z || 0.03);
     if (!l) continue;
     const h = handleOf(c);
     const slop = (slopPx * 2 * l.t * Math.tan(view.fovY / 2)) / innerHeight;
@@ -206,7 +210,7 @@ function pickControl(ray, slopPx) {
   return best;
 }
 function dragControl(g, ray) {
-  const c = g.c, l = onFrame(ray, c.parent, c.z || 0.08);
+  const c = g.c, l = onFrame(ray, c.parent, c.z || 0.03);
   if (!l) return;
   if (c.type === 'tab') {
     c.value = clamp(g.v0 + ((l[0] - g.l0[0]) * c.axis[0] + (l[1] - g.l0[1]) * c.axis[1]) / c.travel, 0, 1);
@@ -229,7 +233,7 @@ function dragControl(g, ray) {
 
 // --- Page turning under the pointer ---------------------------------------------------------------------
 function pickLeaf(ray) {
-  const { W, H, PAGE_T } = BOOK;
+  const { W, H } = BOOK;
   const inY = (l) => l[1] > -1 && l[1] < H + 1;
   const whole = Math.abs(turn - Math.round(turn)) < 1e-3;
   if (!whole) {
@@ -238,11 +242,11 @@ function pickLeaf(ray) {
   }
   const k = Math.round(turn);
   if (k < BOOK.SPREADS) {
-    const l = onFrame(ray, book.front[k], k === 0 ? BOOK.COVER_T : PAGE_T);
+    const l = onFrame(ray, book.front[k], 0);
     if (l && inY(l) && l[0] > W * (k === 0 ? 0.12 : 0.58) && l[0] < W + 1.5) return { leaf: k, l };
   }
   if (k >= 1) {
-    const l = onFrame(ray, book.back[k - 1], PAGE_T);
+    const l = onFrame(ray, book.back[k - 1], 0);
     if (l && inY(l) && l[0] < -W * 0.58 && l[0] > -W - 1.5) return { leaf: k - 1, l };
   }
   return null;
@@ -251,7 +255,8 @@ function pickLeaf(ray) {
 function turnFromRay(g, ray) {
   if (Math.abs(ray.d[2]) < 1e-4) return null;
   const t = (g.z - ray.o[2]) / ray.d[2];
-  const x = ray.o[0] + ray.d[0] * t, y = ray.o[1] + ray.d[1] * t - book.origin[1];
+  const hinge = book.front[g.leaf].o;
+  const x = ray.o[0] + ray.d[0] * t - hinge[0], y = ray.o[1] + ray.d[1] * t - hinge[1];
   const a = y <= 0 ? (x >= 0 ? 0 : Math.PI) : Math.atan2(y, x);
   const [r, l] = book.restAngles(g.leaf);
   return (a - r) / (l - r);
@@ -378,8 +383,12 @@ $('next').addEventListener('click', () => step(1));
 $('engineer').addEventListener('click', () => { setEngineer(!engineerOn); touched(); });
 setEngineer(engineerOn);
 
-// Sound is added in src/sound.js; until then these do nothing.
-const sound = window.__soundHooks || { on: false, grab() {}, drop() {}, update() {} };
+const sound = createSound();
+window.__sound = sound;
+$('sound').addEventListener('click', () => {
+  if (sound.on) { sound.stop(); $('sound').textContent = 'Enable sound'; $('sound').setAttribute('aria-pressed', 'false'); }
+  else { sound.start(); $('sound').textContent = 'Sound on'; $('sound').setAttribute('aria-pressed', 'true'); }
+});
 
 // The words and buttons step back after a few quiet seconds.
 let idleTimer = 0;
@@ -531,7 +540,7 @@ requestAnimationFrame(frame);
 // For work on the build: fetches every source file afresh (modules are cached hard), then reloads.
 window.__reload = async (query = location.search) => {
   const files = ['index.html', 'src/main.js', 'src/book.js', 'src/art.js', 'src/story.js', 'src/engineer.js', 'src/sound.js', 'src/spreads/base.js', 'src/spreads/s1.js', 'src/spreads/s2.js',
-    'src/spreads/s3.js', 'src/spreads/s4.js', 'src/spreads/s5.js', 'engine/fold.js', 'engine/cardmesh.js', 'engine/atlas.js', 'engine/paperlight.js', 'engine/papershaders.js', 'engine/glkit.js', 'engine/mat4.js'];
+    'src/spreads/s3.js', 'src/spreads/s4.js', 'src/spreads/s5.js', 'engine/fold.js', 'engine/spine.js', 'engine/cardmesh.js', 'engine/atlas.js', 'engine/paperlight.js', 'engine/papershaders.js', 'engine/glkit.js', 'engine/mat4.js'];
   await Promise.all(files.map((f) => fetch(new URL('../' + f, import.meta.url), { cache: 'reload' }).catch(() => 0)));
   location.href = location.pathname + query;
 };

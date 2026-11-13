@@ -12,7 +12,7 @@ export function buildBase(b, book) {
 
   // Front cover. Its outside is up when the book is shut.
   b.part({
-    on: book.front[0], shape: rrect(0, -O, W + O, H + O, 0.25, 3), z: [0, T], color: CLOTH, back: CLOTH, edge: CLOTH,
+    on: book.front[0], shape: rrect(0, -O, W + O, H + O, 0.25, 3), z: [-T, 0], color: CLOTH, back: CLOTH, edge: CLOTH,
     mat: MAT.BOARD, hasRim: false, hasBack: true,
     print: (c) => {
       // a river of cut-paper bands running down the cover
@@ -31,13 +31,13 @@ export function buildBase(b, book) {
     },
   });
   // The boat on the cover: two pieces of card glued on.
-  b.part({ on: book.front[0], z: [T, T + 0.045], shape: shift(boatHull(0, 0, 5.4), 16.4, 9.3), color: C.red, hasBack: false });
-  b.part({ on: book.front[0], z: [T + 0.045, T + 0.09], shape: shift(boatSail(0, 0, 5.4), 16.4, 9.25), color: C.snow, hasBack: false });
+  b.part({ on: book.front[0], z: [0, 0.045], shape: shift(boatHull(0, 0, 5.4), 16.4, 9.3), color: C.red, hasBack: false });
+  b.part({ on: book.front[0], z: [0.045, 0.09], shape: shift(boatSail(0, 0, 5.4), 16.4, 9.25), color: C.snow, hasBack: false });
   // Cloth tape down the spine side.
-  b.part({ on: book.front[0], z: [T, T + 0.03], shape: rect(0, -O, 2.3, H + O), color: tint(CLOTH, -0.35), hasBack: false, hasRim: false, mat: MAT.BOARD, edge: tint(CLOTH, -0.35) });
+  b.part({ on: book.front[0], z: [0, 0.03], shape: rect(0, -O, 2.3, H + O), color: tint(CLOTH, -0.35), hasBack: false, hasRim: false, mat: MAT.BOARD, edge: tint(CLOTH, -0.35) });
 
   // Back cover: face down on the table.
-  b.part({ on: book.back[5], shape: rrect(-W - O, -O, 0, H + O, 0.25, 3), z: [0, T], color: CLOTH, back: CLOTH, edge: CLOTH, mat: MAT.BOARD, hasRim: false });
+  b.part({ on: book.back[5], shape: rrect(-W - O, -O, 0, H + O, 0.25, 3), z: [-T, 0], color: CLOTH, back: CLOTH, edge: CLOTH, mat: MAT.BOARD, hasRim: false });
 
   // --- On the table ---------------------------------------------------------------------------------
   // A frame lying on the table at (x, z), turned by a radians.

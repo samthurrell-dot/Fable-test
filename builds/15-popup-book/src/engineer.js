@@ -47,7 +47,7 @@ export function createEngineer(canvas) {
       }
       // the spine itself is a valley fold
       const g = book.folds[k];
-      const lines = [{ frame: g.A, a: [0, 0, 0.07], b: [0, 30, 0.07], kind: 'valley' }, ...s.creases.map((c) => ({ ...c, kind: book.creaseKind(c) }))];
+      const lines = [{ frame: g.A, a: [0, 0, 0.01], b: [0, 30, 0.01], kind: 'valley' }, ...s.creases.map((c) => ({ ...c, kind: book.creaseKind(c) }))];
       for (const c of lines) {
         const a = project(viewProj, c.frame.point(...c.a)), b = project(viewProj, c.frame.point(...c.b));
         if (!a || !b) continue;

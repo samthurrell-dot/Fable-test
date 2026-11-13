@@ -58,7 +58,7 @@ export function buildSpread4(b) {
   // --- Pull tab and its two levers ----------------------------------------------------------------------
   const tab = b.control({ type: 'tab', parent: b.R, axis: [1, 0], travel: TAB_TRAVEL, at: [W + 0.9, 6.0], radius: 1.7, name: 'Pull tab', demo: [0, 1, 0, 1, 0] });
   const strip = b.planar(b.R, () => ({ x: tab.value * TAB_TRAVEL }));
-  b.part({ on: strip, z: [0.006, 0.03], shape: [[16, 5.2], [W + 1.3, 5.2], [W + 1.8, 5.6], [W + 1.8, 6.4], [W + 1.3, 6.8], [16, 6.8]], color: C.cream, hasRim: false, mat: MAT.BOARD, sticksOut: true,
+  b.part({ on: strip, z: [-0.045, -0.02], shape: [[16, 5.2], [W + 1.3, 5.2], [W + 1.8, 5.6], [W + 1.8, 6.4], [W + 1.3, 6.8], [16, 6.8]], color: C.cream, hasRim: false, mat: MAT.BOARD, sticksOut: true,
     print: (c) => { line(c, W + 0.2, 6, W + 1.2, 6, C.red, 0.14); fill(c, [[W + 1.0, 5.6], [W + 1.0, 6.4], [W + 1.55, 6]], C.red); } });
   b.label(b.R, [23.4, 6.1, 0.2], 'Pull tab');
 

@@ -67,16 +67,16 @@ export function buildSpread2(b) {
   }, [slot]);
 
   // --- Slider: the boat on a button through the slot ----------------------------------------------
-  b.part({ on: b.R, z: [0.004, 0.02], shape: band(RAPIDS, 0.7), color: C.navy, hasRim: false, hasBack: false, hasWalls: false, mat: MAT.BOARD });
+  b.part({ on: b.R, z: [-0.055, -0.04], shape: band(RAPIDS, 0.7), color: C.navy, hasRim: false, hasBack: false, hasWalls: false, mat: MAT.BOARD });
   const slider = b.control({ type: 'slider', parent: b.R, path: RAPIDS, radius: 1.5, value: 0.06, name: 'Slider', demo: [0.06, 0.95, 0.95, 0.06] });
   const boat = b.planar(b.R, () => {
     const f = Math.max(0, Math.min(1, slider.value)) * (RAPIDS.length - 1), i = Math.min(RAPIDS.length - 2, Math.floor(f)), u = f - i;
     const p = RAPIDS[i], q = RAPIDS[i + 1];
     return { x: p[0] + (q[0] - p[0]) * u, y: p[1] + (q[1] - p[1]) * u, rot: Math.atan2(q[1] - p[1], q[0] - p[0]) * 0.5 + 0.75 };
   });
-  b.part({ on: boat, z: [0.02, 0.075], shape: ellipse(0, 0, 0.2, 0.2, 10), color: C.white, hasRim: false });
-  b.part({ on: boat, z: [0.075, 0.12], shape: boatHull(0, -0.45, 2.3), color: C.red });
-  b.part({ on: boat, z: [0.12, 0.165], shape: boatSail(0, -0.47, 2.3), color: C.snow });
+  b.part({ on: boat, z: [-0.04, 0.03], shape: ellipse(0, 0, 0.2, 0.2, 10), color: C.white, hasRim: false });
+  b.part({ on: boat, z: [0.03, 0.075], shape: boatHull(0, -0.45, 2.3), color: C.red });
+  b.part({ on: boat, z: [0.075, 0.12], shape: boatSail(0, -0.47, 2.3), color: C.snow });
   b.label(b.R, [9.6, 6.6, 0.2], 'Slider');
 
   // --- The fir wall -----------------------------------------------------------------------------------
