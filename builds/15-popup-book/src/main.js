@@ -69,7 +69,7 @@ const ease = (t) => { t = clamp(t, 0, 1); return t * t * t * (t * (t * 6 - 15) +
 const isPhone = params.get('quality') === 'phone' ||
   (params.get('quality') !== 'desktop' && (Math.min(innerWidth, innerHeight) < 700 ||
     // a touch-only device with a small screen; a laptop that also has a touch screen is not a phone
-    (!matchMedia('(any-pointer: fine)').matches && Math.min(screen.width, screen.height) < 900)));
+    (!matchMedia('(any-pointer: fine)').matches && Math.min(screen.width, screen.height) < 700)));
 const quality = isPhone ? QUALITY.low : QUALITY.high;
 const maxDpr = isPhone ? 1.5 : 2;
 
