@@ -1,3 +1,9 @@
+Run on: Claude Fable 5.2 (claude-fable-5-2), default effort, in Claude Code (desktop app) on Sam's PC, 12-13 Nov 2026.
+Sam's instruction for this run: "take on the most complex of the builds that you have all of the tools for. Keep going through the project until it's completed and you can't execute it to any higher level." So the 70 minute cap in the prompt below was not applied.
+The prompt as given (prompts/ready/15-popup-book-fable.txt) follows.
+
+----------------------------------------------------------------------
+
 # The pop-up book
 
 I will open your build on screen and show it to an audience for 20 to 60 seconds and then allow them to freely access it and explore it. Quality is the goal. Take the time that quality needs.

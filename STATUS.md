@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 11 Nov 2026 (Fable 5.2, first build session)
+Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 
 ## Done
 - [x] Reviewed the 15 Maker Skool prompts and the video of results.
@@ -12,6 +12,9 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 ## In progress
 - **13-tree-seasons** – v1 + five rounds done and working on `main` (1 look, 2 speed, 3 look, 4 life, 5 polish: jointed squirrel, songbird soundscape, cloud shadows, gusts, wood on the ridge, glow, sharp 30 fps mode, link-preview picture). Sam is steering it by eye and ear: read his briefs at the top of rounds 4 and 5 in ROUNDS.md before changing anything. He has approved the tree, the birds and the wind sound; leave those alone unless he asks. What is still open is at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
   - Why 13 was run first and not 06: it is the shortest Fable-ranked run (55 min cap), needs no Blender and no downloads, and has the highest reuse score in `plan/viability.md`. 06 and 15 are still to run.
+
+- **15-popup-book** – v1 works on `main`: "Where the river goes", five spreads, every mechanism in the brief, page turning, tabs, slider, wheels, engineer's view, sound. Improvement rounds are in progress; see `builds/15-popup-book/ROUNDS.md` for what is done and what is next.
+  - Why 15 and not 06: Sam asked for the most complex build that needs no extra tools. 15 has the widest set of hard parts (six solved mechanisms, a book that turns, a renderer, five spreads of content) and can be checked properly on this PC; 06 is one deep shader that this PC's graphics chip can barely run.
 
 ## Site
 - GitHub Pages serves `main` from the root: https://samthurrell-dot.github.io/Fable-test/ . The home page is `index.html` at the top of the repo; add a card there for each new build. `.nojekyll` is on purpose.
@@ -26,3 +29,4 @@ Last updated: 11 Nov 2026 (Fable 5.2, first build session)
 | Build | Model + effort | State | Rounds done | Link |
 |---|---|---|---|---|
 | 13-tree-seasons | Fable 5.2, default effort | Works; showcase piece | v1 + 5 (4 asked) | https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/ |
+| 15-popup-book | Fable 5.2, default effort | Works; rounds in progress | v1 | https://samthurrell-dot.github.io/Fable-test/builds/15-popup-book/ |

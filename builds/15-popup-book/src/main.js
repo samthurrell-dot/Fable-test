@@ -30,7 +30,7 @@ const FOV = 24;                  // lens angle in degrees: a long lens, as a pho
 const APERTURE = 0.4;           // cm, lens radius for the finished still (depth of field)
 const TURN_SECONDS = 3.6;        // automatic run: time to turn one page
 const HOLD_SECONDS = 8.5;        // and to rest on a spread
-const COVER_SECONDS = 1.6;       // rest on the shut book at the start of each run
+const COVER_SECONDS = 0.7;       // rest on the shut book at the start of each run
 const CLOSE_SECONDS = 5.5;       // time to leaf back to the start at the end
 const DEMO_FROM = 1.6, DEMO_TO = 5.6;   // within a rest: when the book works its own tab or wheel
 const IDLE_RESUME = 10;          // seconds without input before the automatic run takes over again
@@ -550,9 +550,8 @@ window.__reload = async (query = location.search) => {
 //   __shot('name', { w, h, turn, cam: { yaw, pitch, zoom }, value, engineer, moving })
 window.__shot = async (name, o = {}) => {
   const w = o.w || 1600, h = o.h || 900;
-  auto = false; lastInput = 1e12;
+  if (!o.keep) { auto = false; lastInput = 1e12; Object.assign(cam, camHome, o.cam || {}); }
   if (o.turn !== undefined) turn = o.turn;
-  Object.assign(cam, camHome, o.cam || {});
   if (o.value !== undefined) for (const c of book.controls) c.value = o.value;
   engineerAmount = o.engineer ? 1 : 0; engineerOn = !!o.engineer;
   renderer.resize(w, h);
