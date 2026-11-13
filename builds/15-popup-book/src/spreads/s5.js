@@ -48,7 +48,7 @@ export function buildSpread5(b) {
 
   // --- The far waves, and the wheel of day and night behind them ------------------------------------------
   const far = b.vfold({ y: 22, alpha: ALPHA, beta: BETA, span: [-21, 21], labelY: 2.4 });
-  row(far, 21, 3.3, 1.5, 4.3, 0.2, C.navy, tint(C.foam, -0.08));
+  row(far, 21, 3.3, 1.5, 4.3, 0.2, tint(C.navy, 0.14), tint(C.foam, -0.08));
   const sky = b.control({ type: 'wheel', parent: far.A, at: [-10.4, 5.2], radius: DISC_R, z: -0.07, name: 'Wheel', demo: [0, 3.14159, 3.14159, 6.28318] });
   const turning = b.planar(far.A, () => ({ x: -10.4, y: 5.2, rot: sky.value, z: -0.12 }));
   b.part({

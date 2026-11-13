@@ -22,19 +22,19 @@ export const QUALITY = {
 
 // The light. Directions point from the scene to the light. Colours are linear.
 export const LIGHT_RIG = {
-  key: { dir: [-0.72, 0.62, -0.31], col: [2.9, 2.72, 2.42], size: 6.5 },   // size: half angle of the window in degrees
+  key: { dir: [-0.6, 0.6, -0.53], col: [3.5, 3.25, 2.85], size: 4.5 },   // size: half angle of the window in degrees
   fill: [
-    { dir: [0.0, 1.0, 0.05], col: [0.30, 0.33, 0.38], cone: 34 },      // ceiling
-    { dir: [-0.5, 0.62, -0.6], col: [0.34, 0.38, 0.46], cone: 30 },    // sky through the window
-    { dir: [0.82, 0.42, 0.38], col: [0.40, 0.36, 0.30], cone: 34 },    // white card held to the right
-    { dir: [0.08, 0.5, 0.86], col: [0.26, 0.25, 0.25], cone: 34 },     // the room behind the camera
-    { dir: [-0.76, 0.42, 0.5], col: [0.18, 0.19, 0.21], cone: 34 },
-    { dir: [0.55, 0.52, -0.66], col: [0.15, 0.15, 0.16], cone: 34 },
+    { dir: [0.0, 1.0, 0.05], col: [0.216, 0.238, 0.274], cone: 34 },      // ceiling
+    { dir: [-0.5, 0.62, -0.6], col: [0.245, 0.274, 0.331], cone: 30 },    // sky through the window
+    { dir: [0.82, 0.42, 0.38], col: [0.288, 0.259, 0.216], cone: 34 },    // white card held to the right
+    { dir: [0.08, 0.5, 0.86], col: [0.187, 0.18, 0.18], cone: 34 },     // the room behind the camera
+    { dir: [-0.76, 0.42, 0.5], col: [0.13, 0.137, 0.151], cone: 34 },
+    { dir: [0.55, 0.52, -0.66], col: [0.108, 0.108, 0.115], cone: 34 },
   ],
-  low: [0.2, 0.16, 0.12],     // light coming up off the table and pages
+  low: [0.15, 0.12, 0.09],     // light coming up off the table and pages
   bounce: 0.42,               // share of a hidden patch of sky that the hiding card gives back, in its own colour
   centre: [0, 6, 0],          // middle of the volume that casts shadows
-  radius: 42,                 // its radius in cm
+  radius: 52,                 // its radius in cm
   exposure: 0.42,
   background: [0.050, 0.043, 0.038],
   vignette: 0.3,
@@ -429,6 +429,12 @@ export function createPaperRenderer(canvas, quality = QUALITY.high, rig = LIGHT_
     info: { hdr: hdrOk, get live() { return live ? [live.w, live.h, live.samples] : null; } },
     // Forces the next still to start again (for example after the light rig is edited).
     restart() { state.samples = 0; state.dirtyKey = true; state.dirtyFill.fill(true); state.lastCam = ''; },
+    // Call after editing the light rig (directions, colours, sizes) to take the changes up.
+    relight() {
+      rig.fill.forEach((f, i) => { lights.fillCol.set(f.col, i * 3); aimFill(i, norm(f.dir)); });
+      aimKey(norm(rig.key.dir));
+      state.samples = 0; state.dirtyKey = true; state.dirtyFill.fill(true); state.lastCam = '';
+    },
     // The camera matrix of the last moving frame, for laying 2D marks over the picture.
     viewProjOf(view) { return camera(view).viewProj; },
   };

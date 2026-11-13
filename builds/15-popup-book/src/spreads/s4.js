@@ -85,8 +85,8 @@ export function buildSpread4(b) {
 
   // --- The far bank, with the sun going down behind it -----------------------------------------------------
   const far = b.vfold({ y: 19.5, alpha: 110, beta: 93, span: [-21, 21], labelY: 5 });
-  const skyline = [[-21, 1.8], ...smooth([[-20.4, 3.0], [-18, 4.4], [-16.2, 4.0]], 4), [-15.6, 4.2], [-15.2, 8.2], [-14.6, 8.8], [-14.0, 8.2], [-13.6, 4.2],
-    ...smooth([[-13, 4.4], [-10, 5.6], [-6, 4.6], [-3, 3.4], [0, 3.0], [3, 3.6], [6, 5.0], [8, 4.6]], 4), [8.4, 4.8], [8.8, 9.2], [9.5, 10.0], [10.2, 9.2], [10.6, 4.8],
+  const skyline = [[-21, 1.8], ...smooth([[-20.4, 3.0], [-18, 4.4], [-16.2, 4.0]], 4), ...smooth([[-16, 4.2], [-15.9, 6.4], [-15.2, 8.0], [-14.4, 8.4], [-13.6, 7.8], [-13.2, 6.2], [-13.3, 4.3]], 4),
+    ...smooth([[-13, 4.4], [-10, 5.6], [-6, 4.6], [-3, 3.4], [0, 3.0], [3, 3.6], [6, 5.0], [8, 4.6]], 4), ...smooth([[8.2, 4.8], [8.0, 7.4], [8.6, 9.4], [9.5, 10.0], [10.4, 9.5], [11.0, 7.6], [10.8, 4.8]], 4),
     ...smooth([[11, 4.6], [14, 5.6], [17.6, 4.2], [20.4, 3.0]], 4), [21, 1.8]];
   b.part({ on: far, shape: standing(skyline, b.base(far)), color: C.violet, screen: (x, y) => 0.6 - y * 0.1, ink: C.navy,
     print: (c) => { for (const [x, w, h] of [[-17.5, 3, 2.4], [-9.5, 5, 3.4], [5.5, 4, 3.0], [15, 5, 3.2]]) fill(c, smooth([[x - w, -1.5], [x - w * 0.6, h * 0.6], [x - w * 0.1, h], [x + w * 0.5, h * 0.7], [x + w, -1.5]], 5), tint(C.violet, -0.3)); for (let x = -20; x < 20; x += 1.3) line(c, x, -1.2, x + 0.15, 0.4 + ((x * 3) % 1), REED, 0.07); } });
@@ -97,15 +97,15 @@ export function buildSpread4(b) {
   }
 
   // --- Reeds on layers each side -----------------------------------------------------------------------------
-  const left = b.layer(far, 'A', { r: 14.5, a: 4.2, b: 3.0, w: 1.6, x0: -3, x1: 3, strut: REED });
-  b.part({ on: left.stand, color: REED, shape: clump(-4.6, 4.6, [[4.6, -0.3], [7.4, 0.2], [5.6, -0.4], [8.6, 0.1], [6.2, 0.5], [9.2, -0.2], [5.2, 0.4], [7.6, 0.3], [4.2, 0.6]]),
+  const left = b.layer(far, 'A', { r: 17, a: 3.0, b: 3.0, w: 1.6, x0: -3, x1: 3, strut: REED });
+  b.part({ on: left.stand, color: REED, shape: clump(-3.8, 4.4, [[4.6, -0.3], [7.4, 0.2], [5.6, -0.4], [8.6, 0.1], [6.2, 0.5], [9.2, -0.2], [5.2, 0.4], [7.6, 0.3], [4.2, 0.6]]),
     print: (c) => scatter(30, -4.4, 0.2, 4.4, 4, 3, (x, y) => line(c, x, y, x + 0.12, y + 1.4, tint(REED, -0.25), 0.06)) });
-  for (const [x, y] of [[-2.9, 6.3], [-0.6, 7.4], [1.6, 8.0], [3.1, 6.4]]) b.part({ on: left.stand, level: 1, shape: rrect(x - 0.24, y, x + 0.24, y + 1.7, 0.22, 4), color: C.bark });
+  for (const [x, y] of [[-2.23, 6.9], [-0.51, 8.1], [1.01, 8.7], [3.33, 7.1]]) b.part({ on: left.stand, level: 1, shape: rrect(x - 0.24, y, x + 0.24, y + 1.7, 0.22, 4), color: C.bark });
   b.part({ on: left.stand, level: 1, color: C.sun, shape: [[-1.9, 4.3], [-1.3, 4.5], [-0.5, 5.2], [-0.9, 4.5], [-0.2, 4.3], [-0.9, 4.2], [-0.6, 3.5], [-1.3, 4.1], [-1.9, 3.9], [-1.6, 4.15]] });
 
   const right = b.layer(far, 'B', { r: 11, a: 2.2, b: 2.6, w: 1.6, x0: -2.6, x1: 2.6, label: false, strut: tint(REED, -0.12) });
   b.part({ on: right.stand, color: tint(REED, -0.12), shape: clump(-3.8, 3.8, [[5.2, 0.3], [7.0, -0.2], [4.6, 0.4], [7.8, 0.1], [5.8, -0.4], [6.6, 0.3], [4.2, -0.5]]) });
-  for (const [x, y] of [[-1.9, 6.0], [0.5, 6.8], [2.3, 5.6]]) b.part({ on: right.stand, level: 1, shape: rrect(x - 0.24, y, x + 0.24, y + 1.6, 0.22, 4), color: C.bark });
+  for (const [x, y] of [[-2.37, 6.5], [0.1, 7.3], [2.47, 6.1]]) b.part({ on: right.stand, level: 1, shape: rrect(x - 0.24, y, x + 0.24, y + 1.6, 0.22, 4), color: C.bark });
 
   // --- The floating layer: the water's surface, with windows down to the fish -------------------------------------
   const F = b.float({ height: 2.3, y0: 5.0, y1: 13.0, d: 9.3, legColor: tint(WATER, -0.2) });

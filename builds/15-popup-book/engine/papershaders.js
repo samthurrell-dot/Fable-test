@@ -18,10 +18,11 @@ export const LOOK = {
   TRANSMIT: 0.16,        // share of the key light that passes through a sheet of card
   CARD_THICK: 0.05,      // cm, used to step through a sheet for the light behind it
   RIM_WHITE: 0.6,        // how far the pressed rim goes towards bare card
-  BEND_WHITE: 0.22,      // how far a fold goes towards bare card (ink cracks along a crease)
+  BEND_WHITE: 0.12,      // how far a fold goes towards bare card (ink cracks along a crease)
   COCKLE: 0.085,         // waviness of a sheet (0 = dead flat)
   TOOTH: 0.16,           // strength of the fine surface grain in the shading
-  MOTTLE: 0.05,          // unevenness of ink and fibre in the colour
+  MOTTLE: 0.065,         // unevenness of ink and fibre in the colour
+  SALT: 0.5,             // strength of the white specks where ink missed the paper (seen in close-up)
   SCREEN_FREQ: 13.0,     // halftone dots per cm
 };
 
@@ -264,6 +265,10 @@ void main() {
   float a3 = 1.0 - smoothstep(0.25, 0.6, 61.0 * px);
   float m1 = vnoise(lp * 5.0), m2 = vnoise(lp * 23.0), m3 = vnoise(lp * 61.0);
   base *= 1.0 + ((m1 - 0.5) * a1 + (m2 - 0.5) * a2 * 0.9 + (m3 - 0.5) * a3 * 0.8) * MOTTLE * 2.0;
+  // Specks where the ink missed a hollow of the paper.
+  float a4 = 1.0 - smoothstep(0.2, 0.5, 44.0 * px);
+  float speck = smoothstep(0.80, 0.9, vnoise(lp * 44.0 + 7.7) * (0.75 + 0.5 * m2));
+  base = mix(base, CORE, speck * a4 * SALT * (1.0 - isWall));
   vec2 wave = vec2(vnoise(lp * 0.17 + 3.1), vnoise(lp * 0.17 + 9.7)) - 0.5;
   vec2 grain = vec2(vnoise(lp * 23.0 + 17.3), vnoise(lp * 23.0 + 41.7)) - 0.5;
   vec2 tilt = (wave * COCKLE + grain * a2 * TOOTH) * (1.0 - isWall);

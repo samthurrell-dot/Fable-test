@@ -11,11 +11,11 @@ const FLOOR = '#a3c267';
 // The upper outline of one fir, left to right, without its trunk.
 const firTop = (cx, y, h, w, tiers = 4) => fir(cx, y, h, w, tiers, 0).reverse().slice(2, -2);
 
-const DEER = [[-2.0, 0], [-1.72, 0], [-1.6, 1.35], [-0.4, 1.5], [0.5, 1.42], [0.56, 0], [0.84, 0], [0.95, 1.5], [1.35, 1.55], [2.0, 0.95], [2.5, 0.42], [2.72, 0.5], [2.74, 0.72],
+const DEER = [[-2.0, 0], [-1.72, 0], [-1.6, 1.3], [-1.42, 1.38], [-1.3, 0.06], [-1.04, 0.06], [-0.95, 1.42], [-0.4, 1.5], [0.0, 1.46], [0.06, 0.06], [0.3, 0.06], [0.4, 1.42], [0.52, 1.42], [0.56, 0], [0.84, 0], [0.95, 1.5], [1.35, 1.55], [2.0, 0.95], [2.5, 0.42], [2.72, 0.5], [2.74, 0.72],
   [2.45, 1.15], [2.66, 1.55], [2.3, 1.42], [1.9, 2.0], [1.3, 2.6], [0.4, 2.62], [-1.0, 2.6], [-1.75, 2.5], [-2.05, 2.78], [-2.22, 2.5], [-2.05, 1.9], [-2.12, 1.0]];
 
 // The rapids: the line the slot follows on the right-hand page.
-const RAPIDS = smooth([[4.6, 11.6], [7.4, 10.2], [9.2, 8.0], [8.6, 5.8], [6.2, 4.4], [4.6, 2.9]], 8);
+const RAPIDS = smooth([[5.0, 9.6], [7.4, 9.1], [9.0, 7.6], [8.6, 5.8], [6.2, 4.4], [4.6, 2.9]], 8);
 
 // A band of the given half width round a line.
 function band(pts, half) {
@@ -35,7 +35,7 @@ export function buildSpread2(b) {
 
   // --- The page ---------------------------------------------------------------------------------
   // The river leaves the fold of the book, swings out over the right-hand page and comes back.
-  const course = smooth([[0, 19.5], [0.2, 15], [1.6, 12.6], [4.6, 11.6], [7.4, 10.2], [9.2, 8.0], [8.6, 5.8], [6.2, 4.4], [4.6, 2.9], [2.2, 1.2], [0.4, -0.4]], 8);
+  const course = smooth([[0, 19.5], [0.2, 15], [1.2, 12.2], [3.0, 10.4], [5.0, 9.6], [7.4, 9.1], [9.0, 7.6], [8.6, 5.8], [6.2, 4.4], [4.6, 2.9], [2.2, 1.2], [0.4, -0.4]], 8);
   b.page(FLOOR, (c) => {
     fill(c, [[-W, 20], [-10, 22], [0, 20.5], [11, 22.4], [W, 20], [W, H], [-W, H]], tint(C.pine, 0.12));
     scatter(110, -W + 0.5, 0.5, W - 0.5, 19, 8, (x, y, i, r) => fill(c, ellipse(x, y, 0.5 + r() * 0.9, 0.22 + r() * 0.3, 10), tint(FLOOR, i % 2 ? -0.09 : 0.12)));
@@ -47,7 +47,7 @@ export function buildSpread2(b) {
       stroke(c, smooth([[p[0] - 0.8, p[1] + 0.25], [(p[0] + q[0]) / 2 - 0.5, (p[1] + q[1]) / 2 + 0.5], [q[0] - 0.9, q[1] + 0.1]], 4), C.foam, 0.11);
       stroke(c, smooth([[p[0] + 0.5, p[1] - 0.1], [(p[0] + q[0]) / 2 + 0.8, (p[1] + q[1]) / 2 + 0.1], [q[0] + 0.6, q[1] - 0.3]], 4), C.foam, 0.11);
     }
-    for (const [x, y, r] of [[5.6, 12.6, 0.55], [10.6, 8.6, 0.7], [7.2, 6.4, 0.5], [9.6, 4.6, 0.6], [3.4, 3.4, 0.5], [6.4, 2.4, 0.6], [2.4, 13.8, 0.5]]) {
+    for (const [x, y, r] of [[5.8, 11.2, 0.55], [10.6, 8.4, 0.7], [7.2, 6.4, 0.5], [9.6, 4.6, 0.6], [3.4, 3.4, 0.5], [6.4, 2.4, 0.6], [2.6, 12.6, 0.5]]) {
       fill(c, ellipse(x, y, r, r * 0.72, 12), C.stone); fill(c, ellipse(x - r * 0.2, y + r * 0.2, r * 0.5, r * 0.3, 10), tint(C.stone, 0.3));
     }
     for (let y = 13.5; y < 19; y += 1.6) stroke(c, smooth([[-0.5, y], [0.1, y - 0.3], [0.7, y]], 4), C.foam, 0.07);
@@ -63,7 +63,7 @@ export function buildSpread2(b) {
     }
     textBlock(c, STORY[2], -22.6, 4.15, 0.86, 15.5, { colour: C.dusk });
     text(c, '2', -23.2, 0.7, 0.5, { colour: tint(C.dusk, 0.25) });
-    text(c, 'slide the boat', 12.3, 6.3, 0.42, { colour: C.dusk, italic: true, rot: -0.2 });
+    text(c, 'slide the boat', 10.6, 8.9, 0.42, { colour: C.dusk, italic: true, rot: -0.5 });
   }, [slot]);
 
   // --- Slider: the boat on a button through the slot ----------------------------------------------
@@ -90,10 +90,10 @@ export function buildSpread2(b) {
   const gap = top.findIndex((p) => p[0] > -1.4);
   top.splice(gap, 0, [-1.1, 3.2], [0, 2.8], [1.1, 3.2]);
   b.part({
-    on: far, shape: standing(top, b.base(far)), color: C.dusk, screen: (x, y) => 0.55 - y * 0.045, ink: C.navy,
+    on: far, shape: standing(top, b.base(far)), color: C.dusk, screen: (x, y) => 0.3 - y * 0.026, ink: C.navy,
     print: (c) => {
       for (const [x, h, w] of firs) for (let k = 0; k < 4; k++) line(c, x - w * 0.16, h * (0.42 + k * 0.13), x + w * 0.1, h * (0.38 + k * 0.13), tint(C.dusk, 0.2), 0.08);
-      for (const [x, h] of firs) line(c, x, -1.5, x, h * 0.34, tint(C.bark, -0.2), 0.3);
+      for (const [x, h] of firs) line(c, x, -1.5, x, h * 0.36, C.bark, 0.34);
     },
   });
   // an owl looking out between the trees
@@ -119,9 +119,9 @@ export function buildSpread2(b) {
   b.part({ on: drink.stand, level: 1, shape: shift(DEER, 0.2, 0.9), color: C.ochre,
     print: (c) => { for (const [x, y] of [[-1.2, 2.2], [-0.6, 2.4], [0, 2.15], [0.6, 2.4], [-0.9, 1.85], [-0.2, 1.8], [1.0, 2.1]]) disc(c, x + 0.2, y + 0.9, 0.09, C.cream); disc(c, 2.62, 1.72, 0.06, C.ink); fill(c, [[-1.85, 3.4], [-1.7, 3.62], [-2.02, 3.62]], C.snow); } });
 
-  const log = b.layer(near, 'B', { r: 13, a: 3.2, b: 1.6, w: 1.6, x0: -3, x1: 3, strut: C.brown });
-  b.part({ on: log.stand, color: C.brown, shape: [[-4.4, 0], [-4.4, 1.5], [-4.0, 1.9], [3.2, 1.9], [3.6, 2.3], [4.1, 2.9], [4.4, 2.7], [4.0, 2.0], [4.4, 1.5], [4.4, 0]],
-    print: (c) => { fill(c, ellipse(-3.6, 0.95, 0.75, 0.85, 16), C.sand); stroke(c, ellipse(-3.6, 0.95, 0.45, 0.52, 14), C.brown, 0.05, true); stroke(c, ellipse(-3.6, 0.95, 0.2, 0.24, 10), C.brown, 0.05, true); for (let x = -2.4; x < 4; x += 0.9) line(c, x, 0.3 + (x * 7 % 1) * 0.5, x + 0.5, 0.35 + (x * 7 % 1) * 0.5, C.bark, 0.06); fill(c, smooth([[-1.6, 1.9], [-0.8, 1.6], [0.6, 1.7], [1.4, 1.9]], 4), C.moss); } });
+  const log = b.layer(near, 'B', { r: 17, a: 3.2, b: 1.6, w: 1.6, x0: -3, x1: 3, strut: C.brown });
+  b.part({ on: log.stand, color: C.brown, shape: [[-3.7, 0], [-3.7, 1.5], [-3.3, 1.9], [3.0, 1.9], [3.3, 2.3], [3.7, 2.9], [3.95, 2.7], [3.6, 2.0], [3.9, 1.5], [3.9, 0]],
+    print: (c) => { fill(c, ellipse(-2.95, 0.95, 0.7, 0.85, 16), C.sand); stroke(c, ellipse(-2.95, 0.95, 0.42, 0.52, 14), C.brown, 0.05, true); stroke(c, ellipse(-2.95, 0.95, 0.18, 0.24, 10), C.brown, 0.05, true); for (let x = -2.4; x < 4; x += 0.9) line(c, x, 0.3 + (x * 7 % 1) * 0.5, x + 0.5, 0.35 + (x * 7 % 1) * 0.5, C.bark, 0.06); fill(c, smooth([[-1.6, 1.9], [-0.8, 1.6], [0.6, 1.7], [1.4, 1.9]], 4), C.moss); } });
   b.part({ on: log.stand, level: 1, shape: fir(2.6, 1.9, 4.6, 2.4, 4), color: C.pine });
   // a red squirrel on the trunk
   b.part({ on: log.stand, level: 1, color: C.orange,

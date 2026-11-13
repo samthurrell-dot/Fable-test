@@ -36,15 +36,17 @@ const DEMO_FROM = 1.6, DEMO_TO = 5.6;   // within a rest: when the book works it
 const IDLE_RESUME = 10;          // seconds without input before the automatic run takes over again
 const STILL_AFTER = 0.18;        // seconds without movement before the picture starts to refine
 const FLICK = 0.55;              // turns per second: a release faster than this carries the page over
+const SETTLE = { size: 0.011, rate: 15, fade: 0.17, lasts: 0.9 };   // a landed page bounces: turns, radians a second, seconds, seconds
 const KEY_TURN_RATE = 3.2;       // how briskly a page follows an arrow key or button
 const ORBIT_YAW = 0.006, ORBIT_PITCH = 0.005;   // radians per pixel dragged
-const PORTRAIT_FIT = 0.84;        // on a tall screen the page edges may touch the sides, so the pop-up is larger
+const PORTRAIT_FIT = 47;          // cm across a tall screen: the pop-up fills it and the page edges run off the sides
+const PORTRAIT_PITCH = 0.2;       // and the camera looks down more steeply, to use the height
 const PITCH_MIN = 0.16, PITCH_MAX = 1.45, YAW_MAX = 1.5, ZOOM_MIN = 0.45, ZOOM_MAX = 1.9;
 const TARGET_MS = 21, SMOOTH_MS = 17.6, MIN_SCALE = 0.5;   // resolution steps down above TARGET_MS, up below SMOOTH_MS
 
 // Where the camera stands for each whole turn: 0 is the shut book, 1..5 the spreads.
 const SHOTS = [
-  { target: [12.6, 0.6, 0.6], fit: 76, pitch: 0.98 },
+  { target: [12.6, 0.6, 0.6], fit: 66, pitch: 0.98 },
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.6, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
@@ -151,11 +153,12 @@ function placeCamera() {
   const a = SHOTS[i], b = SHOTS[i + 1];
   const mix = (x, y) => x + (y - x) * f;
   const aspect = canvas.width / canvas.height;
-  const fit = mix(a.fit, b.fit) * (aspect < 0.8 ? PORTRAIT_FIT : 1);
+  const tall = aspect < 0.8;
+  const fit = tall ? Math.min(PORTRAIT_FIT, mix(a.fit, b.fit)) : mix(a.fit, b.fit);
   // Far enough back for the width to fit, and on a wide screen for the height to fit too.
   const half = Math.tan(view.fovY / 2);
   const dist = Math.max(fit / (2 * half * aspect), (fit * 0.5) / (2 * half)) * cam.zoom;
-  const pitch = clamp(mix(a.pitch, b.pitch) + cam.pitch + (aspect < 0.8 ? 0.12 : 0), PITCH_MIN, PITCH_MAX);
+  const pitch = clamp(mix(a.pitch, b.pitch) + cam.pitch + (tall ? PORTRAIT_PITCH : 0), PITCH_MIN, PITCH_MAX);
   view.target = [mix(a.target[0], b.target[0]), mix(a.target[1], b.target[1]), mix(a.target[2], b.target[2])];
   view.aperture = APERTURE * (COVER_APERTURE + (1 - COVER_APERTURE) * ease(Math.min(turn, 1)));
   view.eye = [view.target[0] + Math.sin(cam.yaw) * Math.cos(pitch) * dist, view.target[1] + Math.sin(pitch) * dist, view.target[2] + Math.cos(cam.yaw) * Math.cos(pitch) * dist];
@@ -412,6 +415,27 @@ function applySize() {
 addEventListener('resize', applySize);
 applySize();
 
+// Start-up check: time a few real frames and pick a resolution this graphics chip can hold.
+// Skipped when the clock is frozen (?t=) or the scale is fixed, so stills are drawn at full size.
+const TUNE_BUDGET_MS = 13;       // aim for a moving frame that costs this much
+if (!frozen && !fixedScale) {
+  await pause();
+  const keepTurn = turn;
+  turn = 1.5;   // a page in the air with two spreads half open: the heaviest picture
+  book.setTurn(turn); book.update(); renderer.setFrames(book.frameData(), book.frameCount); placeCamera();
+  const gl = renderer.gl;
+  const once = (i) => { renderer.render({ ...view, eye: [view.eye[0] + i * 1e-3, view.eye[1], view.eye[2]], groups: book.groups(), changed: true, still: false, blueprint: 0 }); gl.finish(); };
+  once(0); once(1);   // the first frames also pay for setting up the programs
+  let best = 1e9;
+  for (let i = 2; i < 5; i++) { const t0 = performance.now(); once(i); best = Math.min(best, performance.now() - t0); }
+  boot.frameMs = best;
+  scale = clamp(Math.sqrt(TUNE_BUDGET_MS / best), MIN_SCALE, 1);
+  if (scale > 0.93) scale = 1;
+  renderer.setScale(scale);
+  turn = keepTurn;
+  book.setTurn(turn); book.update(); renderer.setFrames(book.frameData(), book.frameCount);
+}
+
 // --- The loop -------------------------------------------------------------------------------------------
 let last = performance.now(), lastTurn = -1, lastValues = '', lastMoved = 0, lastSpread = -1;
 let ema = 16.7, slow = 0, steady = 0, frames = 0, ceiling = 1;
@@ -458,11 +482,26 @@ function advance(dt, now) {
   }
 }
 
+// A page that has just landed bounces a little on the card folded under it.
+let settle = null, wasWhole = true, cameFrom = 0;
+function settled(secs) {
+  const whole = Math.abs(turn - Math.round(turn)) < 1e-3;
+  if (!whole) cameFrom = turn;
+  if (whole && !wasWhole && !frozen) settle = { at: secs, dir: Math.sign(turn - cameFrom) || 1 };
+  wasWhole = whole;
+  if (!settle || grab || !whole) { settle = null; return turn; }
+  const t = secs - settle.at;
+  if (t > SETTLE.lasts) { settle = null; return turn; }
+  return turn - settle.dir * SETTLE.size * Math.abs(Math.sin(t * SETTLE.rate)) * Math.exp(-t / SETTLE.fade);
+}
+
 function tick(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const secs = now / 1000;
   advance(dt, secs);
+  const logical = turn;
+  turn = settled(secs);
 
   book.setTurn(turn);
   const values = book.controls.map((c) => c.value.toFixed(4)).join();
@@ -470,6 +509,7 @@ function tick(now) {
   if (moved) { book.update(); renderer.setFrames(book.frameData(), book.frameCount); lastMoved = secs; }
   const speed = dt > 0 ? (turn - lastTurn) / dt : 0;
   lastTurn = turn; lastValues = values;
+  turn = logical;
 
   const want = engineerOn ? 1 : 0;
   if (engineerAmount !== want) { engineerAmount = clamp(engineerAmount + Math.sign(want - engineerAmount) * dt * 3, 0, 1); lastMoved = secs; }

@@ -11,9 +11,9 @@
 
 import { Rig, hingeOfFold, vec } from '../engine/fold.js';
 import { createSpine } from '../engine/spine.js';
-import { CardMesh, crossingsX } from '../engine/cardmesh.js';
+import { CardMesh, crossingsX, triangulate, insetLoop, clipHalfPlane, ccw, cleanPoly } from '../engine/cardmesh.js';
 import { buildAtlas } from '../engine/atlas.js';
-import { C, hexRgb, rect } from './art.js';
+import { C, hexRgb, rect, tint } from './art.js';
 
 export const BOOK = {
   W: 25,              // cm, width of a page
@@ -90,9 +90,11 @@ class Builder {
   }
 
   // The printed sheet of both pages. print(ctx) draws in spread units: x from -W to W, y from 0 to H.
-  page(color, print, holes = []) {
+  // far: how much darker the page is printed towards its far edge (a halftone screen), 0 for none.
+  page(color, print, holes = [], far = 0.3) {
     return this.part({
       on: this.gutter, shape: rect(-BOOK.W, 0, BOOK.W, BOOK.H), holes, z: [-BOOK.PAGE_T, 0], color, print,
+      screen: far ? (x, y) => (far * y) / BOOK.H : null, ink: tint(color, -0.42),
       group: this.pagesGroup, mat: MAT.BOARD, hasBack: false, bend: BOOK.GUTTER_BEND, edge: C.snow,
     });
   }
@@ -100,7 +102,7 @@ class Builder {
   label(frame, p, text) { this.labels.push({ frame, p, text }); }
 
   // A glue tab on a host sheet: a strip from world point p0 to p1, reaching `side` (a world unit vector).
-  _tab(host, p0, p1, side, width = BOOK.TAB_W) {
+  _tab(host, p0, p1, side, width = BOOK.TAB_W, color = C.white) {
     const a = host.local(p0), b = host.local(p1);
     const s = [dot(side, host.x), dot(side, host.y)];
     let tx = b[0] - a[0], ty = b[1] - a[1];
@@ -109,7 +111,7 @@ class Builder {
     const c = Math.min(width * 0.6, l * 0.3);
     const shape = [[a[0], a[1]], [b[0], b[1]], [b[0] + s[0] * width - tx * c, b[1] + s[1] * width - ty * c], [a[0] + s[0] * width + tx * c, a[1] + s[1] * width + ty * c]];
     const tz = this._z(host, 1)[0];
-    this.part({ on: host, shape, z: [tz, tz + BOOK.TAB_T], color: C.white, mat: MAT.TAB, hasBack: false, foldEdge: (p, q) => (p === shape[0] && q === shape[1]) || (p === shape[1] && q === shape[0]) || (Math.hypot(p[0] - shape[0][0], p[1] - shape[0][1]) + Math.hypot(q[0] - shape[1][0], q[1] - shape[1][1]) < 1e-4) || (Math.hypot(q[0] - shape[0][0], q[1] - shape[0][1]) + Math.hypot(p[0] - shape[1][0], p[1] - shape[1][1]) < 1e-4) });
+    this.part({ on: host, shape, z: [tz, tz + BOOK.TAB_T], color, mat: MAT.TAB, hasBack: false, foldEdge: (p, q) => (p === shape[0] && q === shape[1]) || (p === shape[1] && q === shape[0]) || (Math.hypot(p[0] - shape[0][0], p[1] - shape[0][1]) + Math.hypot(q[0] - shape[1][0], q[1] - shape[1][1]) < 1e-4) || (Math.hypot(q[0] - shape[0][0], q[1] - shape[0][1]) + Math.hypot(p[0] - shape[1][0], p[1] - shape[1][1]) < 1e-4) });
     this.tabs.push({ frame: host, shape, z: tz + BOOK.TAB_T });
     this.creases.push({ frame: host, a: [a[0], a[1], tz], b: [b[0], b[1], tz], kind: 'glue' });
   }
@@ -179,14 +181,14 @@ class Builder {
     const F = this.rig.float(this.gutter, { height: o.height });
     const span = (frame, pa, pb) => { const a = frame.local(pa)[0], b = frame.local(pb)[0]; return rect(Math.min(a, b), 0, Math.max(a, b), o.height); };
     const g = this.gutter;
-    this.part({ on: F.fin, shape: span(F.fin, g.A.point(0, o.y0, 0), g.A.point(0, o.y1, 0)), color: C.white });
+    this.part({ on: F.fin, shape: span(F.fin, g.A.point(0, o.y0, 0), g.A.point(0, o.y1, 0)), color: o.legColor || C.white, back: o.legColor || C.white });
     for (const side of ['A', 'B']) {
       const host = g[side], sx = side === 'A' ? -o.d : o.d;
       const leg = F.leg(side, o.d);
       this.stands.add(leg.id);
       const p0 = host.point(sx, o.y0, 0), p1 = host.point(sx, o.y1, 0);
       this.part({ on: leg, shape: span(leg, p0, p1), color: o.legColor || C.white, back: o.legColor || C.white, print: o.legPrint });
-      this._tab(host, p0, p1, side === 'A' ? host.x : neg(host.x));
+      this._tab(host, p0, p1, side === 'A' ? host.x : neg(host.x), BOOK.TAB_W, o.legColor || C.white);
       const top = F[side];
       this.creases.push({ frame: top, a: [sx, o.y0, 0], b: [sx, o.y1, 0], kind: 'fold', fold: { fixed: 'mountain' } });
     }
@@ -349,6 +351,87 @@ export function createBook(content, opts = {}) {
     }
     book.turn = keep; rig.update();
     return report;
+  };
+  // Looks for card passing through card. Every part is shrunk a little (so pieces that only meet
+  // along a fold or a glue line do not count), turned into triangles, and tested against every part
+  // on a different panel at `samples` poses from open to nearly shut, with every tab, slider and
+  // wheel at the start, middle and end of its travel. Glue tabs are left out: they are part of the
+  // sheet they are stuck to.
+  // Returns [{ spread, a, b, opening (degrees, the first pose at which they meet), poses }].
+  book.collisions = (samples = 10, shrink = 0.14, shutAt = 0.14) => {
+    const keep = book.turn, found = [];
+    const seg = (p, q, a, b, c) => {
+      // does the segment p-q pass through triangle a-b-c (not merely touch it)?
+      const e1 = sub(b, a), e2 = sub(c, a), d = sub(q, p), h = cross(d, e2), det = dot(e1, h);
+      if (Math.abs(det) < 1e-9) return false;
+      const s = sub(p, a), u = dot(s, h) / det;
+      if (u < 1e-4 || u > 1 - 1e-4) return false;
+      const qv = cross(s, e1), v = dot(d, qv) / det;
+      if (v < 1e-4 || u + v > 1 - 1e-4) return false;
+      const t = dot(e2, qv) / det;
+      return t > 1e-4 && t < 1 - 1e-4;
+    };
+    const meet = (A, B) => {
+      for (let i = 0; i < 3; i++) {
+        if (seg(A[i], A[(i + 1) % 3], B[0], B[1], B[2])) return true;
+        if (seg(B[i], B[(i + 1) % 3], A[0], A[1], A[2])) return true;
+      }
+      return false;
+    };
+    for (let k = 1; k <= N; k++) {
+      // flat pieces: { name, frame, tris: [[x, y] * 3] }
+      const pieces = [];
+      const add = (name, frame, outline, z) => {
+        const o = ccw(cleanPoly(outline));
+        if (o.length < 3) return;
+        const small = insetLoop(o, shrink);
+        const { pts, tris } = triangulate(o);
+        const list = [];
+        for (let i = 0; i < tris.length; i += 3) list.push([small[tris[i]], small[tris[i + 1]], small[tris[i + 2]]]);
+        pieces.push({ name, frame, tris: list, z });
+      };
+      book.spreads[k].list.forEach((p, i) => {
+        if (p.mat === MAT.TAB) return;
+        const name = p.name || `part ${i} (${p.color})`;
+        const z = (p.z[0] + p.z[1]) / 2;
+        if (p.frameB) {
+          add(name, p.frame, clipHalfPlane(p.shape, -1, 0, -shrink), z);
+          add(name, p.frameB, clipHalfPlane(p.shape, 1, 0, -shrink), z);
+        } else add(name, p.frame, p.shape, z);
+      });
+      const hits = new Map();
+      const moving = book.spreads[k].controls;
+      const starts = moving.map((c) => c.value);
+      for (let s = 0; s < samples * 3; s++) {
+        const travel = (s % 3) / 2;
+        moving.forEach((c) => { c.value = c.type === 'wheel' ? travel * 2.2 : travel; });
+        book.turn = k - (Math.floor(s / 3) / (samples - 1)) * (1 - shutAt); rig.update();
+        const world = pieces.map((p) => {
+          const tris = p.tris.map((t) => t.map(([x, y]) => p.frame.point(x, y, p.z)));
+          const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+          for (const t of tris) for (const v of t) for (let d = 0; d < 3; d++) { lo[d] = Math.min(lo[d], v[d]); hi[d] = Math.max(hi[d], v[d]); }
+          return { tris, lo, hi };
+        });
+        for (let i = 0; i < pieces.length; i++) {
+          for (let j = i + 1; j < pieces.length; j++) {
+            if (pieces[i].frame === pieces[j].frame) continue;
+            const A = world[i], B = world[j];
+            if (A.lo[0] > B.hi[0] || B.lo[0] > A.hi[0] || A.lo[1] > B.hi[1] || B.lo[1] > A.hi[1] || A.lo[2] > B.hi[2] || B.lo[2] > A.hi[2]) continue;
+            let hit = false;
+            for (const ta of A.tris) { for (const tb of B.tris) if (meet(ta, tb)) { hit = true; break; } if (hit) break; }
+            if (hit) {
+              const key = pieces[i].name + ' / ' + pieces[j].name;
+              const h = hits.get(key) || { spread: k, a: pieces[i].name, b: pieces[j].name, opening: (book.opening(k) * 180) / Math.PI, poses: 0 };
+              h.poses++; hits.set(key, h);
+            }
+          }
+        }
+      }
+      moving.forEach((c, i) => { c.value = starts[i]; });
+      found.push(...hits.values());
+    }
+    book.turn = keep; rig.update();
+    return found;
   };
   return book;
 }
