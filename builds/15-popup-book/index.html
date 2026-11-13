@@ -68,7 +68,7 @@
   #error { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font-size: 18px; background: #2a1d14; }
   [hidden] { display: none !important; }
   @media (max-width: 700px) {
-    h1 { font-size: 19px; } header p { font-size: 14px; max-width: 62vw; }
+    h1 { font-size: 19px; } header { max-width: calc(100vw - 172px); } header p { font-size: 14px; }
     button { padding: 8px 13px; font-size: 14px; }
     #caption { display: block; }
     #legend { left: 12px; right: 12px; max-width: none; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px); }
@@ -81,7 +81,7 @@
 <canvas id="overlay" aria-hidden="true"></canvas>
 <header class="shade">
   <h1>Where the river goes</h1>
-  <p>Drag a page by its outer edge to turn it. Pull the tabs. Press E for the engineer's view.</p>
+  <p id="hint">Drag a page by its outer edge to turn it. Pull the tabs. Press E for the engineer's view.</p>
 </header>
 <button id="sound" type="button" aria-pressed="false">Enable sound</button>
 <p id="caption" class="shade" aria-live="polite"></p>

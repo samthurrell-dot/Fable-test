@@ -1,6 +1,6 @@
 # 15 – The pop-up book: techniques
 
-Raw WebGL2, no libraries. About 3,300 lines. 229 card parts, 27,000 triangles, 104 rigid frames. Costs are from an Intel UHD Graphics 615 (a low-power laptop chip) unless stated; a recent laptop GPU is several times faster.
+Raw WebGL2, no libraries. About 3,400 lines. 229 card parts, 27,000 triangles, 104 rigid frames. Costs are from an Intel UHD Graphics 615 (a low-power laptop chip) unless stated; a recent laptop GPU is several times faster.
 
 Files:
 - `engine/fold.js` – paper mechanisms solved from the page angle. No WebGL, no DOM. **Reusable.**
@@ -12,7 +12,7 @@ Files:
 - `src/book.js` – this book: leaves, spreads, the builder that spread files use, and the paper checks.
 - `src/spreads/*.js`, `src/art.js`, `src/story.js` – the content: outlines, print and words.
 - `src/main.js`, `src/engineer.js`, `src/sound.js` – page, input, camera, the automatic run, the engineer's view, audio.
-- `demo/fold.html`, `demo/paper.html` – the fold engine and the renderer alone, with sliders.
+- `demo/fold.html`, `demo/spine.html`, `demo/paper.html` – the fold engine, the spine and the renderer alone, with sliders.
 
 ## 1. Fold kinematics (`engine/fold.js`)
 
@@ -72,7 +72,7 @@ Files:
 
 **Two ways of drawing with the same shader:**
 - **Moving:** one frame at a time. The key's shadow edge widens with distance from what casts it (5 samples to find the blocker, 8 comparisons), so shadows are sharp where card touches card and soft further off. Fill maps are redrawn two a frame in turn. 4× multisampling. Depth is drawn first so the costly shader runs once a pixel.
-- **Still:** when nothing has moved for 0.18 s, frames are added up. Each one moves every light to a new point of the window or sky patch it stands for, shifts the picture by part of a pixel and moves the lens across its opening. The mean of 72 frames (40 on phones) is true area-light shadow, clean edges and depth of field at full resolution. Then drawing stops until something moves.
+- **Still:** when nothing has moved for 0.18 s, frames are added up. Each one moves every light to a new point of the window or sky patch it stands for, shifts the picture by part of a pixel and moves the lens across its opening. The mean of 72 frames (40 on phones) is true area-light shadow, clean edges and depth of field at full resolution. Then drawing stops until something moves. The first frames of a still are rough (one hard shadow each), so the moving frame stays on screen until six have been added up and the still then eases in over twelve more.
 
 **Why this and not screen-space ambient occlusion or blurred shadow maps:** the layers of a pop-up are millimetres apart. Blurred depth cannot resolve that and screen-space occlusion draws halos. Shadow comparisons hold contact at any distance, and adding frames up turns the same cheap comparison into the real integral when there is time.
 

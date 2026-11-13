@@ -81,3 +81,32 @@ Three weakest things:
 3. **Sound unmeasured.** Changed: levels read from the page's output (silent at rest, page turn peaks 0.13, music box 0.10), then tab rub and music box raised a little.
 
 Demos added: `demo/fold.html` (the mechanisms alone, with their angles on sliders and the rigidity numbers live) and `demo/paper.html` (the renderer alone, with the light on sliders).
+
+## Round 5 (the hand-over to the still, phone faults)
+
+Three weakest things:
+1. **A flash each time the book came to rest.** The still began by showing its first frame, which has one hard shadow from each light and no smoothing. Changed: the moving frame stays on screen until six frames have been added up, then the still eases in over twelve more. The picture now settles and sharpens with no jump.
+2. **Phone layout faults.** The title ran under the sound button; on spread 4 the pull tab was off the right edge; the words of the spread showed under the engineer's legend; the hint named a key that a phone does not have. All fixed. A laptop with a touch screen (this PC) was also being given the phone settings; it is no longer.
+3. **The spine had no demo.** Added `demo/spine.html`: the book seen end on, with the turn, leaf thickness and fan on sliders.
+
+Also: with "reduce motion" set in the system, the book waits to be turned and does not run itself.
+
+Final state of the checks: `book.check()` rigid to 9e-16, glue seams to 4e-15 cm, every linkage solved over the whole motion, 0.01 cm outside the shut book at worst; `book.collisions()` none.
+
+## Not checked, and known flaws
+
+- **Sound by ear.** Levels are measured; whether the paper noises and the music box sound right is not known. Sam has the only ears.
+- **A real phone and a stronger GPU.** Phone layout was checked in a 375×812 window on this PC with made-up touch events. Frame rate on other machines is not measured.
+- **Dragging by hand.** Page turning, the tabs, the slider and both wheels were driven with made-up pointer events and their values read back. They were not felt.
+- Card has no springiness: a page stopped half way stays exactly where it was left, and pieces do not bow.
+- The floating layer's centre fin is held on the bisector by symmetry, not by a linkage. That is how the real mechanism works, but a real one sags a little.
+- Print is a texture at about 36 pixels a centimetre: sharp at the normal view, soft in the closest close-up. Outlines stay sharp.
+- Gull stalks on spread 5 are thin strips of card; in a real book they would be clear acetate.
+- The wheel of day and night can be turned by its whole disc, including the part hidden behind the waves.
+- The collision test shrinks every part by 1.4 mm and samples ten poses; a touch thinner than that, or between poses, would not be found.
+
+## Next
+
+- Hear it and tune the sound.
+- Try it on a real phone.
+- Harvest: `engine/fold.js` with `engine/spine.js` is the part worth a card first (see `skills/build-harvest`), then the renderer.

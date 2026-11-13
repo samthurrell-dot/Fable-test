@@ -52,7 +52,7 @@ const SHOTS = [
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.6, 3.0], fit: 61, pitch: 0.60 },
   { target: [0, 3.4, 3.0], fit: 61, pitch: 0.60 },
-  { target: [0, 3.0, 3.0], fit: 61, pitch: 0.62 },
+  { target: [0, 3.0, 3.0], fit: 61, pitch: 0.62, fitTall: 57 },   // the pull tab at the page edge must stay in the picture
   { target: [0, 10, 4.0], fit: 80, pitch: 0.5 },
 ];
 const VIEWS = {
@@ -67,7 +67,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = (t) => { t = clamp(t, 0, 1); return t * t * t * (t * (t * 6 - 15) + 10); };
 
 const isPhone = params.get('quality') === 'phone' ||
-  (params.get('quality') !== 'desktop' && (Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches));
+  (params.get('quality') !== 'desktop' && (Math.min(innerWidth, innerHeight) < 700 ||
+    // a touch-only device with a small screen; a laptop that also has a touch screen is not a phone
+    (!matchMedia('(any-pointer: fine)').matches && Math.min(screen.width, screen.height) < 900)));
 const quality = isPhone ? QUALITY.low : QUALITY.high;
 const maxDpr = isPhone ? 1.5 : 2;
 
@@ -108,10 +110,11 @@ window.__book = book; window.__renderer = renderer;
 // --- State ----------------------------------------------------------------------------------------
 const frozen = params.has('t');   // ?t= stops the clock; ?turn= only sets where the book starts
 let clock = params.has('t') ? parseFloat(params.get('t')) || 0 : 0;   // seconds into the automatic run
-let auto = !params.has('turn');     // the book is turning its own pages
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;   // then the book waits to be turned
+let auto = !params.has('turn') && !calm;     // the book is turning its own pages
 let turn = 0;                       // where the book is, 0..5
 let turnTarget = null;              // a turn in progress from a key, a button or a flick
-let lastInput = params.has('turn') ? 1e12 : -1e9;   // with ?turn= the automatic run stays off
+let lastInput = params.has('turn') || calm ? 1e12 : -1e9;   // with ?turn= the automatic run stays off
 let engineerOn = params.get('engineer') === '1', engineerAmount = engineerOn ? 1 : 0;
 const cam = { yaw: 0, pitch: 0, zoom: 1, ...(VIEWS[params.get('view')] || {}) };
 for (const k of ['yaw', 'pitch', 'zoom']) if (params.has(k)) cam[k] = parseFloat(params.get(k));
@@ -157,7 +160,7 @@ function placeCamera() {
   const mix = (x, y) => x + (y - x) * f;
   const aspect = canvas.width / canvas.height;
   const tall = aspect < 0.8;
-  const fit = tall ? Math.min(PORTRAIT_FIT, mix(a.fit, b.fit)) : mix(a.fit, b.fit);
+  const fit = tall ? Math.min(mix(a.fitTall || PORTRAIT_FIT, b.fitTall || PORTRAIT_FIT), mix(a.fit, b.fit)) : mix(a.fit, b.fit);
   // Far enough back for the width to fit, and on a wide screen for the height to fit too.
   const half = Math.tan(view.fovY / 2);
   const dist = Math.max(fit / (2 * half * aspect), (fit * 0.5) / (2 * half)) * cam.zoom;
@@ -377,6 +380,7 @@ function setEngineer(on) {
   $('engineer').setAttribute('aria-pressed', on ? 'true' : 'false');
   $('engineer').textContent = on ? 'Finished view' : "Engineer's view";
   $('legend').hidden = !on;
+  document.body.classList.toggle('engineer', on);
 }
 addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight' || e.key === 'PageDown') { step(1); e.preventDefault(); }
@@ -390,6 +394,8 @@ $('prev').addEventListener('click', () => step(-1));
 $('next').addEventListener('click', () => step(1));
 $('engineer').addEventListener('click', () => { setEngineer(!engineerOn); touched(); });
 setEngineer(engineerOn);
+// No keyboard on a touch screen: the hint names the button instead of the key.
+if (!matchMedia('(any-pointer: fine)').matches && $('hint')) $('hint').textContent = 'Drag a page by its outer edge to turn it. Pull the tabs. Pinch to come closer.';
 
 const sound = createSound();
 window.__sound = sound;
@@ -529,7 +535,7 @@ function tick(now) {
   if (engineerAmount !== want) { engineerAmount = clamp(engineerAmount + Math.sign(want - engineerAmount) * dt * 3, 0, 1); lastMoved = secs; }
   placeCamera();
   const still = frozen ? true : secs - lastMoved > STILL_AFTER && !grab;
-  const res = renderer.render({ ...view, groups: book.groups(), changed: moved, still, blueprint: engineerAmount });
+  const res = renderer.render({ ...view, groups: book.groups(), changed: moved, still, blueprint: engineerAmount, instant: frozen });
   // While the book is running itself, a ring points out the tab or wheel it is about to work.
   const rings = [];
   if (auto && !frozen) {
@@ -590,12 +596,12 @@ window.__bench = (n = 20, moving = true) => {
 window.__finish = () => {
   book.setTurn(turn); book.update(); renderer.setFrames(book.frameData(), book.frameCount); placeCamera();
   let r = { done: false }, n = 0;
-  while (!r.done && n++ < 400) r = renderer.render({ ...view, groups: book.groups(), changed: false, still: true, blueprint: engineerAmount });
+  while (!r.done && n++ < 400) r = renderer.render({ ...view, groups: book.groups(), changed: false, still: true, blueprint: engineerAmount, instant: true });
   return r;
 };
 window.__project = (p) => engineer.project(viewProj(), p);
 window.__state = () => ({ turn, auto, turnTarget, clock, cam: { ...cam }, grab: grab && grab.kind, values: book.controls.map((c) => +c.value.toFixed(3)) });
-window.__set = (o) => { if (o.turn !== undefined) { turn = o.turn; auto = false; lastInput = 1e12; } if (o.cam) Object.assign(cam, o.cam); if (o.value !== undefined) for (const c of book.controls) c.value = o.value; };
+window.__set = (o) => { if (o.turn !== undefined) { turn = o.turn; turnTarget = null; auto = false; lastInput = 1e12; } if (o.cam) Object.assign(cam, o.cam); if (o.value !== undefined) for (const c of book.controls) c.value = o.value; };
 requestAnimationFrame(frame);
 
 // For work on the build: fetches every source file afresh (modules are cached hard), then reloads.

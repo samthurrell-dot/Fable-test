@@ -41,6 +41,8 @@ export const LIGHT_RIG = {
   grain: 0.018,
 };
 
+const STILL_SHOW_FROM = 6;   // frames added up before a still is first shown
+const STILL_EASE = 12;       // frames over which it takes over from the moving picture
 const R2A = 0.7548776662466927, R2B = 0.5698402909980532;   // steps of a low-discrepancy sequence
 const seq = (n, k) => {
   const a = (0.5 + n * R2A + k * 0.371) % 1, b = (0.5 + n * R2B + k * 0.613) % 1;
@@ -347,14 +349,17 @@ export function createPaperRenderer(canvas, quality = QUALITY.high, rig = LIGHT_
     return { eye, viewProj };
   }
 
-  function present(tex, hdr) {
+  // mix < 1 shows part of the last moving frame under the new picture.
+  function present(tex, hdr, mix = 1) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(progs.present.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    setUniforms(gl, progs.present, { u_src: 0, u_hdr: hdr ? 1 : 0, u_vignette: rig.vignette, u_grain: rig.grain, u_frameNoise: (state.frame % 97) * 1.37, u_exposure: rig.exposure });
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, live.color);
+    setUniforms(gl, progs.present, { u_src: 0, u_prev: 1, u_mix: mix, u_hdr: hdr ? 1 : 0, u_vignette: rig.vignette, u_grain: rig.grain, u_frameNoise: (state.frame % 97) * 1.37, u_exposure: rig.exposure });
     gl.bindVertexArray(quadVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.enable(gl.DEPTH_TEST);
@@ -367,6 +372,7 @@ export function createPaperRenderer(canvas, quality = QUALITY.high, rig = LIGHT_
   //   view.changed                       true if any card moved since the last call
   //   view.still                         true to add frames up; false to draw a moving frame
   //   view.blueprint                     0..1, the plain white "dummy" look of the engineer's view
+  //   view.instant                       true to show a still from its first frame (for saved pictures)
   // Returns { samples, done }. When done is true the picture is finished and need not be drawn again.
   function render(view) {
     state.frame++;
@@ -418,7 +424,9 @@ export function createPaperRenderer(canvas, quality = QUALITY.high, rig = LIGHT_
     gl.disable(gl.BLEND);
     gl.enable(gl.DEPTH_TEST);
     state.samples++;
-    present(accum.tex, hdrOk);
+    // The first few frames of a still are rough (one hard shadow each). Keep showing the moving
+    // frame until there are enough, then ease the still in over it.
+    if (state.samples >= STILL_SHOW_FROM || view.instant) present(accum.tex, hdrOk, view.instant ? 1 : Math.min(1, (state.samples - STILL_SHOW_FROM + 1) / STILL_EASE));
     return { samples: state.samples, done: state.samples >= q.samples };
   }
 

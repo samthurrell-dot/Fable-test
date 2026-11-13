@@ -393,6 +393,8 @@ precision highp float;
 in vec2 v_uv;
 out vec4 o_col;
 uniform sampler2D u_src;
+uniform sampler2D u_prev;   // the last moving frame, for easing into a still
+uniform float u_mix;        // 1 = u_src only
 uniform float u_hdr;
 uniform float u_vignette;
 uniform float u_grain;
@@ -402,6 +404,7 @@ ${TONE}
 void main() {
   vec3 c = texture(u_src, v_uv).rgb;
   if (u_hdr > 0.5) c = tone(c);
+  if (u_mix < 0.999) c = mix(texture(u_prev, v_uv).rgb, c, u_mix);
   vec2 q = (v_uv - 0.5) * vec2(1.0, 0.86);
   c *= 1.0 - u_vignette * smoothstep(0.28, 0.82, length(q));
   c += (hash21(gl_FragCoord.xy + u_frameNoise) - 0.5) * u_grain;
