@@ -20,7 +20,7 @@ import { createSilo, ZONES } from './silo.js';
 import { createSound } from './sound.js';
 
 const $ = (s, el = document) => el.querySelector(s);
-const app = $('#app'), bar = $('#bar'), desk = $('#desk'), sheet = $('#sheet'), sheetBody = $('#sheet-body');
+const app = $('#app'), bar = $('#bar'), desk = $('#desk'), sheet = $('#sheet'), sheetBody = $('#sheet-body'), strip = $('#strip');
 const params = new URLSearchParams(location.search);
 const calm = params.has('still') || matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (calm) app.classList.add('calm');
@@ -58,6 +58,18 @@ const RES = [
   ['med', 'Medicine', 'Treats injury and illness. Drained by accidents, poisonings and rationing choices.'],
   ['lux', 'Luxury', 'Your comfort and status: wine, art, gold taps. It also pays for perks and informants. Nothing new comes in.'],
 ];
+// What each tool gets you and what it costs, in the words of the design outline.
+const TOOL_INFO = {
+  perk: ['Loyalty up quickly, for one person.', 'Luxury. The others notice who got it, and each perk to the same person works less.'],
+  cameras: ['You see where people really are, by day and at night, and who was near anything that breaks.', 'Power every night, and everyone’s loyalty drops a little for as long as they are on.'],
+  camerasOff: ['Saves power, and the slow loss of loyalty stops.', 'You stop seeing where anybody goes.'],
+  informant: ['A plain report on one person every morning.', 'Luxury now and every night. The informant might lie, or be found out, which is a scandal.'],
+  test: ['You find out today whether one person is loyal.', 'A loyal person is offended to be tested. A disloyal one learns that you know.'],
+  example: ['Fear goes up for everyone.', 'Loyalty goes down for everyone. The person may want revenge, and proud people always do.'],
+  exile: ['Removes a problem for good.', 'You lose their skills: the job is done badly from then on. The others are horrified.'],
+  speech: ['A small loyalty boost for everyone, and a calmer bunker.', 'Nothing but your dignity. Each speech works less than the last.'],
+};
+const toolInfo = (id) => { const i = TOOL_INFO[id === 'cameras' && st.cameras ? 'camerasOff' : id]; return i ? `<dl class="trade"><dt>What you get</dt><dd>${i[0]}</dd><dt>What it costs</dt><dd>${i[1]}</dd></dl>` : ''; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const num = (v) => (v > 0 ? '+' : '−') + Math.abs(Math.round(v));
 const chips = (delta) => Object.entries(delta || {}).filter(([, v]) => Math.abs(v) >= 0.5).map(([k, v]) => `<span class="chip r-${k} ${v > 0 ? 'up' : 'down'}">${ICON[k]}${num(v)}</span>`).join('');
@@ -101,7 +113,7 @@ function siloView(night) {
     else if (kind === 'king' || kind === 'word' || over === 'deposed_hatch') zone = 'surface';
     else if (night) { if (st.cameras) zone = p.night || 'bunks'; else { zone = 'bunks'; unseen = true; } } else if (st.cameras && p.room) zone = p.room;
     return {
-      role: p.role, status: p.status, zone, unseen, mood: over ? trueFace(p) : moodOf(p), label: `${p.name}, ${p.title}`,
+      role: p.role, status: p.status, zone, unseen, mood: kind === 'everyone' ? 'dead' : over ? trueFace(p) : moodOf(p), label: `${p.name}, ${p.title}`,
       badge: over ? '' : p.exposed ? 'alert' : st.informant === p.role ? 'eye' : '', down: kind === 'everyone',
     };
   });
@@ -113,7 +125,21 @@ function siloView(night) {
   if (kind === 'deposed' || kind === 'killed' || kind === 'everyone') you.mood = kind === 'deposed' ? 'sour' : 'dead';
   return { staff, you, cameras: st.cameras, night: night || kind === 'everyone', res: st.res, ending: kind };
 }
-function renderSilo(night = false) { if (st) silo.update(siloView(night)); }
+function renderSilo(night = false) {
+  if (!st) { strip.innerHTML = '<span>Tap a face to open that person’s file, once you are in charge</span>'; return; }
+  silo.update(siloView(night));
+  const inf = st.informant ? person(st.informant) : null;
+  strip.innerHTML = `<button type="button" data-act="roster">Staff files</button><span class="${st.cameras ? 'on' : ''}">${st.cameras ? 'Cameras on' : 'Cameras off'}</span><span class="${inf ? 'on' : ''}">${inf ? `Informant on ${esc(inf.first)}` : 'No informant'}</span>`;
+}
+function roster() {
+  openSheet(`<h2>Staff files</h2><p class="fine">A face each morning and whatever was last heard. Some of it is wrong.</p><ul class="picker">${st.staff.map((p) => `<li><button type="button" data-act="dossier" data-role="${p.role}">${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)} · ${TRAITS[p.trait].name.toLowerCase()}${p.status !== 'ok' ? ` · ${p.status}` : ''}</small>${p.rumour && p.status === 'ok' ? `<small class="r">${esc(p.rumour.text)}</small>` : ''}</span></button></li>`).join('')}</ul>`);
+}
+// A ring round the pawn that today's card is about, so the card and the picture are tied together.
+function ping(role) {
+  const el = $(`.pawn[data-role="${role}"]`);
+  if (!el || calm) return;
+  el.classList.remove('ping'); void el.offsetWidth; el.classList.add('ping');
+}
 
 // Title screen: nobody is in charge yet, and the staff wander.
 function startAttract() {
@@ -153,6 +179,17 @@ function renderTitle() {
   </article>`;
 }
 
+// The faces that changed overnight, in one line. Only what the player could see for themselves.
+function facesLine(f) {
+  if (!f) return '';
+  const names = (roles) => roles.map((r) => person(r).first).join(', ').replace(/, ([^,]*)$/, ' and $1');
+  const parts = [];
+  if (f.worse.length) parts.push(`${names(f.worse)} ${f.worse.length > 1 ? 'look' : 'looks'} worse this morning.`);
+  if (f.better.length) parts.push(`${names(f.better)} ${f.better.length > 1 ? 'look' : 'looks'} happier.`);
+  if (f.grin.length) parts.push(`${names(f.grin)} ${f.grin.length > 1 ? 'have' : 'has'} started smiling at everything.`);
+  return parts.length ? `<p class="faces-line">${rich(parts.join(' '))}</p>` : '';
+}
+
 function renderReport() {
   const r = st.report, card = cardById(st.card);
   const first = st.day === 1 ? `<p class="lede">${esc(card.line)}</p><p class="hintline">Tap a face in the silo to open that person’s file. The faces and the rumours are all you get: some are wrong.</p>` : '';
@@ -161,6 +198,7 @@ function renderReport() {
     ${first}
     ${r.inc.length ? `<ul class="incidents">${r.inc.map((i) => `<li class="${i.kind}">${rich(i.text)}</li>`).join('')}</ul>` : ''}
     <p class="mood">${esc(r.mood)}</p>
+    ${facesLine(r.faces)}
     ${r.cams ? `<p class="cams-line">${rich(r.cams)}</p>` : ''}
     ${r.informant ? `<p class="informant-line">${rich(r.informant.text)}</p>` : ''}
     ${r.rumours.length ? `<h3>Heard on the stairs</h3><ul class="rumours">${r.rumours.map((x) => `<li>${rich(x.text)}</li>`).join('')}</ul>` : ''}
@@ -174,7 +212,7 @@ function renderEvent() {
   desk.innerHTML = `<article class="card memo deal${v.grim ? ' grim' : ''}">
     <header><span class="stamp">Day ${st.day} · today’s business</span>${from ? `<button type="button" class="from" data-act="dossier" data-role="${from.role}" aria-label="${esc(from.name)}">${faceSVG(from.role, moodOf(from))}</button>` : ''}<h2>${esc(v.title)}</h2></header>
     <p class="body">${rich(v.text)}</p>
-    <div class="choices">${v.choices.map((c, i) => `<button type="button" class="choice" data-act="choose" data-i="${i}"${c.ok ? '' : ' disabled'}><span class="n">${i + 1}</span><span class="t">${esc(c.label)}${c.ok ? '' : `<small>${esc(c.why)}</small>`}</span><span class="costs">${chips(c.cost)}</span></button>`).join('')}</div>
+    <div class="choices">${(from && ping(from.role), v.choices).map((c, i) => `<button type="button" class="choice" data-act="choose" data-i="${i}"${c.ok ? '' : ' disabled'}><span class="n">${i + 1}</span><span class="t">${esc(c.label)}${c.ok ? '' : `<small>${esc(c.why)}</small>`}</span><span class="costs">${chips(c.cost)}</span></button>`).join('')}</div>
   </article>`;
 }
 
@@ -191,6 +229,7 @@ function renderOrder() {
   </article>
   <article class="card orders deal d2">
     <header><h2>${st.orderUsed ? 'Your order' : 'One order before lights out'}</h2></header>
+    ${!st.orderUsed && st.day <= 2 ? '<p class="hintline">One order a day, or none. Every tool helps in one way and costs you in another: tap one to read it first.</p>' : ''}
     ${tools}
     <button type="button" class="go" data-act="night">${st.orderUsed ? 'Lights out' : 'No orders. Lights out'}</button>
   </article>`;
@@ -221,8 +260,8 @@ function renderEnding() {
 function render(delta) {
   app.dataset.phase = st ? st.phase : 'title';
   renderBar(delta);
-  if (!st) { renderTitle(); return; }
   renderSilo(false);
+  if (!st) { renderTitle(); return; }
   if (st.phase === 'report') renderReport();
   else if (st.phase === 'event') renderEvent();
   else if (st.phase === 'order') renderOrder();
@@ -262,7 +301,7 @@ function dossier(role) {
 function pickWho(id, type) {
   const o = orderList(st).find((x) => x.id === id);
   const title = type === 'bunk' ? 'Who is promised the next bunk upgrade?' : `${o.name}: who?`;
-  openSheet(`<h2>${esc(title)}</h2><p class="fine">${esc(type === 'bunk' ? PROMISES.bunk.cost : o.hint)}</p><ul class="picker">${st.staff.filter((p) => p.status === 'ok').map((p) => `<li><button type="button" data-act="${id === 'exile' || id === 'example' ? 'confirm' : 'do'}" data-id="${id}" data-role="${p.role}"${type ? ` data-type="${type}"` : ''}>${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)} · ${TRAITS[p.trait].name.toLowerCase()}</small>${p.rumour ? `<small class="r">${esc(p.rumour.text)}</small>` : ''}</span></button></li>`).join('')}</ul>`);
+  openSheet(`<h2>${esc(title)}</h2>${type === 'bunk' ? `<p class="fine">Cost of keeping it: ${esc(PROMISES.bunk.cost)}</p>` : toolInfo(id)}<ul class="picker">${st.staff.filter((p) => p.status === 'ok').map((p) => `<li><button type="button" data-act="${id === 'exile' || id === 'example' ? 'confirm' : 'do'}" data-id="${id}" data-role="${p.role}"${type ? ` data-type="${type}"` : ''}>${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)} · ${TRAITS[p.trait].name.toLowerCase()}</small>${p.rumour ? `<small class="r">${esc(p.rumour.text)}</small>` : ''}</span></button></li>`).join('')}</ul>`);
 }
 function pickPromise() {
   openSheet(`<h2>Make a promise</h2><p class="fine">Loyalty goes up at once and costs nothing today. Keep it later and trust builds. Break it and everyone who heard it remembers.</p><ul class="picker">${promiseList(st).map((o) => `<li><button type="button" data-act="${o.target ? 'who' : 'do'}" data-id="promise" data-type="${o.type}"${o.ok ? '' : ' disabled'}><span><b>“${esc(o.name)}”</b><small>Cost of keeping it: ${esc(o.cost)}</small><small>${o.ok ? (o.due ? `Falls due in ${o.due} days` : 'Stands until the hatch opens') : esc(o.why)}</small></span></button></li>`).join('')}</ul>`);
@@ -335,7 +374,8 @@ document.addEventListener('click', (ev) => {
     case 'choose': choose(st, +d.i); sound.play('stamp'); if (st.phase === 'ended') finish(); else save(); render(st.result ? st.result.delta : {}); break;
     case 'tool': {
       const o = orderList(st).find((x) => x.id === d.id);
-      if (o.id === 'promise') pickPromise(); else if (o.target) pickWho(o.id); else doOrder(o.id, {});
+      if (o.id === 'promise') pickPromise(); else if (o.target) pickWho(o.id);
+      else openSheet(`<h2>${esc(o.name)}</h2>${toolInfo(o.id)}<div class="row"><button type="button" class="go" data-act="do" data-id="${o.id}">${esc(o.name)}</button><button type="button" class="go ghost" data-act="close">Not today</button></div>`);
       break;
     }
     case 'who': pickWho(d.id, d.type); break;
@@ -348,6 +388,7 @@ document.addEventListener('click', (ev) => {
     case 'night': lightsOut(); break;
     case 'dossier': if (st) { sound.play('tap'); dossier(d.role); } break;
     case 'ledger': ledger(); break;
+    case 'roster': roster(); break;
     case 'res': { const r = RES.find((x) => x[0] === d.k); openSheet(`<h2 class="r-${r[0]}">${ICON[r[0]]} ${r[1]}: ${Math.round(st.res[r[0]])}</h2><p class="body">${r[2]}</p>`); break; }
     case 'menu': menu(); break;
     case 'help': help(); break;

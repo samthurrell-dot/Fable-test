@@ -242,29 +242,38 @@ function faceOf(st, p) {
   return x >= 66 ? 'happy' : x >= 52 ? 'content' : x >= 40 ? 'flat' : x >= 27 ? 'sour' : 'angry';
 }
 
-function rumourOf(st, g, p, sure) {
+function rumourOf(st, g, p, sure, used = []) {
   const pa = g.s('pa');
   const acc = sure ? 0.95 : R.RUMOUR_TRUE + (pa ? (pa.loyalty >= 50 ? 0.1 : -0.12) : 0);
   let sig = p.stage;
   if (rnd(st) > acc) sig = p.stage >= 2 ? Math.floor(rnd(st) * 2) : rnd(st) < 0.5 ? p.stage + 1 + Math.floor(rnd(st) * 2) : p.stage;
   const afraid = p.fear >= 66 && rnd(st) < 0.5;
-  const line = g.pick(afraid ? RUMOURS_AFRAID : RUMOURS[sig]).replace(/\{n\}/g, p.first);
-  return { text: line, day: st.day, sig: afraid ? -1 : sig };
+  const pool = (afraid ? RUMOURS_AFRAID : RUMOURS[sig]).filter((l) => !used.includes(l) && l !== (p.rumour && p.rumour.raw));
+  const raw = g.pick(pool.length ? pool : RUMOURS[sig]);
+  used.push(raw);
+  return { text: raw.replace(/\{n\}/g, p.first), raw, day: st.day, sig: afraid ? -1 : sig };
 }
 
 function beginDay(st, inc) {
   const g = ctx(st);
   const here = g.here();
+  const RANK = { happy: 4, content: 3, flat: 2, sour: 1, angry: 0 };
+  const faces = { worse: [], better: [], grin: [] };
   for (const p of here) {
+    const was = p.face;
     p.face = faceOf(st, p);
+    if (was && was !== p.face) {
+      if (p.face === 'grin') faces.grin.push(p.role);
+      else if (was !== 'grin') (RANK[p.face] < RANK[was] ? faces.worse : faces.better).push(p.role);
+    }
     // where they really are; the screen only shows it while the cameras are on
     p.room = p.stage === 2 ? 'mess' : ROLES[p.role].post;
     p.night = p.stage >= 5 ? 'stores' : p.stage === 4 ? 'vault' : 'bunks';
   }
   // two rumours a morning, about the people you have heard least about lately
   const order = here.filter((p) => p.role !== st.informant).map((p) => ({ p, k: (p.rumour ? p.rumour.day : -9) + rnd(st) * 2 })).sort((a, b) => a.k - b.k);
-  const rumours = [];
-  for (const { p } of order.slice(0, 2)) { p.rumour = rumourOf(st, g, p, false); rumours.push({ role: p.role, text: p.rumour.text }); }
+  const rumours = [], used = [];
+  for (const { p } of order.slice(0, 2)) { p.rumour = rumourOf(st, g, p, false, used); rumours.push({ role: p.role, text: p.rumour.text }); }
   // the informant
   let informant = null;
   const target = st.informant && g.s(st.informant);
@@ -286,7 +295,7 @@ function beginDay(st, inc) {
     else cams = 'Cameras: everyone was where they should be.';
   }
   const band = Math.min(4, Math.floor(st.unrest / 20));
-  st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), rumours, informant, cams, delta: { ...st.delta } };
+  st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), rumours, informant, cams, faces, delta: { ...st.delta } };
   st.orderUsed = false; st.orderText = ''; st.result = null;
   st.event = pickEvent(st, g);
   st.phase = 'report';

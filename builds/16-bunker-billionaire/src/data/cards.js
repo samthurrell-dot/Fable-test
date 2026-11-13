@@ -29,7 +29,7 @@ export const CARDS = [
     id: 'vote', name: 'Promised them a vote',
     line: 'You won the argument at the hatch by promising an election. Then you shut the hatch.',
     blurb: 'High loyalty, almost no fear, and a date in the diary.',
-    level: 'Gentle', loyalty: 63, fear: 14, promises: ['vote'], grudge: 'security',
+    level: 'Gentle', loyalty: 60, fear: 14, promises: ['vote'], grudge: 'security',
     grudgeLine: 'The head of security, the candidate you beat.',
   },
   {
