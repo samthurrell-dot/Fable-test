@@ -1,6 +1,6 @@
 # 15 – The pop-up book: techniques
 
-Raw WebGL2, no libraries. About 4,200 lines, of which 1,300 are the reusable engines. 229 card parts, 27,000 triangles, 104 rigid frames. Costs are from an Intel UHD Graphics 615 (a low-power laptop chip) unless stated; a recent laptop GPU is several times faster.
+Raw WebGL2, no libraries. About 4,200 lines, of which about 1,650 are the reusable engines. 229 card parts, 27,000 triangles, 104 rigid frames. Costs are from an Intel UHD Graphics 615 (a low-power laptop chip) unless stated; a recent laptop GPU is several times faster.
 
 Files:
 - `engine/fold.js` – paper mechanisms solved from the page angle. No WebGL, no DOM. **Reusable.**
