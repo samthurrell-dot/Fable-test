@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
+Last updated: 13 Nov 2026 (Fable 5.2, harvest of the pop-up book)
 
 ## Done
 - [x] Reviewed the 15 Maker Skool prompts and the video of results.
@@ -8,6 +8,7 @@ Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 - [x] Skill: `skills/build-harvest` (turn finished build code into knowledge for other models).
 - [x] Plan: `plan/viability.md` (which builds on Fable 5.2, which on Opus 5.5).
 - [x] Ready prompts in `prompts/ready/`.
+- [x] Harvest of 15-popup-book (13 Nov 2026, Fable 5.2): three technique cards, each with its engine copied unchanged, a demo, and a prompt snippet. `knowledge/paper-fold-kinematics` (fold.js, spine.js, and the recipe for the two paper checks), `knowledge/card-mesh-atlas` (cardmesh.js, atlas.js), `knowledge/paper-renderer` (paperlight.js, papershaders.js, glkit.js, mat4.js). Listed in `knowledge/INDEX.md`. All three demos load with no console errors at desktop size and 390 px wide on this PC. Not done: step 6 of the skill (see Next).
 
 ## In progress
 - **13-tree-seasons** – v1 + five rounds done and working on `main` (1 look, 2 speed, 3 look, 4 life, 5 polish: jointed squirrel, songbird soundscape, cloud shadows, gusts, wood on the ridge, glow, sharp 30 fps mode, link-preview picture). Sam is steering it by eye and ear: read his briefs at the top of rounds 4 and 5 in ROUNDS.md before changing anything. He has approved the tree, the birds and the wind sound; leave those alone unless he asks. What is still open is at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
@@ -23,7 +24,7 @@ Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
 - Check 13 on a real phone and a stronger GPU. Sam watched the round 5 squirrel on 12 Nov 2026 and said it looks right: leave its movement alone unless he asks. He likes the small bird chirps; the big-bird calls (cuckoo, pigeon, crow, geese, woodpecker) sounded fake to him and were removed on 12 Nov 2026: do not add large-bird sounds back. He has not yet said anything about the sharp 30 fps mode.
 - Then 06 lightbulb from `prompts/ready/` (15 is built).
-- Harvest 15 (in progress, 13 Nov 2026; cards are listed in `knowledge/INDEX.md`): 1 `knowledge/paper-fold-kinematics` done (fold.js with spine.js, demo, card with the paper-checks recipe). 2 `knowledge/card-mesh-atlas` done (cardmesh.js, atlas.js, demo with its own small shader, card). Still to do: 3 paper renderer (`engine/paperlight.js`, `engine/papershaders.js`, `glkit.js`, `mat4.js`). Then step 6 of `skills/build-harvest` (try the cards on a cheaper model).
+- Test the harvest of 15 with a cheaper model (step 6 of `skills/build-harvest`, not yet done): give Opus 5.5, Sonnet or Gemini only one card from `knowledge/`, its engine and a short new brief (same technique, different subject, about 30 minutes), and add what it gets wrong to that card's Gotchas. A good first test: a single pop-up greeting card using all three cards.
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
 ## Build log

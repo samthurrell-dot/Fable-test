@@ -1,0 +1,7 @@
+# Prompt snippet: paper renderer
+
+Paste this into a prompt for any build whose scene is made of cut card or paper and should look like the real thing on a table.
+
+> Use the paper renderer in `knowledge/paper-renderer/engine/` (`paperlight.js`, `papershaders.js`, `glkit.js`, `mat4.js`) with meshes from `knowledge/card-mesh-atlas` and frames from `knowledge/paper-fold-kinematics`. Read all three CARD.md files first and open `knowledge/paper-renderer/demo.html`. Model in centimetres, y up, table at y = 0. Do not write your own shadows, ambient occlusion, antialiasing or depth of field: the renderer's moving mode and still mode do all four. Keep the light rig's defaults (key behind and to one side, exposure 0.42, bounce 0.42) and set only `centre` and `radius` to fit your scene tightly. Pass `changed: true` whenever card moved and `still: true` only after about 0.18 s of rest. Do not add highlights to card. Do not edit the engine files except the table's colours in `groundFS` if the brief needs another surface. Measure frame cost by drawing frames back to back and ending with a 1×1 `readPixels`, and scale the moving picture with `setScale` to hold about 13 ms. Save pictures from the canvas (restart, render with `instant: true` until done, `toDataURL`) and judge them against the card's look checklist.
+
+If the build copies the engines into its own folder, copy all three sets unchanged (the demo's import paths show how they fit together) and say where they came from in the build's `TECHNIQUES.md`.

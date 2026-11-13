@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper renderer: card, soft light and bounced colour</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #2a1d14; color: #23261f; font: 15px/1.4 Georgia, 'Times New Roman', serif; }
+  body { display: grid; grid-template-columns: 1fr 310px; }
+  canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; min-height: 0; }
+  aside { padding: 16px 18px; overflow: auto; background: #fbfaf5; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  p { margin: 0 0 12px; color: #5d6156; }
+  label { display: block; margin: 9px 0 0; }
+  label span { float: right; font-variant-numeric: tabular-nums; color: #5d6156; }
+  input[type=range], select { width: 100%; margin: 2px 0 0; min-height: 28px; font: inherit; }
+  fieldset { border: 0; padding: 0; margin: 10px 0 0; }
+  fieldset label { display: inline-block; margin: 4px 10px 0 0; min-height: 28px; }
+  button { font: inherit; margin: 12px 0 0; padding: 6px 12px; min-height: 36px; border: 1px solid #b9b3a2; border-radius: 6px; background: #f0ece0; cursor: pointer; }
+  pre { font: 12px/1.5 ui-monospace, Consolas, monospace; background: #f0ece0; padding: 10px; border-radius: 6px; white-space: pre-wrap; margin: 14px 0 0; }
+  @media (max-width: 720px) {
+    html, body { height: auto; }
+    body { display: block; }
+    canvas { height: 56vh; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A folded piece of coloured card on a wooden table"></canvas>
+<aside>
+  <h1>Paper renderer</h1>
+  <p>While anything moves it draws one frame at a time. When it rests it adds frames up into true soft shadow, clean edges and depth of field, then stops. Drag to look round, scroll to move in.</p>
+  <label>Fold open <span id="v-open"></span><input id="open" type="range" min="20" max="176" value="150"></label>
+  <label>Window: round the table <span id="v-turn"></span><input id="turn" type="range" min="-180" max="180" value="-131"></label>
+  <label>Window: height <span id="v-high"></span><input id="high" type="range" min="10" max="80" value="37"></label>
+  <label>Window: size <span id="v-size"></span><input id="size" type="range" min="0.5" max="14" value="4.5" step="0.5"></label>
+  <label>Room light <span id="v-room"></span><input id="room" type="range" min="0" max="2" value="1" step="0.05"></label>
+  <label>Colour bounced between layers <span id="v-bounce"></span><input id="bounce" type="range" min="0" max="1" value="0.42" step="0.02"></label>
+  <label>Exposure <span id="v-exp"></span><input id="exp" type="range" min="0.15" max="0.9" value="0.42" step="0.01"></label>
+  <label>Lens opening, stills only <span id="v-lens"></span><input id="lens" type="range" min="0" max="1.2" value="0.3" step="0.05"></label>
+  <label>Moving picture drawn at <span id="v-scale"></span><input id="scale" type="range" min="0.4" max="1" value="1" step="0.05"></label>
+  <fieldset>
+    <label><input type="checkbox" id="on-still" checked> add frames up at rest</label>
+  </fieldset>
+  <label>Settings
+    <select id="quality">
+      <option value="high">high (desktop)</option>
+      <option value="low">low (phone)</option>
+    </select>
+  </label>
+  <button id="measure" type="button">Measure a moving frame</button>
+  <pre id="report"></pre>
+</aside>
+<script type="module">
+import { createPaperRenderer, QUALITY, LIGHT_RIG } from './engine/paperlight.js';
+import { Rig, hingeOfFold } from '../paper-fold-kinematics/engine/fold.js';
+import { CardMesh } from '../card-mesh-atlas/engine/cardmesh.js';
+import { buildAtlas } from '../card-mesh-atlas/engine/atlas.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('c');
+// Phone settings for a small screen, or when asked for with ?quality=low. The settings are compiled
+// into the shaders, so changing them means making the renderer again: the page reloads.
+const small = Math.min(innerWidth, innerHeight) < 700;
+const asked = new URLSearchParams(location.search).get('quality');
+const qName = asked === 'low' || asked === 'high' ? asked : small ? 'low' : 'high';
+$('quality').value = qName;
+$('quality').addEventListener('change', () => { location.search = '?quality=' + $('quality').value; });
+
+// The light rig is a plain object: copy it, change it, hand it over. Call relight() after any later change.
+const rigLight = JSON.parse(JSON.stringify(LIGHT_RIG));
+rigLight.centre = [0, 4, 0]; rigLight.radius = 30;     // the volume that casts shadows: keep it tight
+const baseFill = rigLight.fill.map((f) => f.col.slice());
+const renderer = createPaperRenderer(canvas, QUALITY[qName], rigLight);
+
+// --- The scene: a sheet that folds, a V-fold standing on it, a few cut pieces glued on in layers ---
+const rig = new Rig();
+const L = rig.frame(), R = rig.frame();
+let open = 150;
+rig.step(() => {
+  const h = (open * Math.PI) / 360;
+  L.set([0, 0.2, 9], [Math.sin(h), -Math.cos(h), 0], [0, 0, -1]);
+  R.set([0, 0.2, 9], [Math.sin(h), Math.cos(h), 0], [0, 0, -1]);
+});
+const page = { A: L, B: R };
+const v = rig.vfold(hingeOfFold(page, 12), { alpha: 108, beta: 92 });
+
+const SHEET = [[-13, 0], [13, 0], [13, 18], [-13, 18]];
+// Text in an atlas drawing: the context is in cm with y up, so step out to pixels to set the type.
+function text(c, str, x, y, size, colour) {
+  const m = c.getTransform(), p = new DOMPoint(x, y).matrixTransform(m), d = Math.hypot(m.a, m.b);
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  c.font = `italic 500 ${size * d}px Georgia, serif`; c.fillStyle = colour; c.fillText(str, p.x, p.y);
+  c.restore();
+}
+const atlas = buildAtlas([{ box: [-13, 0, 13, 18], base: '#f1e9d2', draw: (c) => {
+  c.strokeStyle = '#c9bd98'; c.lineWidth = 0.05;
+  for (let y = 2; y < 5.6; y += 0.8) { c.beginPath(); c.moveTo(1.8, y); c.lineTo(4.8, y); c.stroke(); }
+  text(c, 'card, light and shade', 1.8, 0.6, 0.7, '#6c6247');
+} }], small ? 1024 : 2048, small ? 20 : 38);
+
+const mesh = new CardMesh();
+const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+const part = (frames, outline, z0, z1, colour, extra = {}) => mesh.addPart('all', { frame: frames[0].id, frameB: frames[1] && frames[1].id, outline, z0, z1, front: hex(colour), back: hex('#f6f2e8'), ...extra });
+const circle = (cx, cy, r, n = 28) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * 6.2832) * r, cy + Math.sin((i / n) * 6.2832) * r]);
+part([L, R], SHEET, -0.06, 0, '#f1e9d2', { mat: 1, hasBack: true, bend: 0.4, uv: atlas.uv[0] });
+const k = 1 / Math.tan((92 * Math.PI) / 180);   // the foot of a V-fold piece runs along y = |x| / tan(beta)
+const hill = [[-11, 3], [-8, 6.5], [-5, 5.2], [-2.5, 8], [0, 6], [2.5, 8.6], [5.5, 5.4], [8, 7], [11, 3], [11, 11 * k], [0, 0], [-11, 11 * k]];
+const foot = (p, q) => Math.abs(p[1] - Math.abs(p[0]) * k) < 1e-4 && Math.abs(q[1] - Math.abs(q[0]) * k) < 1e-4;
+part([v.A, v.B], hill, -0.0225, 0.0225, '#d6452f', { holes: [circle(-6.2, 3.2, 1.3), circle(6.2, 3.2, 1.3)], screen: (x, y) => 0.5 - y * 0.06, ink: hex('#7a1f18'), foldEdge: foot });
+part([v.A], [[-9.6, 1.2], [-3.4, 0.9], [-3, 2.4], [-6, 4.4], [-9, 2.8]], 0.0225, 0.0675, '#f6c64a');
+part([v.B], circle(3.4, 4.6, 1.5), 0.0225, 0.0675, '#2e8c88');
+part([v.B], circle(3.4, 4.6, 0.7), 0.0675, 0.1125, '#f6f2e8');
+part([L], [[-11, 1], [-5, 1.4], [-6, 5], [-10.4, 4.2]], 0, 0.045, '#4a97bd', { hasBack: false });
+part([R], circle(7.5, 3.6, 2.2), 0, 0.045, '#5d9f52', { hasBack: false });
+part([R], circle(7.5, 3.6, 1.1), 0.045, 0.09, '#f6c64a', { hasBack: false });
+const built = mesh.finish(['all']);
+renderer.setMesh(built);
+renderer.setAtlas(['all'], atlas.canvas);
+const frames = new Float32Array(rig.frames.length * 12);
+
+// --- One frame --------------------------------------------------------------------------------------
+let yaw = 0.35, pitch = 0.5, dist = 62, changed = true, last = '', lens = 0.3, lastMs = null;
+function settings() {
+  const o = { open: +$('open').value, turn: +$('turn').value, high: +$('high').value, size: +$('size').value, room: +$('room').value, bounce: +$('bounce').value, exp: +$('exp').value, lens: +$('lens').value, scale: +$('scale').value };
+  const key = JSON.stringify(o);
+  if (key === last) return;
+  last = key;
+  for (const n in o) $('v-' + n).textContent = o[n] + (n === 'open' || n === 'turn' || n === 'high' || n === 'size' ? '°' : n === 'lens' ? ' cm' : '');
+  open = o.open; lens = o.lens;
+  const a = (o.turn * Math.PI) / 180, e = (o.high * Math.PI) / 180;
+  rigLight.key.dir = [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
+  rigLight.key.size = o.size;
+  rigLight.fill.forEach((f, i) => { f.col = baseFill[i].map((c) => c * o.room); });
+  rigLight.bounce = o.bounce; rigLight.exposure = o.exp;
+  renderer.setScale(o.scale);        // the moving picture can be drawn smaller than the canvas; stills never are
+  renderer.relight();                // takes up the edited rig and starts the still again
+  rig.update(); renderer.setFrames(rig.pack(frames), rig.frames.length);
+  changed = true;
+}
+function view() {
+  const target = [0, 3, 2];
+  const d = dist * Math.max(1, 1.25 / (canvas.width / canvas.height));   // step back on a tall screen
+  const eye = [target[0] + Math.sin(yaw) * Math.cos(pitch) * d, target[1] + Math.sin(pitch) * d, target[2] + Math.cos(yaw) * Math.cos(pitch) * d];
+  return { eye, target, fovY: 0.42, aperture: lens, groups: ['all'], blueprint: 0 };
+}
+function size() {
+  const dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 2);
+  renderer.resize(canvas.clientWidth * dpr, canvas.clientHeight * dpr);
+}
+function report(res) {
+  const live = renderer.info.live;
+  $('report').textContent = [
+    `${built.stats.parts} parts, ${built.stats.triangles} triangles, ${rig.frames.length} frames`,
+    `canvas ${canvas.width} × ${canvas.height}; moving picture ${live ? live[0] + ' × ' + live[1] + ', ' + live[2] + '× multisampling' : ''}`,
+    res.samples ? `still: ${res.samples} of ${renderer.quality.samples} frames added up${res.done ? ' (finished: drawing has stopped)' : ''}` : 'moving: one frame at a time',
+    renderer.info.hdr ? 'frames are added up in 16-bit float' : 'no float targets here: frames are added up in 8 bits',
+    lastMs === null ? '' : `a moving frame took ${lastMs.toFixed(1)} ms (mean of 20, drawn back to back)`,
+  ].filter(Boolean).join('\n');
+}
+function frame() {
+  size();
+  settings();
+  const res = renderer.render({ ...view(), changed, still: !drag && $('on-still').checked });
+  changed = false;
+  report(res);
+  requestAnimationFrame(frame);
+}
+
+// --- Input ------------------------------------------------------------------------------------------
+let drag = null, touched = false;
+canvas.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.006; pitch = Math.max(0.12, Math.min(1.45, pitch + (e.clientY - drag[1]) * 0.005)); drag = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointercancel', () => { drag = null; });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); dist = Math.max(25, Math.min(120, dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+addEventListener('pointerdown', () => { touched = true; });
+// With no input the fold opens and shuts slowly. Not if the reader has asked for less motion.
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+setInterval(() => { if (!touched && !calm) $('open').value = 110 + 62 * Math.sin(performance.now() / 1800); }, 33);
+
+// Frame cost, measured the only honest way: frames drawn back to back, ended by reading one pixel
+// (gl.finish() alone does not wait for the GPU in every browser).
+function bench(n = 20) {
+  const gl = renderer.gl, px = new Uint8Array(4), base = view();
+  const once = (i) => renderer.render({ ...base, eye: [base.eye[0] + i * 1e-4, base.eye[1], base.eye[2]], changed: true, still: false });
+  once(0); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const t0 = performance.now();
+  for (let i = 1; i <= n; i++) once(i);
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return (performance.now() - t0) / n;
+}
+$('measure').addEventListener('click', () => { touched = true; lastMs = bench(); });
+requestAnimationFrame(frame);
+
+// For checking from the console. shot() finishes a still (or draws one moving frame) and returns the
+// picture in the same task, which is the only time a WebGL canvas can be read back.
+window.__demo = {
+  renderer, rig, bench,
+  hold() { touched = true; },
+  shot({ moving = false } = {}) {
+    size(); settings();
+    if (moving) { for (let i = 0; i < 4; i++) renderer.render({ ...view(), changed: true, still: false }); return canvas.toDataURL('image/png'); }
+    renderer.restart();
+    let r, n = 0;
+    do { r = renderer.render({ ...view(), changed: false, still: true, instant: true }); } while (!r.done && n++ < 400);
+    return canvas.toDataURL('image/png');
+  },
+  camera(y, p, d) { yaw = y; pitch = p; dist = d; },
+};
+</script>
+</body>
+</html>
