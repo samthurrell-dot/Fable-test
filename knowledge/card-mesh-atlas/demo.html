@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card mesher and print atlas: cut edges, pressed rims and bent folds</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #e9e5da; color: #23261f; font: 15px/1.4 Georgia, 'Times New Roman', serif; }
+  body { display: grid; grid-template-columns: 1fr 310px; }
+  #c { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; min-height: 0; }
+  aside { padding: 16px 18px; overflow: auto; border-left: 1px solid #d9d4c6; background: #fbfaf5; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 16px; margin: 18px 0 4px; font-weight: 600; }
+  p { margin: 0 0 10px; color: #5d6156; }
+  label { display: block; margin: 9px 0 0; }
+  label span { float: right; font-variant-numeric: tabular-nums; color: #5d6156; }
+  input[type=range], select { width: 100%; margin: 2px 0 0; min-height: 28px; font: inherit; }
+  fieldset { border: 0; padding: 0; margin: 10px 0 0; }
+  fieldset label { display: inline-block; margin: 4px 10px 0 0; min-height: 28px; }
+  pre { font: 12px/1.5 ui-monospace, Consolas, monospace; background: #f0ece0; padding: 10px; border-radius: 6px; white-space: pre-wrap; margin: 14px 0 0; }
+  .key i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+  #atlas canvas { width: 100%; height: auto; display: block; border: 1px solid #d9d4c6; }
+  @media (max-width: 720px) {
+    html, body { height: auto; }
+    body { display: block; }
+    #c { height: 56vh; }
+    aside { border-left: 0; border-top: 1px solid #d9d4c6; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Pieces of cut and folded card on a folded sheet"></canvas>
+<aside>
+  <h1>Card mesher and print atlas</h1>
+  <p>Flat outlines become card: two faces, a wall round the cut edge, a pale pressed rim, and a bent strip at each fold. Print comes from one packed canvas. Drag to look round.</p>
+  <label>Look at
+    <select id="look">
+      <option value="whole">the whole sheet</option>
+      <option value="foot">the foot of the standing piece</option>
+      <option value="crease">the bent fold</option>
+      <option value="hole">a cut hole and layers</option>
+    </select>
+  </label>
+  <label>Show
+    <select id="show">
+      <option value="card">card, as printed</option>
+      <option value="kinds">what each triangle is</option>
+    </select>
+  </label>
+  <p class="key" id="key" hidden><i style="background:#cfc9ba;margin-left:0"></i>face<i style="background:#ee7a1c"></i>rim<i style="background:#2f76c9"></i>wall<i style="background:#2fa35a"></i>bend</p>
+  <label>Sheet folded open <span id="v-open"></span><input id="open" type="range" min="95" max="178" value="150"></label>
+  <label>Card thickness <span id="v-thick"></span><input id="thick" type="range" min="0.02" max="0.3" value="0.045" step="0.005"></label>
+  <label>Bent strip at a fold <span id="v-bend"></span><input id="bend" type="range" min="0.04" max="1" value="0.12" step="0.02"></label>
+  <label>Print density asked for <span id="v-dens"></span><input id="dens" type="range" min="4" max="60" value="38"></label>
+  <fieldset>
+    <label><input type="checkbox" id="on-rim" checked> pressed rim</label>
+    <label><input type="checkbox" id="on-wall" checked> cut walls</label>
+    <label><input type="checkbox" id="on-fold" checked> foot is a fold (<code>foldEdge</code>)</label>
+    <label><input type="checkbox" id="on-screen" checked> halftone tone</label>
+  </fieldset>
+  <pre id="report"></pre>
+  <h2>The print atlas</h2>
+  <div id="atlas"></div>
+</aside>
+<script type="module">
+import { CardMesh, KIND, RIM_WIDTH } from './engine/cardmesh.js';
+import { buildAtlas } from './engine/atlas.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('c');
+const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
+if (!gl) { $('report').textContent = 'WebGL2 is not available in this browser.'; throw new Error('WebGL2 is not available.'); }
+const DEG = Math.PI / 180;
+
+// --- The smallest shader that honours every field of the mesh --------------------------------------
+// The vertex shader is the first half of CARD_VS in the paper renderer: read the frame, place the
+// vertex, and bend the strip at a fold as a curve from one panel to the other.
+const VS = `#version 300 es
+precision highp float;
+layout(location = 0) in vec4 a_pos;      // xyz in the frame; w: -1 rigid, else 0..1 across a crease
+layout(location = 1) in vec3 a_nrm;
+layout(location = 2) in vec2 a_uv;       // into the print atlas; x < 0: no print
+layout(location = 3) in vec2 a_frames;   // frame A, frame B (rows of the frame texture)
+layout(location = 4) in float a_mat;
+layout(location = 5) in vec4 a_col;      // rgb sRGB, a: kind / 255
+layout(location = 6) in vec4 a_ink;      // rgb sRGB, a: halftone density
+uniform highp sampler2D u_frames;
+uniform mat4 u_viewProj;
+out vec3 v_nrm; out vec2 v_local; out vec2 v_uv; out vec3 v_col; out vec4 v_ink; out float v_kind;
+
+void readFrame(float id, out vec3 o, out vec3 x, out vec3 y) {
+  int i = int(id + 0.5);
+  o = texelFetch(u_frames, ivec2(0, i), 0).xyz;
+  x = texelFetch(u_frames, ivec2(1, i), 0).xyz;
+  y = texelFetch(u_frames, ivec2(2, i), 0).xyz;
+}
+
+void main() {
+  vec3 o, x, y;
+  readFrame(a_frames.x, o, x, y);
+  vec3 n = cross(x, y);
+  vec3 wp, wn;
+  if (a_pos.w < 0.0) {
+    wp = o + x * a_pos.x + y * a_pos.y + n * a_pos.z;
+    wn = x * a_nrm.x + y * a_nrm.y + n * a_nrm.z;
+    v_local = a_pos.xy;
+  } else {
+    vec3 o2, x2, y2;
+    readFrame(a_frames.y, o2, x2, y2);
+    vec3 n2 = cross(x2, y2);
+    float u = a_pos.w, h = a_pos.x;
+    vec3 pa = o - x * h + y * a_pos.y;
+    vec3 pc = o + y * a_pos.y;
+    vec3 pb = o2 + x2 * h + y2 * a_pos.y;
+    vec3 c = pa * (1.0 - u) * (1.0 - u) + pc * 2.0 * u * (1.0 - u) + pb * u * u;
+    vec3 nn = normalize(mix(n, n2, u));
+    wp = c + nn * a_pos.z;
+    wn = nn * a_nrm.z + y * a_nrm.y;
+    v_local = vec2((u - 0.5) * 2.0 * h, a_pos.y);
+  }
+  v_nrm = wn; v_uv = a_uv;
+  v_col = pow(a_col.rgb, vec3(2.2));
+  v_ink = vec4(pow(a_ink.rgb, vec3(2.2)), a_ink.a);
+  v_kind = a_col.a * 255.0;
+  gl_Position = u_viewProj * vec4(wp, 1.0);
+}`;
+// Plain light, no shadows: enough to see the geometry. The paper renderer card does the real thing.
+const FS = `#version 300 es
+precision highp float;
+in vec3 v_nrm; in vec2 v_local; in vec2 v_uv; in vec3 v_col; in vec4 v_ink; in float v_kind;
+uniform sampler2D u_atlas;
+uniform float u_kinds;
+out vec4 o_col;
+const vec3 CORE = vec3(0.90, 0.875, 0.82);   // bare card, where ink is cut or cracked away
+void main() {
+  vec3 base = v_col;
+  if (v_uv.x >= 0.0) base = texture(u_atlas, v_uv).rgb;
+  float isRim = clamp(v_kind, 0.0, 1.0) * step(v_kind, 1.5);
+  float isWall = step(1.5, v_kind) * step(v_kind, 2.5);
+  float isBend = step(2.5, v_kind);
+  float dens = v_ink.a;
+  if (dens > 0.004) {
+    // halftone screen: a second ink laid down as dots (13 dots a cm)
+    vec2 q = mat2(0.866, -0.5, 0.5, 0.866) * v_local * 13.0;
+    float fw = max(fwidth(q.x), fwidth(q.y));
+    float r = sqrt(dens * 0.62);
+    float spot = 1.0 - smoothstep(r - fw, r + fw, length(fract(q) - 0.5));
+    float cover = min(1.0, 3.14159 * r * r);
+    base = mix(base, base * v_ink.rgb, mix(spot, cover, smoothstep(0.22, 0.55, fw)));
+  }
+  base = mix(base, CORE, isRim * 0.6 + isBend * 0.12);
+  if (u_kinds > 0.5) base = mix(mix(mix(vec3(0.62, 0.58, 0.50), vec3(0.85, 0.19, 0.01), isRim), vec3(0.03, 0.18, 0.58), isWall), vec3(0.03, 0.36, 0.10), isBend);
+  vec3 n = normalize(v_nrm);
+  float light = 0.34 + 0.72 * max(dot(n, normalize(vec3(-0.5, 0.7, 0.5))), 0.0) + 0.16 * max(dot(n, normalize(vec3(0.7, 0.3, -0.4))), 0.0);
+  o_col = vec4(pow(base * light, vec3(1.0 / 2.2)), 1.0);
+}`;
+function shader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+const U = (n) => gl.getUniformLocation(prog, n);
+
+// --- Frames: three rigid panels, 12 floats each (origin, x axis, y axis, one spare float after each) -
+// Any source of frames will do. The fold engine's rig.pack() writes exactly this layout.
+const H = 18;                               // cm, height of the sheet
+const frames = new Float32Array(3 * 12);
+const setFrame = (i, o, x, y) => { frames.set(o, i * 12); frames.set(x, i * 12 + 4); frames.set(y, i * 12 + 8); };
+function poseFrames(openDeg) {
+  const h = (openDeg * Math.PI) / 360, s = Math.sin(h), c = Math.cos(h);
+  setFrame(0, [0, 0, H / 2], [s, -c, 0], [0, 0, -1]);            // left half of the sheet
+  setFrame(1, [0, 0, H / 2], [s, c, 0], [0, 0, -1]);             // right half
+  // a piece standing on the right half, 10 cm up it, facing the reader: x along the sheet, y off it
+  setFrame(2, [s * 3, c * 3, H / 2 - 10], [s, c, 0], [-c, s, 0]);
+}
+const frameTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, frameTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 3, 3, 0, gl.RGBA, gl.FLOAT, frames);
+for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.NEAREST);
+
+// --- Art: outlines in cm, and print drawn with the same numbers -------------------------------------
+const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+const circle = (cx, cy, r, n = 28) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * 6.2832) * r, cy + Math.sin((i / n) * 6.2832) * r]);
+const boxOf = (shape) => { const xs = shape.map((p) => p[0]), ys = shape.map((p) => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+const path = (c, pts) => { c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); };
+// Text in an atlas drawing: the context is in cm with y up, so step out to pixels to set the type.
+function text(c, str, x, y, size, colour) {
+  const m = c.getTransform(), p = new DOMPoint(x, y).matrixTransform(m), d = Math.hypot(m.a, m.b);
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  c.font = `600 ${size * d}px Georgia, serif`; c.fillStyle = colour; c.fillText(str, p.x, p.y);
+  c.restore();
+}
+const SHEET = [[-13, 0], [13, 0], [13, H], [-13, H]];
+const HILL = [[-9, 1.2], [-6, 4.6], [-3.4, 3.2], [0, 6.4], [3, 3.6], [6.2, 5], [9, 1.2]];
+const HOUSE = [[0, 0], [9, 0], [9, 4.2], [7.4, 4.2], [7.4, 6], [6.4, 6], [6.4, 4.9], [4.5, 7], [0, 4.2]];
+const WINDOW = [[1.4, 1.6], [3, 1.6], [3, 3.2], [1.4, 3.2]];
+const TAB = [[0.4, 0], [8.6, 0], [8.1, 0.85], [0.9, 0.85]];     // on the standing piece's frame the foot is y = 0
+
+const prints = [
+  { box: boxOf(SHEET), base: '#e9dfc0', draw: (c) => {
+    c.fillStyle = '#7fb6c9'; path(c, [[-0.9, 0], [0.9, 0], [1.3, 6], [0.7, 12], [1.1, H], [-1.1, H], [-0.6, 12], [-1.2, 6]]); c.fill();
+    c.strokeStyle = '#b9ad84'; c.lineWidth = 0.06;
+    for (let y = 1; y < H; y += 1) { c.beginPath(); c.moveTo(-12.4, y); c.lineTo(-10.8, y); c.stroke(); }
+    text(c, 'cut, fold, glue', -9.6, 15.8, 0.9, '#5a5136');
+  } },
+  { box: boxOf(HOUSE), base: '#d6452f', draw: (c) => {
+    c.fillStyle = '#7a1f18'; path(c, [[0, 4.2], [4.5, 7], [6.4, 4.9], [6.4, 4.2]]); c.fill();
+    c.fillStyle = '#f6c64a'; c.fillRect(5.2, 1.4, 1.5, 1.5); c.fillRect(7.2, 1.4, 1.2, 1.5);
+    c.fillStyle = '#3a2a22'; c.fillRect(3.5, 0, 1.2, 2.4);
+    c.strokeStyle = '#f6f2e8'; c.lineWidth = 0.12; c.strokeRect(1.4, 1.6, 1.6, 1.6);
+  } },
+];
+
+// --- Mesh and atlas, rebuilt when a slider changes --------------------------------------------------
+let ranges = null, vao = null, atlasTex = null, stats = '';
+function rebuild(o) {
+  const t0 = performance.now();
+  const atlas = buildAtlas(prints, 1024, o.dens);
+  const t = o.thick;
+  const mesh = new CardMesh();
+  const part = (frame, frameB, outline, z0, z1, colour, extra = {}) => mesh.addPart('all', {
+    frame, frameB, outline, z0, z1, front: hex(colour), back: hex('#f6f2e8'), edge: hex('#f6f3ec'), hasWalls: o.wall, hasRim: o.rim, ...extra,
+  });
+  // the sheet, across the fold: printed, with tone laid on as a halftone towards its far edge
+  part(0, 1, SHEET, -0.06, 0, '#e9dfc0', { uv: atlas.uv[0], bend: Math.max(o.bend, 0.4), mat: 1, screen: o.screen ? (x, y) => (0.34 * y) / H : null, ink: hex('#6f6238') });
+  // a piece of card lying across the fold, with two holes: cut at the crease, joined by a bent strip
+  part(0, 1, HILL, 0, t, '#2e8c88', { holes: [circle(-5.6, 2.6, 0.8), circle(5.6, 2.6, 0.8)], bend: o.bend, hasBack: false });
+  // layers glued flat on the left half
+  part(0, undefined, circle(-7, 12, 2.6), 0, t, '#f6c64a', { holes: [circle(-7, 12, 1)], hasBack: false });
+  part(0, undefined, circle(-5.4, 13.2, 1.3), t, 2 * t, '#d6452f', { hasBack: false });
+  // the standing piece: printed front, white back, a window cut out. Its foot is a fold into the tab.
+  const foot = (p, q) => Math.abs(p[1]) < 1e-4 && Math.abs(q[1]) < 1e-4;
+  part(2, undefined, HOUSE, -t / 2, t / 2, '#d6452f', { holes: [WINDOW], uv: atlas.uv[1], foldEdge: o.fold ? foot : undefined });
+  // its glue tab, pressed flat on the sheet behind it (frame 1). Drawn in the sheet's own coordinates.
+  const tab = TAB.map(([x, y]) => [3 + x, 10 + y]);
+  part(1, undefined, tab, 0, 0.02, '#f6f2e8', { mat: 2, hasBack: false, foldEdge: o.fold ? (p, q) => Math.abs(p[1] - 10) < 1e-4 && Math.abs(q[1] - 10) < 1e-4 : undefined });
+  const built = mesh.finish(['all']);
+  const ms = performance.now() - t0;
+
+  // upload: one interleaved float buffer (48 bytes a vertex), one byte buffer (8), one index buffer
+  if (vao) gl.deleteVertexArray(vao);
+  vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, built.f32, gl.STATIC_DRAW);
+  [[0, 4, 0], [1, 3, 16], [2, 2, 28], [3, 2, 36], [4, 1, 44]].forEach(([loc, size, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 48, off); });
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, built.u8, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(5); gl.vertexAttribPointer(5, 4, gl.UNSIGNED_BYTE, true, 8, 0);
+  gl.enableVertexAttribArray(6); gl.vertexAttribPointer(6, 4, gl.UNSIGNED_BYTE, true, 8, 4);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, built.idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  ranges = built.ranges;
+
+  if (atlasTex) gl.deleteTexture(atlasTex);
+  atlasTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.SRGB8_ALPHA8, gl.RGBA, gl.UNSIGNED_BYTE, atlas.canvas);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  $('atlas').replaceChildren(atlas.canvas);
+
+  const count = (kind) => { let n = 0; for (let i = 3; i < built.u8.length; i += 8) if (built.u8[i] === kind) n++; return n; };
+  stats = [
+    `${built.stats.parts} parts, ${built.stats.triangles} triangles, ${built.vertices} vertices`,
+    `vertices by kind: face ${count(KIND.FACE)}, rim ${count(KIND.RIM)}, wall ${count(KIND.WALL)}, bend ${count(KIND.BEND)}`,
+    `${((built.f32.byteLength + built.u8.byteLength + built.idx.byteLength) / 1024).toFixed(1)} KB of mesh, frames ${frames.byteLength} bytes`,
+    `atlas 1024 px at ${atlas.density.toFixed(1)} px a cm (asked ${o.dens})`,
+    `mesh and atlas built in ${ms.toFixed(1)} ms`,
+    `rim is ${(RIM_WIDTH * 10).toFixed(2)} mm wide: look at the foot or a hole to see it`,
+  ].join('\n');
+  return { stats: built.stats, vertices: built.vertices, density: atlas.density, ms };
+}
+
+// --- Camera -----------------------------------------------------------------------------------------
+// Each look: the frame it follows (null = the table), a point on that frame in cm, distance, yaw, pitch.
+const LOOKS = { whole: [null, [0, 2.5, 1], 52, 0.3, 0.62], foot: [2, [4.1, 0.9, 0], 12, 0.5, 0.26], crease: [0, [0, 3.8, 0], 11, 0.5, 0.6], hole: [0, [-6.2, 12.4, 0], 13, -0.4, 0.7] };
+let look = LOOKS.whole, dist = 52, yaw = 0.3, pitch = 0.62;
+const setLook = (name) => { look = LOOKS[name]; [, , dist, yaw, pitch] = look; };
+function viewProj(aspect) {
+  let target = look[1];
+  if (look[0] !== null) {
+    const k = look[0] * 12, [a, b] = look[1];
+    target = [0, 1, 2].map((i) => frames[k + i] + frames[k + 4 + i] * a + frames[k + 8 + i] * b);
+  }
+  const d = dist * Math.max(1, 1.35 / aspect);   // step back on a tall screen so the width still fits
+  const eye = [target[0] + Math.sin(yaw) * Math.cos(pitch) * d, target[1] + Math.sin(pitch) * d, target[2] + Math.cos(yaw) * Math.cos(pitch) * d];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(...a); return [a[0] / l, a[1] / l, a[2] / l]; };
+  const f = norm(sub(target, eye)), r = norm(cross(f, [0, 1, 0])), u = cross(r, f);
+  const near = Math.max(0.2, d * 0.05), far = d * 4 + 60, k = 1 / Math.tan(0.42 / 2);
+  // column-major: perspective times look-at, written out
+  const V = [r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, -dot(r, eye), -dot(u, eye), dot(f, eye), 1];
+  const P = [k / aspect, 0, 0, 0, 0, k, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, (2 * far * near) / (near - far), 0];
+  const M = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let rr = 0; rr < 4; rr++) M[c * 4 + rr] = P[rr] * V[c * 4] + P[4 + rr] * V[c * 4 + 1] + P[8 + rr] * V[c * 4 + 2] + P[12 + rr] * V[c * 4 + 3];
+  return M;
+}
+
+// --- Draw -------------------------------------------------------------------------------------------
+let lastKey = '', last = null;
+function settings() {
+  const o = { open: +$('open').value, thick: +$('thick').value, bend: +$('bend').value, dens: +$('dens').value, rim: $('on-rim').checked, wall: $('on-wall').checked, fold: $('on-fold').checked, screen: $('on-screen').checked };
+  $('v-open').textContent = Math.round(o.open) + '°';
+  $('v-thick').textContent = (o.thick * 10).toFixed(2) + ' mm';
+  $('v-bend').textContent = (o.bend * 10).toFixed(1) + ' mm';
+  $('v-dens').textContent = o.dens + ' px a cm';
+  return o;
+}
+function draw() {
+  const o = settings();
+  const key = JSON.stringify({ ...o, open: 0 });
+  if (key !== lastKey) { last = rebuild(o); lastKey = key; }
+  poseFrames(o.open);
+  gl.bindTexture(gl.TEXTURE_2D, frameTex);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 3, 3, gl.RGBA, gl.FLOAT, frames);
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.round(canvas.clientWidth * dpr)), h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0.82, 0.79, 0.73, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U('u_viewProj'), false, viewProj(w / h));
+  gl.uniform1f(U('u_kinds'), $('show').value === 'kinds' ? 1 : 0);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, frameTex); gl.uniform1i(U('u_frames'), 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, atlasTex); gl.uniform1i(U('u_atlas'), 1);
+  gl.bindVertexArray(vao);
+  // solid triangles first, then the rims (they lie 0.02 mm above their faces): one call covers both
+  const r = ranges.all;
+  gl.drawElements(gl.TRIANGLES, r.solid[1] + r.rim[1], gl.UNSIGNED_INT, r.solid[0] * 4);
+  $('key').hidden = $('show').value !== 'kinds';
+  $('report').textContent = stats;
+  return last;
+}
+
+// --- Input ------------------------------------------------------------------------------------------
+let drag = null, touched = false, dirty = true;
+const touch = () => { touched = true; dirty = true; };
+canvas.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; touch(); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.006; pitch = Math.max(0.06, Math.min(1.5, pitch + (e.clientY - drag[1]) * 0.005)); drag = [e.clientX, e.clientY]; dirty = true; });
+canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointercancel', () => { drag = null; });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); dist = Math.max(3, Math.min(120, dist * Math.exp(e.deltaY * 0.001))); touch(); }, { passive: false });
+for (const el of document.querySelectorAll('input, select')) el.addEventListener('input', touch);
+$('look').addEventListener('input', () => setLook($('look').value));
+addEventListener('resize', () => { dirty = true; });
+// With no input the sheet opens and shuts slowly. Not if the reader has asked for less motion.
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop(now) {
+  if (!touched && !calm) { $('open').value = 138 + 38 * Math.sin(now / 1700); dirty = true; }
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(loop);
+}
+draw(); requestAnimationFrame(loop);
+// For checking from the console. shot() draws and returns the picture in the same task, which is
+// the only time a WebGL canvas can be read back.
+window.__demo = {
+  gl, draw, hold() { touched = true; },
+  look(name) { $('look').value = name; setLook(name); },
+  shot() { draw(); return canvas.toDataURL('image/png'); },
+};
+</script>
+</body>
+</html>
