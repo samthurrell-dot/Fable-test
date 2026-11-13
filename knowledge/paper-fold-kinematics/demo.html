@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper-fold kinematics: mechanisms and spine solved from the page angle</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #f4f1e9; color: #23261f; font: 15px/1.4 Georgia, 'Times New Roman', serif; }
+  body { display: grid; grid-template-columns: 1fr 310px; }
+  main { display: grid; grid-template-rows: 3fr 2fr; min-height: 0; }
+  canvas { width: 100%; height: 100%; display: block; min-height: 0; }
+  #c { touch-action: none; cursor: grab; }
+  #s { border-top: 1px solid #d9d4c6; }
+  aside { padding: 16px 18px; overflow: auto; border-left: 1px solid #d9d4c6; background: #fbfaf5; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 16px; margin: 20px 0 2px; font-weight: 600; }
+  p { margin: 0 0 10px; color: #5d6156; }
+  label { display: block; margin: 9px 0 0; }
+  label span { float: right; font-variant-numeric: tabular-nums; color: #5d6156; }
+  input[type=range] { width: 100%; margin: 2px 0 0; min-height: 28px; }
+  fieldset { border: 0; padding: 0; margin: 10px 0 0; }
+  fieldset label { display: inline-block; margin: 4px 10px 0 0; min-height: 28px; }
+  pre { font: 12px/1.5 ui-monospace, Consolas, monospace; background: #f0ece0; padding: 10px; border-radius: 6px; white-space: pre-wrap; margin: 14px 0 0; }
+  @media (max-width: 720px) {
+    html, body { height: auto; }
+    body { display: block; }
+    main { display: block; }
+    #c { height: 48vh; } #s { height: 30vh; }
+    aside { border-left: 0; border-top: 1px solid #d9d4c6; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="c" aria-label="Paper mechanisms on two pages"></canvas>
+  <canvas id="s" aria-label="A book seen end on, its leaves turning"></canvas>
+</main>
+<aside>
+  <h1>Paper-fold kinematics</h1>
+  <p>Every panel is rigid. Each mechanism is solved from the angle between the two pages, with no simulation. Drag the top picture to look round.</p>
+  <label>Pages open <span id="v-open"></span><input id="open" type="range" min="3" max="180" value="150" step="0.5"></label>
+  <fieldset>
+    <label><input type="checkbox" id="on-v" checked> V-fold</label>
+    <label><input type="checkbox" id="on-l" checked> layer</label>
+    <label><input type="checkbox" id="on-t" checked> tent</label>
+    <label><input type="checkbox" id="on-f"> floating layer</label>
+    <label><input type="checkbox" id="on-p" checked> wheel and tab</label>
+  </fieldset>
+  <label>V-fold: glue angle alpha <span id="v-alpha"></span><input id="alpha" type="range" min="40" max="140" value="110"></label>
+  <label>V-fold: card angle beta <span id="v-beta"></span><input id="beta" type="range" min="40" max="140" value="93"></label>
+  <label>Layer: distance in front, a <span id="v-la"></span><input id="la" type="range" min="1" max="6" value="3" step="0.1"></label>
+  <label>Layer: strut height, b <span id="v-lb"></span><input id="lb" type="range" min="1" max="6" value="2.5" step="0.1"></label>
+  <label>Tent: glue distance, a <span id="v-ta"></span><input id="ta" type="range" min="2" max="8" value="5" step="0.1"></label>
+  <label>Tent: panel width, p <span id="v-tp"></span><input id="tp" type="range" min="2" max="10" value="6.5" step="0.1"></label>
+  <label>Floating layer: height <span id="v-fh"></span><input id="fh" type="range" min="0.5" max="5" value="2.5" step="0.1"></label>
+  <label>Wheel: turn <span id="v-wheel"></span><input id="wheel" type="range" min="0" max="360" value="40"></label>
+  <label>Tab: pull <span id="v-tab"></span><input id="tab" type="range" min="0" max="4" value="1" step="0.1"></label>
+  <pre id="report"></pre>
+
+  <h2>Spine</h2>
+  <p>The book seen end on. Each leaf is hinged to the next along the edge of a printed face, and the stacks on each side hang from the open hinge and rest on the table. Heights are drawn four times life size.</p>
+  <label>Turn <span id="v-turn"></span><input id="turn" type="range" min="0" max="5" value="1" step="0.005"></label>
+  <label>Leaf thickness <span id="v-thick"></span><input id="thick" type="range" min="0.04" max="0.5" value="0.12" step="0.01"></label>
+  <label>Fan between resting leaves <span id="v-fan"></span><input id="fan" type="range" min="0.005" max="0.06" value="0.026" step="0.001"></label>
+  <pre id="report-s"></pre>
+</aside>
+<script type="module">
+import { Rig, hingeOfFold, verify, vec } from './engine/fold.js';
+import { createSpine } from './engine/spine.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('c'), ctx = canvas.getContext('2d');
+const W = 22, H = 30;              // page size, cm
+let yaw = -0.5, pitch = 0.62;
+const DEG = Math.PI / 180;
+const UNITS = { open: '°', alpha: '°', beta: '°', wheel: '°' };
+
+// --- Mechanisms -----------------------------------------------------------------------------------
+// Builds the rig afresh for the current sliders. Everything that moves reads `pose`, so the same rig
+// can be swept through its whole motion afterwards. Returns the faces to draw and the checks to run.
+function build(o) {
+  const pose = { open: o.open, wheel: o.wheel * DEG, tab: o.tab };
+  const rig = new Rig();
+  const L = rig.frame(), R = rig.frame();
+  // two pages hinged on the z axis, opening evenly
+  rig.step(() => {
+    const half = (pose.open * Math.PI) / 360;
+    L.set([0, 0, H / 2], [Math.sin(half), -Math.cos(half), 0], [0, 0, -1]);
+    R.set([0, 0, H / 2], [Math.sin(half), Math.cos(half), 0], [0, 0, -1]);
+  });
+  const page = { A: L, B: R };
+  // faces: [frame, outline, colour, host] - a host is the face a flat part lies on (drawn just after it)
+  const faces = [], lines = [], notes = [], seams = [], folds = [];
+  const quad = (frame, pts, colour, host) => { const f = { frame, pts, colour, host }; faces.push(f); return f; };
+  // A seam is one spot of glue seen from two panels. Record where it is on the host now (in the
+  // host's plane) and it must stay there at every pose.
+  const glue = (panel, p, host) => { const l = host.local(panel.point(...p)); seams.push({ a: panel, pa: p, b: host, pb: [l[0], l[1], 0] }); };
+  const pageL = quad(L, [[-W, 0], [0, 0], [0, H], [-W, H]], '#cfe0b0');
+  const pageR = quad(R, [[0, 0], [W, 0], [W, H], [0, H]], '#cfe0b0');
+
+  if (o.v) {
+    const v = rig.vfold(hingeOfFold(page, 17), { alpha: o.alpha, beta: o.beta });
+    folds.push(v);
+    const b = o.beta * DEG, len = 15, tall = 9;
+    quad(v.A, [[0, 0], [-Math.sin(b) * len, Math.cos(b) * len], [-Math.sin(b) * len, Math.cos(b) * len + tall * 0.6], [0, tall]], '#56708f');
+    quad(v.B, [[0, 0], [Math.sin(b) * len, Math.cos(b) * len], [Math.sin(b) * len, Math.cos(b) * len + tall * 0.6], [0, tall]], '#6c86a6');
+    lines.push([v.A, [0, 0, 0], [0, tall, 0]]);
+    glue(v.A, [-Math.sin(b) * 10, Math.cos(b) * 10, 0], L);
+    glue(v.B, [Math.sin(b) * 10, Math.cos(b) * 10, 0], R);
+    notes.push(() => 'V-fold ' + (v.ok ? 'solved' : 'PAST ITS REACH (no card of this shape can make the fold)'));
+    if (o.l) {
+      // a flat layer held upright in front of the right-hand panel by a parallelogram
+      const l = rig.parallel(v.glueHinge('B', { r0: 8 }), { a: o.la, b: o.lb, p: o.lb, q: o.la });
+      folds.push(l);
+      quad(l.stand, [[-3.5, 0], [3.5, 0], [3.5, o.lb + 2.5], [-3.5, o.lb + 2.5]], '#d6452f');
+      quad(l.strut, [[-0.8, 0], [0.8, 0], [0.8, o.la], [-0.8, o.la]], '#f6f2e8');
+      glue(l.stand, [0, 0, 0], R);
+      glue(l.strut, [0, o.la, 0], v.B);
+      notes.push(() => 'layer stays parallel to its backdrop: ' + (1 - Math.abs(vec.dot(l.stand.n, v.B.n))).toExponential(1));
+    }
+  }
+  if (o.t) {
+    const t = rig.parallel(hingeOfFold(page, 6), { a: o.ta, b: o.ta, p: o.tp, q: o.tp });
+    folds.push(t);
+    quad(t.A, [[-o.tp, -2.2], [0, -2.2], [0, 2.2], [-o.tp, 2.2]], '#e2b055');
+    quad(t.B, [[0, -2.2], [o.tp, -2.2], [o.tp, 2.2], [0, 2.2]], '#eec06a');
+    glue(t.A, [-o.tp, 0, 0], L);
+    glue(t.B, [o.tp, 0, 0], R);
+    notes.push(() => 'tent ' + (t.ok ? 'solved' : 'PAST ITS REACH (panels shorter than the gap)'));
+  }
+  if (o.f) {
+    const f = rig.float(page, { height: o.fh });
+    quad(f.A, [[-8, 20], [0, 20], [0, 28], [-8, 28]], '#67b5b1');
+    quad(f.B, [[0, 20], [8, 20], [8, 28], [0, 28]], '#7cc3c0');
+    const fin = f.fin.local(L.point(0, 20, 0))[0], fin2 = f.fin.local(L.point(0, 28, 0))[0];
+    quad(f.fin, [[fin, 0], [fin2, 0], [fin2, o.fh], [fin, o.fh]], '#f6f2e8');
+    for (const side of ['A', 'B']) {
+      const leg = f.leg(side, 8), host = side === 'A' ? L : R, sx = side === 'A' ? -8 : 8;
+      const a = leg.local(host.point(sx, 20, 0))[0], c = leg.local(host.point(sx, 28, 0))[0];
+      quad(leg, [[a, 0], [c, 0], [c, o.fh], [a, o.fh]], '#f6f2e8');
+      glue(leg, [a, o.fh, 0], f[side]);     // top of the leg under the platform
+    }
+  }
+  if (o.p) {
+    // planar parts: a wheel that turns on a rivet and a tab that slides, both in the plane of a page
+    const wheel = rig.planar(R, () => ({ x: 16, y: 6, rot: pose.wheel, z: 0.05 }));
+    const disc = Array.from({ length: 20 }, (_, i) => [Math.cos((i / 20) * 6.2832) * 3, Math.sin((i / 20) * 6.2832) * 3]);
+    quad(wheel, disc, '#8d6cab', pageR);
+    quad(wheel, [[0.4, 0.5], [2.6, 0], [0.4, -0.5]], '#f6f2e8', pageR);
+    const tab = rig.planar(L, () => ({ x: -16, y: 3 + pose.tab, z: 0.05 }));
+    quad(tab, [[-1, 0], [1, 0], [1, 5.5], [0, 6.4], [-1, 5.5]], '#f6f2e8', pageL);
+    quad(tab, [[-0.6, 0.5], [0.6, 0.5], [0.6, 1.7], [-0.6, 1.7]], '#d6452f', pageL);
+  }
+  const setOpen = (deg) => { pose.open = deg; rig.update(); };
+  return { rig, faces, lines, notes, seams, folds, setOpen };
+}
+
+function settings() {
+  const o = {};
+  for (const k of ['open', 'alpha', 'beta', 'la', 'lb', 'ta', 'tp', 'fh', 'wheel', 'tab']) {
+    o[k] = +$(k).value;
+    $('v-' + k).textContent = o[k] + (UNITS[k] || ' cm');
+  }
+  for (const k of ['v', 'l', 't', 'f', 'p']) o[k] = $('on-' + k).checked;
+  return o;
+}
+
+function draw() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#f4f1e9'; ctx.fillRect(0, 0, w, h);
+  const o = settings();
+  const m = build(o);
+  // The whole motion first, then back to the pose on the slider.
+  const sweep = verify(m.rig, (t) => m.setOpen(3 + 175 * t), m.seams, m.folds, 48);
+  m.setOpen(o.open);
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const scale = Math.min(w, h) / 46;
+  const view = ([x, y, z]) => {
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+    return [w / 2 + x1 * scale, h * 0.62 - y2 * scale, z2];
+  };
+  const light = vec.norm([0.5, 0.8, 0.3]);
+  for (const f of m.faces) { f.s = f.pts.map(([x, y]) => view(f.frame.point(x, y, 0))); f.d = f.s.reduce((t, p) => t + p[2], 0) / f.s.length; }
+  m.faces.forEach((f, i) => { if (f.host) f.d = f.host.d + 1e-4 * (i + 1); });
+  for (const f of m.faces.slice().sort((a, b) => a.d - b.d)) {
+    const k = 0.62 + 0.38 * Math.abs(vec.dot(f.frame.n, light));
+    ctx.beginPath();
+    f.s.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    ctx.closePath();
+    ctx.fillStyle = f.colour; ctx.fill();
+    ctx.fillStyle = `rgba(20, 24, 30, ${1 - k})`; ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+  ctx.setLineDash([6, 5]); ctx.strokeStyle = '#d2372b'; ctx.lineWidth = 1.5;
+  for (const [frame, a, b] of m.lines) { const p = view(frame.point(...a)), q = view(frame.point(...b)); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+  ctx.setLineDash([]);
+  let seamNow = 0;
+  for (const s of m.seams) seamNow = Math.max(seamNow, vec.len(vec.sub(s.a.point(...s.pa), s.b.point(...s.pb))));
+  $('report').textContent = [
+    ...m.notes.map((n) => n()),
+    'worst glue seam gap: ' + seamNow.toExponential(1) + ' cm',
+    'worst panel error (0 = rigid): ' + m.rig.maxError().toExponential(1),
+    '',
+    'Whole motion, 49 poses from 3° to 178°:',
+    '  panel error ' + sweep.rigid.toExponential(1),
+    '  seam gap ' + sweep.seam.toExponential(1) + ' cm',
+    '  ' + (sweep.unsolved ? sweep.unsolved + ' linkage poses PAST REACH' : 'every linkage solved'),
+  ].join('\n');
+  return { sweep, seamNow, rigid: m.rig.maxError(), faces: m.faces.length, frames: m.rig.frames.length };
+}
+
+// --- Spine ----------------------------------------------------------------------------------------
+const sCanvas = $('s'), sctx = sCanvas.getContext('2d');
+const PAGE_W = 25, COVER = 0.24;
+const COLOURS = ['#1f4f5c', '#b7cf72', '#a3c267', '#d8d08c', '#3b878d', '#1f4f5c'];
+
+function drawSpine() {
+  const turn = +$('turn').value, thick = +$('thick').value, fan = +$('fan').value;
+  $('v-turn').textContent = turn.toFixed(2);
+  $('v-thick').textContent = thick.toFixed(2) + ' cm';
+  $('v-fan').textContent = (fan / DEG).toFixed(1) + '°';
+  // six leaves: a cover board at each end, four leaves between, so five spreads
+  const t = [thick / 2 + COVER, thick, thick, thick, thick, thick / 2 + COVER];
+  const spine = createSpine({ thickness: t, fan, reach: PAGE_W + 0.4 });
+  spine.pose(turn);
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = sCanvas.clientWidth, h = sCanvas.clientHeight;
+  if (sCanvas.width !== Math.round(w * dpr) || sCanvas.height !== Math.round(h * dpr)) { sCanvas.width = Math.round(w * dpr); sCanvas.height = Math.round(h * dpr); }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.fillStyle = '#f4f1e9'; sctx.fillRect(0, 0, w, h);
+  const s = Math.min(w / 58, h / 34), EXAG = 4;   // heights and thickness are drawn larger than life
+  const X = (x) => w / 2 + x * s, Y = (y) => h * 0.86 - y * s * EXAG;
+  sctx.fillStyle = '#7b5a3c'; sctx.fillRect(0, Y(0), w, 6);
+  let lowest = Infinity;
+  for (let j = 0; j < t.length; j++) {
+    const a = spine.phi[j], c = Math.cos(a), sn = Math.sin(a);
+    const p = [spine.px[j], spine.py[j]], q = [p[0] + sn * t[j], p[1] - c * t[j]];
+    const len = j === 0 || j === t.length - 1 ? PAGE_W + 0.4 : PAGE_W;
+    const corners = [p, [p[0] + c * len, p[1] + sn * len], [q[0] + c * len, q[1] + sn * len], q];
+    for (const k of corners) lowest = Math.min(lowest, k[1]);
+    sctx.beginPath();
+    corners.forEach((k, i) => (i ? sctx.lineTo(X(k[0]), Y(k[1])) : sctx.moveTo(X(k[0]), Y(k[1]))));
+    sctx.closePath();
+    sctx.fillStyle = COLOURS[j]; sctx.fill();
+    sctx.strokeStyle = 'rgba(255,255,255,0.9)'; sctx.lineWidth = 1; sctx.stroke();
+    // the hinge to the next leaf is on this leaf's back edge
+    if (j < t.length - 1) { sctx.beginPath(); sctx.arc(X(q[0]), Y(q[1]), 3.2, 0, 7); sctx.fillStyle = '#d2372b'; sctx.fill(); }
+  }
+  const j = Math.min(t.length - 2, Math.floor(turn));
+  const opening = (k) => ((spine.phi[k - 1] - spine.phi[k]) / DEG).toFixed(1) + '°';
+  $('report-s').textContent = [
+    turn % 1 < 1e-6 ? `spread ${turn} lies open: ${turn >= 1 ? opening(turn) : 'the book is shut'}` : `leaf ${j} in the air: spread ${j} at ${j >= 1 ? opening(j) : '0°'}, spread ${j + 1} at ${opening(j + 1)}`,
+    'lowest corner above the table: ' + lowest.toFixed(4) + ' cm',
+  ].join('\n');
+  return { lowest, phi: Array.from(spine.phi) };
+}
+
+// --- Input ----------------------------------------------------------------------------------------
+let drag = null, touchedFold = false, touchedSpine = false;
+const SPINE_IDS = ['turn', 'thick', 'fan'];
+canvas.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; touchedFold = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (!drag) return; yaw += (e.clientX - drag[0]) * 0.006; pitch = Math.max(0.05, Math.min(1.5, pitch + (e.clientY - drag[1]) * 0.005)); drag = [e.clientX, e.clientY]; draw(); });
+canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointercancel', () => { drag = null; });
+for (const el of document.querySelectorAll('input')) {
+  const spine = SPINE_IDS.includes(el.id);
+  el.addEventListener('input', () => { if (spine) { touchedSpine = true; drawSpine(); } else { touchedFold = true; draw(); } });
+}
+addEventListener('resize', () => { draw(); drawSpine(); });
+// With no input, the pages breathe and the leaves turn. Not if the reader has asked for less motion.
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function idle(now) {
+  if (!calm) {
+    if (!touchedFold) { $('open').value = 100 + 78 * Math.sin(now / 1400); draw(); }
+    if (!touchedSpine) { $('turn').value = 2.5 + 2.5 * Math.sin(now / 2600); drawSpine(); }
+  }
+  requestAnimationFrame(idle);
+}
+draw(); drawSpine(); requestAnimationFrame(idle);
+// For checking from the console: stop the idle motion, redraw and return the numbers.
+window.__demo = { draw, drawSpine, hold() { touchedFold = touchedSpine = true; } };
+</script>
+</body>
+</html>

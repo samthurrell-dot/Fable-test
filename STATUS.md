@@ -23,7 +23,7 @@ Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
 - Check 13 on a real phone and a stronger GPU. Sam watched the round 5 squirrel on 12 Nov 2026 and said it looks right: leave its movement alone unless he asks. He likes the small bird chirps; the big-bird calls (cuckoo, pigeon, crow, geese, woodpecker) sounded fake to him and were removed on 12 Nov 2026: do not add large-bird sounds back. He has not yet said anything about the sharp 30 fps mode.
 - Then 06 lightbulb from `prompts/ready/` (15 is built).
-- Harvest 15: `engine/fold.js` with `engine/spine.js` first, then the paper renderer.
+- Harvest 15 (in progress, 13 Nov 2026; cards are listed in `knowledge/INDEX.md`): 1 `knowledge/paper-fold-kinematics` done (fold.js with spine.js, demo, card with the paper-checks recipe). Still to do, in this order: 2 card mesher and print atlas (`engine/cardmesh.js`, `engine/atlas.js`), 3 paper renderer (`engine/paperlight.js`, `engine/papershaders.js`, `glkit.js`, `mat4.js`). Then step 6 of `skills/build-harvest` (try the cards on a cheaper model).
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
 ## Build log
