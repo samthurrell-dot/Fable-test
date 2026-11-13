@@ -52,7 +52,7 @@ export function buildSpread1(b) {
     for (let y = 18.3; y >= -0.2; y -= 0.5) bank.push([river(y) + 0.12 * Math.sin(y * 1.9), y]);
     const riverShape = [...bank, ...bank.map(([x, y]) => [-x + 0.2 * Math.sin(y * 1.3), y]).reverse()];
     fill(c, riverShape, C.water);
-    for (let y = 1; y < 18; y += 1.7) stroke(c, smooth([[-river(y) * 0.5, y], [0, y - 0.35], [river(y) * 0.5, y + 0.05]], 5), C.foam, 0.07);
+    for (let y = 1.2, i = 0; y < 17; y += 1.3 + (i % 3) * 0.5, i++) { const o = ((i * 7) % 5 - 2) * 0.16 * river(y); stroke(c, smooth([[o - river(y) * 0.34, y], [o, y - 0.26], [o + river(y) * 0.34, y + 0.04]], 5), C.foam, 0.07); }
     // the side stream that the channel sits in, and where it joins
     const side = smooth([[6.3, 13.4], [6.2, 11], [6.25, 3.6], [5.4, 1.8], [2.6, 0.6], [1.2, -0.2]], 8);
     stroke(c, side, C.water, 2.2);
@@ -92,7 +92,7 @@ export function buildSpread1(b) {
   const peaks = [[-21, 2.4], [-18.2, 6.6], [-15.6, 5.1], [-12, 10.6], [-9.6, 8.5], [-7, 12.3], [-4.2, 7.4], [-2, 5.9], [0, 5.0], [2.4, 6.3], [5, 9.9], [7.4, 8.1], [10.5, 12.9], [13.4, 8.4], [16, 9.7], [19, 5], [21, 2.4]];
   b.part({
     on: far, shape: standing(peaks, b.base(far)), color: C.slate,
-    screen: (x, y) => 0.5 - y * 0.05, ink: C.navy,
+    screen: (x, y) => 0.26 - y * 0.02, ink: C.navy,
     print: (c) => {
       // bands of rock on the sunlit sides
       for (const [px, py, w] of [[-12, 10.6, 3.2], [-7, 12.3, 3.6], [5, 9.9, 3], [10.5, 12.9, 3.8], [16, 9.7, 2.6], [-18.2, 6.6, 2.2]]) {

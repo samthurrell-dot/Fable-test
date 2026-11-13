@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper renderer: card, soft light and bounced colour</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #2a1d14; color: #23261f; font: 15px/1.4 Georgia, 'Times New Roman', serif; }
+  body { display: grid; grid-template-columns: 1fr 300px; }
+  canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  aside { padding: 16px 18px; overflow: auto; background: #fbfaf5; }
+  h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  p { margin: 0 0 12px; color: #5d6156; }
+  label { display: block; margin: 9px 0 0; }
+  label span { float: right; font-variant-numeric: tabular-nums; color: #5d6156; }
+  input[type=range] { width: 100%; margin: 2px 0 0; min-height: 28px; }
+  pre { font: 12px/1.5 ui-monospace, Consolas, monospace; background: #f0ece0; padding: 10px; border-radius: 6px; white-space: pre-wrap; margin: 14px 0 0; }
+  @media (max-width: 720px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh auto; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A folded piece of coloured card on a wooden table"></canvas>
+<aside>
+  <h1>Paper renderer</h1>
+  <p>Card from <code>cardmesh.js</code>, light from <code>paperlight.js</code>. While anything moves it draws one frame at a time; when it rests it adds frames up into true soft shadow. Drag to look round.</p>
+  <label>Fold open <span id="v-open"></span><input id="open" type="range" min="20" max="176" value="150"></label>
+  <label>Window: round the table <span id="v-turn"></span><input id="turn" type="range" min="-180" max="180" value="-131"></label>
+  <label>Window: height <span id="v-high"></span><input id="high" type="range" min="10" max="80" value="37"></label>
+  <label>Window: size <span id="v-size"></span><input id="size" type="range" min="0.5" max="14" value="4.5" step="0.5"></label>
+  <label>Room light <span id="v-room"></span><input id="room" type="range" min="0" max="2" value="1" step="0.05"></label>
+  <label>Colour bounced between layers <span id="v-bounce"></span><input id="bounce" type="range" min="0" max="1" value="0.42" step="0.02"></label>
+  <label>Exposure <span id="v-exp"></span><input id="exp" type="range" min="0.15" max="0.9" value="0.42" step="0.01"></label>
+  <pre id="report"></pre>
+</aside>
+<script type="module">
+import { Rig, hingeOfFold } from '../engine/fold.js';
+import { CardMesh } from '../engine/cardmesh.js';
+import { createPaperRenderer, QUALITY, LIGHT_RIG } from '../engine/paperlight.js';
+
+const $ = (id) => document.getElementById(id);
+const canvas = $('c');
+const small = Math.min(innerWidth, innerHeight) < 700;
+const rigLight = JSON.parse(JSON.stringify(LIGHT_RIG));
+rigLight.centre = [0, 4, 0]; rigLight.radius = 30;
+const baseFill = rigLight.fill.map((f) => f.col.slice());
+const renderer = createPaperRenderer(canvas, small ? QUALITY.low : QUALITY.high, rigLight);
+
+// A page that folds, a V-fold standing on it, and a few cut pieces glued on in layers.
+const rig = new Rig();
+const L = rig.frame(), R = rig.frame();
+let open = 150;
+rig.step(() => {
+  const h = (open * Math.PI) / 360;
+  L.set([0, 0.2, 9], [Math.sin(h), -Math.cos(h), 0], [0, 0, -1]);
+  R.set([0, 0.2, 9], [Math.sin(h), Math.cos(h), 0], [0, 0, -1]);
+});
+const page = { A: L, B: R };
+const v = rig.vfold(hingeOfFold(page, 12), { alpha: 108, beta: 92 });
+const mesh = new CardMesh();
+const hex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+const part = (frames, outline, z0, z1, colour, extra = {}) => mesh.addPart('all', { frame: frames[0].id, frameB: frames[1] && frames[1].id, outline, z0, z1, front: hex(colour), back: hex('#f6f2e8'), ...extra });
+const circle = (cx, cy, r, n = 28) => Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * 6.2832) * r, cy + Math.sin((i / n) * 6.2832) * r]);
+part([L, R], [[-13, 0], [13, 0], [13, 18], [-13, 18]], -0.06, 0, '#f1e9d2', { mat: 1, hasBack: true, bend: 0.4 });
+const k = 1 / Math.tan((92 * Math.PI) / 180);
+const hill = [[-11, 3], [-8, 6.5], [-5, 5.2], [-2.5, 8], [0, 6], [2.5, 8.6], [5.5, 5.4], [8, 7], [11, 3], [11, 11 * k], [0, 0], [-11, 11 * k]];
+part([v.A, v.B], hill, -0.0225, 0.0225, '#d6452f', { holes: [circle(-6.2, 3.2, 1.3), circle(6.2, 3.2, 1.3)], screen: (x, y) => 0.5 - y * 0.06, ink: hex('#7a1f18') });
+part([v.A], [[-9.6, 1.2], [-3.4, 0.9], [-3, 2.4], [-6, 4.4], [-9, 2.8]], 0.0225, 0.0675, '#f6c64a');
+part([v.B], circle(3.4, 4.6, 1.5), 0.0225, 0.0675, '#2e8c88');
+part([v.B], circle(3.4, 4.6, 0.7), 0.0675, 0.1125, '#f6f2e8');
+part([L], [[-11, 1], [-5, 1.4], [-6, 5], [-10.4, 4.2]], 0, 0.045, '#4a97bd', { hasBack: false });
+part([R], circle(7.5, 3.6, 2.2), 0, 0.045, '#5d9f52', { hasBack: false });
+part([R], circle(7.5, 3.6, 1.1), 0.045, 0.09, '#f6c64a', { hasBack: false });
+const built = mesh.finish(['all']);
+renderer.setMesh(built);
+const frames = new Float32Array(rig.frames.length * 12);
+
+let yaw = 0.35, pitch = 0.5, dist = 62, changed = true, last = '';
+function settings() {
+  const o = { open: +$('open').value, turn: +$('turn').value, high: +$('high').value, size: +$('size').value, room: +$('room').value, bounce: +$('bounce').value, exp: +$('exp').value };
+  const key = JSON.stringify(o);
+  if (key === last) return;
+  last = key;
+  for (const n in o) $('v-' + n).textContent = o[n] + (n === 'open' || n === 'turn' || n === 'high' || n === 'size' ? '°' : '');
+  open = o.open;
+  const a = (o.turn * Math.PI) / 180, e = (o.high * Math.PI) / 180;
+  rigLight.key.dir = [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
+  rigLight.key.size = o.size;
+  rigLight.fill.forEach((f, i) => { f.col = baseFill[i].map((c) => c * o.room); });
+  rigLight.bounce = o.bounce; rigLight.exposure = o.exp;
+  renderer.relight();
+  rig.update(); renderer.setFrames(rig.pack(frames), rig.frames.length);
+  changed = true;
+}
+function frame() {
+  const dpr = Math.min(devicePixelRatio || 1, small ? 1.5 : 2);
+  renderer.resize(canvas.clientWidth * dpr, canvas.clientHeight * dpr);
+  settings();
+  const target = [0, 3, 2];
+  const eye = [target[0] + Math.sin(yaw) * Math.cos(pitch) * dist, target[1] + Math.sin(pitch) * dist, target[2] + Math.cos(yaw) * Math.cos(pitch) * dist];
+  const res = renderer.render({ eye, target, fovY: 0.42, aperture: 0.3, groups: ['all'], changed, still: !drag, blueprint: 0 });
+  changed = false;
+  $('report').textContent = `${built.stats.parts} parts, ${built.stats.triangles} triangles\n` + (res.samples ? `still: ${res.samples} of ${renderer.quality.samples} frames added up` : 'moving: one frame at a time');
+  requestAnimationFrame(frame);
+}
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (!drag) return; yaw -= (e.clientX - drag[0]) * 0.006; pitch = Math.max(0.12, Math.min(1.45, pitch + (e.clientY - drag[1]) * 0.005)); drag = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); dist = Math.max(25, Math.min(120, dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+// With no input the fold opens and shuts slowly.
+let touched = false;
+addEventListener('pointerdown', () => { touched = true; });
+setInterval(() => { if (!touched) $('open').value = 110 + 62 * Math.sin(performance.now() / 1800); }, 33);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

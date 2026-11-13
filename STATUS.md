@@ -13,7 +13,7 @@ Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 - **13-tree-seasons** – v1 + five rounds done and working on `main` (1 look, 2 speed, 3 look, 4 life, 5 polish: jointed squirrel, songbird soundscape, cloud shadows, gusts, wood on the ridge, glow, sharp 30 fps mode, link-preview picture). Sam is steering it by eye and ear: read his briefs at the top of rounds 4 and 5 in ROUNDS.md before changing anything. He has approved the tree, the birds and the wind sound; leave those alone unless he asks. What is still open is at the bottom of `builds/13-tree-seasons/ROUNDS.md`.
   - Why 13 was run first and not 06: it is the shortest Fable-ranked run (55 min cap), needs no Blender and no downloads, and has the highest reuse score in `plan/viability.md`. 06 and 15 are still to run.
 
-- **15-popup-book** – v1 works on `main`: "Where the river goes", five spreads, every mechanism in the brief, page turning, tabs, slider, wheels, engineer's view, sound. Improvement rounds are in progress; see `builds/15-popup-book/ROUNDS.md` for what is done and what is next.
+- **15-popup-book** – v1 plus the improvement rounds are done and working on `main`. "Where the river goes": five spreads, every mechanism in the brief, solved from the page angle; a spine with real leaf thickness; `book.check()` and `book.collisions()` test the paper rules and both pass. What is not checked (sound by ear, a real phone, dragging by hand) is near the bottom of `builds/15-popup-book/ROUNDS.md`.
   - Why 15 and not 06: Sam asked for the most complex build that needs no extra tools. 15 has the widest set of hard parts (six solved mechanisms, a book that turns, a renderer, five spreads of content) and can be checked properly on this PC; 06 is one deep shader that this PC's graphics chip can barely run.
 
 ## Site
@@ -22,11 +22,12 @@ Last updated: 13 Nov 2026 (Fable 5.2, pop-up book session)
 ## Next
 - Carry on with 13: say "Read STATUS.md and carry on with 13-tree-seasons".
 - Check 13 on a real phone and a stronger GPU. Sam watched the round 5 squirrel on 12 Nov 2026 and said it looks right: leave its movement alone unless he asks. He likes the small bird chirps; the big-bird calls (cuckoo, pigeon, crow, geese, woodpecker) sounded fake to him and were removed on 12 Nov 2026: do not add large-bird sounds back. He has not yet said anything about the sharp 30 fps mode.
-- Then 06 lightbulb and 15 pop-up book from `prompts/ready/`.
+- Then 06 lightbulb from `prompts/ready/` (15 is built).
+- Harvest 15: `engine/fold.js` with `engine/spine.js` first, then the paper renderer.
 - Harvest 13 with `skills/build-harvest` once its rounds are done (`engine/tree.js` and `engine/seasons.js` are already separate modules).
 
 ## Build log
 | Build | Model + effort | State | Rounds done | Link |
 |---|---|---|---|---|
 | 13-tree-seasons | Fable 5.2, default effort | Works; showcase piece | v1 + 5 (4 asked) | https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/ |
-| 15-popup-book | Fable 5.2, default effort | Works; rounds in progress | v1 | https://samthurrell-dot.github.io/Fable-test/builds/15-popup-book/ |
+| 15-popup-book | Fable 5.2, default effort | Works; showcase piece | v1 + rounds (4 asked) | https://samthurrell-dot.github.io/Fable-test/builds/15-popup-book/ |

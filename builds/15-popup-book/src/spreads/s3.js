@@ -89,6 +89,11 @@ export function buildSpread3(b) {
     },
   });
 
+  // a cat on a roof
+  b.part({ on: far.B, level: 1, color: C.ink, back: C.ink,
+    shape: [[10.55, 6.9], [10.6, 7.5], [10.5, 7.75], [10.5, 8.05], [10.42, 8.42], [10.68, 8.22], [10.86, 8.22], [11.1, 8.42], [11.06, 8.0], [11.0, 7.75], [11.35, 7.3], [11.5, 6.6], [11.95, 6.38], [12.28, 6.66], [12.36, 6.46], [11.98, 6.1], [11.45, 5.98]],
+    print: (c) => { disc(c, 10.66, 7.98, 0.05, C.sun); disc(c, 10.9, 7.98, 0.05, C.sun); } });
+
   // --- The mill, on a layer in front of the right-hand houses; its wheel turns ------------------------
   const mill = b.layer(far, 'B', { r: 8.2, a: 4.6, b: 3.4, w: 1.8, x0: -2.5, x1: 4, strut: C.stone });
   const WX = -2.6, WY = 3.5;   // the rivet of the wheel, on the mill wall

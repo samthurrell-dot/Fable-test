@@ -26,8 +26,8 @@ export const LIGHT_RIG = {
   fill: [
     { dir: [0.0, 1.0, 0.05], col: [0.216, 0.238, 0.274], cone: 34 },      // ceiling
     { dir: [-0.5, 0.62, -0.6], col: [0.245, 0.274, 0.331], cone: 30 },    // sky through the window
-    { dir: [0.82, 0.42, 0.38], col: [0.288, 0.259, 0.216], cone: 34 },    // white card held to the right
-    { dir: [0.08, 0.5, 0.86], col: [0.187, 0.18, 0.18], cone: 34 },     // the room behind the camera
+    { dir: [0.82, 0.42, 0.38], col: [0.40, 0.36, 0.30], cone: 34 },    // white card held to the right
+    { dir: [0.08, 0.5, 0.86], col: [0.30, 0.29, 0.285], cone: 34 },     // the room behind the camera
     { dir: [-0.76, 0.42, 0.5], col: [0.13, 0.137, 0.151], cone: 34 },
     { dir: [0.55, 0.52, -0.66], col: [0.108, 0.108, 0.115], cone: 34 },
   ],

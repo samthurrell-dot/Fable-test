@@ -6,7 +6,7 @@
 <title>Fable test</title>
 <meta name="description" content="Showpiece builds made in code, and the notes on how each one works.">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Fable test: a tree through the seasons">
+<meta property="og:title" content="Fable test: showpiece builds made in code">
 <meta property="og:description" content="One tree, grown entirely in code, through blossom, full leaf, leaf fall and snow, with the life that lives in it.">
 <meta property="og:image" content="https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/share/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -26,6 +26,7 @@
   /* The same tree in the four seasons, side by side. */
   .year { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; background: #fbfaf5; }
   .year img { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; }
+  .year.five { grid-template-columns: repeat(5, 1fr); }
   .build > div:last-child { padding: 18px 20px 20px; }
   .build h3 { font-weight: 500; font-size: 26px; margin: 0 0 4px; }
   .build p { margin: 0; color: var(--soft); }
@@ -68,13 +69,32 @@
   </ul>
 
   <a class="build" href="builds/15-popup-book/" style="margin-top: 22px">
+    <div class="year five" aria-hidden="true">
+      <img src="builds/15-popup-book/share/spread1.jpg" alt="" width="960" height="600" loading="lazy">
+      <img src="builds/15-popup-book/share/spread2.jpg" alt="" width="960" height="600" loading="lazy">
+      <img src="builds/15-popup-book/share/spread3.jpg" alt="" width="960" height="600" loading="lazy">
+      <img src="builds/15-popup-book/share/spread4.jpg" alt="" width="960" height="600" loading="lazy">
+      <img src="builds/15-popup-book/share/spread5.jpg" alt="" width="960" height="600" loading="lazy">
+    </div>
     <div>
       <h3>Where the river goes: a pop-up book</h3>
       <p>Five spreads of cut and folded card follow a paper boat from the hills to the sea. Every piece is solved from the angle of the pages, as a real pop-up is. Turn the pages, pull the tabs, and press E to see the folds.</p>
-      <p class="state">First version. Improvement rounds in progress.</p>
+      <p class="state">Improvement rounds done.</p>
       <span class="open">Open the book</span>
     </div>
   </a>
+  <ul aria-label="Go straight to a spread, or see how it works">
+    <li><a href="builds/15-popup-book/?turn=1">Hills</a></li>
+    <li><a href="builds/15-popup-book/?turn=2">Forest</a></li>
+    <li><a href="builds/15-popup-book/?turn=3">Mill</a></li>
+    <li><a href="builds/15-popup-book/?turn=4">Marsh</a></li>
+    <li><a href="builds/15-popup-book/?turn=5">Sea</a></li>
+    <li><a href="builds/15-popup-book/?turn=3&amp;engineer=1">Engineer's view</a></li>
+    <li><a href="builds/15-popup-book/demo/fold.html">Fold engine, with sliders</a></li>
+    <li><a href="builds/15-popup-book/demo/paper.html">Paper renderer, with sliders</a></li>
+    <li><a href="https://github.com/samthurrell-dot/Fable-test/blob/main/builds/15-popup-book/TECHNIQUES.md">Techniques</a></li>
+    <li><a href="https://github.com/samthurrell-dot/Fable-test/blob/main/builds/15-popup-book/ROUNDS.md">Round by round</a></li>
+  </ul>
 
   <section>
     <h2>How the tree works</h2>
