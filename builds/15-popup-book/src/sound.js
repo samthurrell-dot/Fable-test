@@ -7,15 +7,15 @@
 //             for each tooth of a wheel
 //   music box a short phrase when each spread opens; the last spread ends the tune
 
-const MASTER = 0.5;            // overall level
+const MASTER = 0.62;           // overall level
 const SWISH_GAIN = 0.16;       // page moving
 const CRACKLE_GAIN = 0.07;     // card unfolding
 const CRACKLE_RATE = 46;       // crackles a second at one page-turn a second
 const KNOCK_GAIN = 0.2;        // page landing
-const RUB_GAIN = 0.1;          // tab or slider moving
+const RUB_GAIN = 0.2;          // tab or slider moving
 const TICK_GAIN = 0.11;        // wheel teeth
 const TICK_ANGLE = 0.26;       // radians of wheel between ticks
-const NOTE_GAIN = 0.11;        // music box
+const NOTE_GAIN = 0.13;        // music box
 const BEAT = 0.34;             // seconds a half-beat of the tune lasts
 const REVERB_SECONDS = 1.6, REVERB_MIX = 0.22;
 

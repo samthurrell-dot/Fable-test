@@ -26,10 +26,23 @@ export function createEngineer(canvas) {
     return [(x / q * 0.5 + 0.5) * w, (0.5 - y / q * 0.5) * h];
   }
 
-  // book: from createBook. viewProj: the camera matrix. amount: 0..1 fade.
-  function draw(book, viewProj, amount) {
+  // book: from createBook. viewProj: the camera matrix. amount: 0..1 fade of the engineer's marks.
+  // rings: [{ p: world point, t: 0..1 }] pulses that point out something the viewer can move.
+  function draw(book, viewProj, amount, rings = []) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    ctx.setLineDash([]);
+    for (const r of rings) {
+      const p = project(viewProj, r.p);
+      if (!p) continue;
+      const a = Math.sin(Math.PI * r.t);
+      ctx.lineWidth = 2.5;
+      for (const k of [0, 0.45]) {
+        const u = (r.t * 1.6 + k) % 1;
+        ctx.strokeStyle = `rgba(255, 250, 240, ${0.8 * a * (1 - u)})`;
+        ctx.beginPath(); ctx.arc(p[0], p[1], 9 + u * 26, 0, 7); ctx.stroke();
+      }
+    }
     if (amount <= 0.01) return;
     ctx.globalAlpha = amount;
     ctx.lineCap = 'round';

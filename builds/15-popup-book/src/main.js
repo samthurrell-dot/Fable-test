@@ -32,7 +32,8 @@ const TURN_SECONDS = 3.6;        // automatic run: time to turn one page
 const HOLD_SECONDS = 8.5;        // and to rest on a spread
 const COVER_SECONDS = 0.7;       // rest on the shut book at the start of each run
 const CLOSE_SECONDS = 5.5;       // time to leaf back to the start at the end
-const DEMO_FROM = 1.6, DEMO_TO = 5.6;   // within a rest: when the book works its own tab or wheel
+const HINT_SECONDS = 1.1;        // a ring shows on a tab or wheel for this long before the book works it
+const DEMO_FROM = 1.9, DEMO_TO = 5.9;   // within a rest: when the book works its own tab or wheel
 const IDLE_RESUME = 10;          // seconds without input before the automatic run takes over again
 const STILL_AFTER = 0.18;        // seconds without movement before the picture starts to refine
 const FLICK = 0.55;              // turns per second: a release faster than this carries the page over
@@ -40,7 +41,8 @@ const SETTLE = { size: 0.011, rate: 15, fade: 0.17, lasts: 0.9 };   // a landed 
 const KEY_TURN_RATE = 3.2;       // how briskly a page follows an arrow key or button
 const ORBIT_YAW = 0.006, ORBIT_PITCH = 0.005;   // radians per pixel dragged
 const PORTRAIT_FIT = 47;          // cm across a tall screen: the pop-up fills it and the page edges run off the sides
-const PORTRAIT_PITCH = 0.2;       // and the camera looks down more steeply, to use the height
+const PORTRAIT_PITCH = 0.32;      // and the camera looks down more steeply, to use the height
+const SWAY_YAW = 0.045, SWAY_PITCH = 0.03;   // radians the camera leans towards a mouse pointer
 const PITCH_MIN = 0.16, PITCH_MAX = 1.45, YAW_MAX = 1.5, ZOOM_MIN = 0.45, ZOOM_MAX = 1.9;
 const TARGET_MS = 21, SMOOTH_MS = 17.6, MIN_SCALE = 0.5;   // resolution steps down above TARGET_MS, up below SMOOTH_MS
 
@@ -148,6 +150,7 @@ let blendFrom = null;   // control values at the moment the run took over, so th
 // --- Camera -----------------------------------------------------------------------------------------
 const view = { eye: [0, 40, 80], target: [0, 5, 0], fovY: (FOV * Math.PI) / 180, aperture: APERTURE, near: 4, far: 900 };
 const COVER_APERTURE = 0.3;      // share of the lens opening used on the shut book, so the whole cover is sharp
+const sway = { x: 0, y: 0, tx: 0, ty: 0 };
 function placeCamera() {
   const i = Math.min(SHOTS.length - 2, Math.floor(turn)), f = ease(turn - i);
   const a = SHOTS[i], b = SHOTS[i + 1];
@@ -158,10 +161,11 @@ function placeCamera() {
   // Far enough back for the width to fit, and on a wide screen for the height to fit too.
   const half = Math.tan(view.fovY / 2);
   const dist = Math.max(fit / (2 * half * aspect), (fit * 0.5) / (2 * half)) * cam.zoom;
-  const pitch = clamp(mix(a.pitch, b.pitch) + cam.pitch + (tall ? PORTRAIT_PITCH : 0), PITCH_MIN, PITCH_MAX);
+  const pitch = clamp(mix(a.pitch, b.pitch) + cam.pitch + (tall ? PORTRAIT_PITCH : 0) + sway.y * SWAY_PITCH, PITCH_MIN, PITCH_MAX);
+  const yaw = cam.yaw - sway.x * SWAY_YAW;
   view.target = [mix(a.target[0], b.target[0]), mix(a.target[1], b.target[1]), mix(a.target[2], b.target[2])];
   view.aperture = APERTURE * (COVER_APERTURE + (1 - COVER_APERTURE) * ease(Math.min(turn, 1)));
-  view.eye = [view.target[0] + Math.sin(cam.yaw) * Math.cos(pitch) * dist, view.target[1] + Math.sin(pitch) * dist, view.target[2] + Math.cos(cam.yaw) * Math.cos(pitch) * dist];
+  view.eye = [view.target[0] + Math.sin(yaw) * Math.cos(pitch) * dist, view.target[1] + Math.sin(pitch) * dist, view.target[2] + Math.cos(yaw) * Math.cos(pitch) * dist];
 }
 function viewProj() { return renderer.viewProjOf(view); }
 
@@ -312,8 +316,9 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   if (!grab) {
-    // hover: show what a press would do
+    // hover: lean the camera a little towards the pointer, and show what a press would do
     if (e.pointerType === 'mouse') {
+      sway.tx = (e.clientX / innerWidth - 0.5) * 2; sway.ty = (e.clientY / innerHeight - 0.5) * 2;
       const ray = rayAt(e.clientX, e.clientY);
       canvas.style.cursor = pickControl(ray, 10) ? 'pointer' : pickLeaf(ray) ? 'grab' : 'move';
     }
@@ -425,9 +430,13 @@ if (!frozen && !fixedScale) {
   book.setTurn(turn); book.update(); renderer.setFrames(book.frameData(), book.frameCount); placeCamera();
   const gl = renderer.gl;
   const once = (i) => { renderer.render({ ...view, eye: [view.eye[0] + i * 1e-3, view.eye[1], view.eye[2]], groups: book.groups(), changed: true, still: false, blueprint: 0 }); gl.finish(); };
-  once(0); once(1);   // the first frames also pay for setting up the programs
-  let best = 1e9;
-  for (let i = 2; i < 5; i++) { const t0 = performance.now(); once(i); best = Math.min(best, performance.now() - t0); }
+  const px = new Uint8Array(4);
+  const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);   // finish() alone does not wait in every browser
+  once(0); once(1); sync();   // the first frames also pay for setting up the programs
+  const t0 = performance.now();
+  for (let i = 2; i < 5; i++) once(i);
+  sync();
+  const best = (performance.now() - t0) / 3;
   boot.frameMs = best;
   scale = clamp(Math.sqrt(TUNE_BUDGET_MS / best), MIN_SCALE, 1);
   if (scale > 0.93) scale = 1;
@@ -511,12 +520,24 @@ function tick(now) {
   lastTurn = turn; lastValues = values;
   turn = logical;
 
+  if (!frozen) {
+    const k = Math.min(1, dt * 4);
+    sway.x += (sway.tx - sway.x) * k; sway.y += (sway.ty - sway.y) * k;
+    if (Math.abs(sway.tx - sway.x) < 2e-3 && Math.abs(sway.ty - sway.y) < 2e-3) { sway.x = sway.tx; sway.y = sway.ty; }
+  }
   const want = engineerOn ? 1 : 0;
   if (engineerAmount !== want) { engineerAmount = clamp(engineerAmount + Math.sign(want - engineerAmount) * dt * 3, 0, 1); lastMoved = secs; }
   placeCamera();
   const still = frozen ? true : secs - lastMoved > STILL_AFTER && !grab;
   const res = renderer.render({ ...view, groups: book.groups(), changed: moved, still, blueprint: engineerAmount });
-  if (engineerAmount > 0 || engineer.shown) { engineer.draw(book, viewProj(), engineerAmount); engineer.shown = engineerAmount > 0; }
+  // While the book is running itself, a ring points out the tab or wheel it is about to work.
+  const rings = [];
+  if (auto && !frozen) {
+    const r = runAt(clock);
+    const t = (r.into - (DEMO_FROM - HINT_SECONDS)) / (HINT_SECONDS + 0.5);
+    if (r.span.type === 'hold' && t > 0 && t < 1) for (const c of book.controls) if (c.spread === r.span.from) { const hp = handleOf(c); rings.push({ p: c.parent.point(hp[0], hp[1], c.z || 0.03), t }); }
+  }
+  if (engineerAmount > 0 || rings.length || engineer.shown) { engineer.draw(book, viewProj(), engineerAmount, rings); engineer.shown = engineerAmount > 0 || rings.length > 0; }
 
   if (!$('loading').hidden) { $('loading').hidden = true; document.body.classList.add('ready'); boot.totalMs = performance.now() - boot.start; }
 
