@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bunker Billionaire: balance bench</title>
+<style>
+  body { margin: 0; padding: 20px; background: #efe7d3; color: #25261f; font: 15px/1.45 Georgia, serif; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { margin: 0 0 14px; max-width: 46em; }
+  label { margin-right: 14px; }
+  select, input, button { font: inherit; min-height: 36px; }
+  table { border-collapse: collapse; margin-top: 16px; font: 13px/1.4 ui-monospace, Consolas, monospace; }
+  td, th { border: 1px solid #c9bfa5; padding: 4px 8px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+</style>
+</head>
+<body>
+<h1>Balance bench</h1>
+<p>Plays whole runs of the rules with three players made of code: a careless one, a sensible one that sees only what a person sees, and one that reads the hidden numbers. The rules are right when the careless player mostly loses, the sensible one wins about half the time and the seer nearly always wins.</p>
+<label>Runs each <input id="n" type="number" value="300" min="20" max="5000" step="20" style="width: 6em"></label>
+<button id="go" type="button">Run</button>
+<div id="out"></div>
+<script type="module">
+import { simulate } from '../src/engine/auto.js';
+import { CARDS } from '../src/data/cards.js';
+const $ = (id) => document.getElementById(id);
+export function run(n) {
+  const kinds = ['king', 'word', 'deposed', 'killed', 'everyone'];
+  let html = '<table><tr><th>Card</th><th>Player</th>' + kinds.map((k) => `<th>${k}</th>`).join('') + '<th>mean last day</th><th>staff left</th><th>food</th><th>water</th><th>power</th><th>med</th><th>lux</th></tr>';
+  const all = {};
+  for (const c of CARDS) for (const p of ['random', 'careful', 'seer']) {
+    const r = simulate(n, p, c.id, 7);
+    all[c.id + '/' + p] = r;
+    html += `<tr><td>${c.name}</td><td>${p}</td>` + kinds.map((k) => `<td>${Math.round(((r.kinds[k] || 0) / n) * 100)}%</td>`).join('')
+      + `<td>${r.meanDay.toFixed(1)}</td><td>${r.meanStaff.toFixed(1)}</td>` + ['food', 'water', 'power', 'med', 'lux'].map((k) => `<td>${r.left[k].toFixed(0)}</td>`).join('') + '</tr>';
+  }
+  $('out').innerHTML = html + '</table>';
+  return all;
+}
+// A short text summary for the console: endings by kind, then hidden-value diagnostics for the sensible player.
+function brief(n = 80, players = ['random', 'careful', 'seer']) {
+  const out = [];
+  for (const c of CARDS) for (const p of players) {
+    const r = simulate(p === 'seer' ? Math.ceil(n / 3) : n, p, c.id, 7);
+    const pc = (k) => Math.round(((r.kinds[k] || 0) / r.runs) * 100);
+    out.push(`${c.id.padEnd(9)} ${p.padEnd(7)} king ${pc('king')} word ${pc('word')} deposed ${pc('deposed')} killed ${pc('killed')} everyone ${pc('everyone')} | day ${r.meanDay.toFixed(1)} staff ${r.meanStaff.toFixed(1)} left ${Object.values(r.left).map((v) => v.toFixed(0)).join('/')}`);
+  }
+  return out.join('\n');
+}
+window.__bench = { run, simulate, brief };
+$('go').addEventListener('click', () => run(+$('n').value));
+</script>
+</body>
+</html>

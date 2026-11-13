@@ -1,0 +1,29 @@
+Bunker Billionaire (build 16)
+Model: Claude Fable 5.2, default effort. Run in the Claude desktop app (Code tab), 13 Nov 2026.
+
+The prompt, as Sam typed it:
+
+  "There is a game design document for a game, bunker billionaire. Use the design doc and skills
+  harvested from other builds to develop a high quality game prototype."
+
+and, part way through, after the plan was to build the silo with the paper engines from build 15:
+
+  "you can use the harvested skills in any way you want. Or not at all, the game design should be
+  the primary driver"
+
+The design document is "Bunker Billionaire: Act 2 design outline" (Sam Hurrell, 12 Nov 2026), a Word
+file kept outside this repo. Its "first prototype" section asks for: phone-first HTML on one screen
+(resources at the top, staff in the middle, today's event at the bottom); 6 staff, 4 resources,
+5 tools, 3 promise types, 2 starting cards; 20 to 30 event cards; a 30-day run; two or three endings;
+no server.
+
+What was taken from the earlier builds and the skills in this repo:
+  - the process from skills/showpiece-prompt-builder (a full v1, then rounds of naming the three
+    weakest things; URL controls to reach exact moments; phone first; sound made in code, off until
+    asked for; a five-line final reply);
+  - the harvest clause (rules, content and screen kept apart; every tuning number a named constant;
+    TECHNIQUES.md, ROUNDS.md, a demo page);
+  - the sound recipe Sam approved on build 15 (event-tied noises and a small bell, silent at rest);
+  - the cut-paper look of build 15, as flat SVG rather than its WebGL renderer.
+What was not used: the three engines in knowledge/ (fold kinematics, card mesher, paper renderer).
+A management game played a minute a day on a phone is better served by a light page.
