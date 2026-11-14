@@ -80,12 +80,29 @@ The tyrant made of code loses mostly by driving everyone out (42 to 77% of its r
 
 Checked: a whole 30-day run clicked through the real buttons at 375 px with every new thing used (policies 7 times, 34 cruel acts, requests granted and refused, faults patched, repaired and inspected): no errors. The hatch, the day, the standing orders sheet and an ending read at 375 px; the day read at 1200 px. Frame cost of the card model on this PC (Intel UHD 615), frames drawn back to back and ended with a 1 x 1 `readPixels`: 9.6 ms at 794 x 595 on phone settings, 24.6 ms at 1700 x 1275 on desktop settings (the moving picture is now capped at about a million pixels, so less than that); a finished still of 72 frames in 0.8 s at 1700 x 1275.
 
+## Round 3 (14 Nov 2026): polish the model
+
+Sam picked "Polish the model". Run on Claude Opus 5.5 (the earlier rounds were Fable 5.2).
+
+Judged from two full-size stills of the model (day, and night with the cameras on and faults showing), saved from the canvas at 1500 x 1125. The three weakest things:
+
+1. **The pawns read as gravestones.** Every person was the same round-topped arch, which is the exact shape of the graves on the surface. Now each person is a cut figure: a body in the job's clothes (security's navy and badge, the chef's whites and neckerchief, the engineer's hi-vis, the doctor's coat and stethoscope, the farmer's dungarees, the assistant's suit and tie, the cleaner's tabard, family in pink and gold, you in a dinner jacket with a red bow tie) and a head with the face drawing on it. The hat or hair is a separate piece glued over the head, cut to the shape of the drawing, so it stands proud in the light. Each figure stands in a small card stand (yours is red).
+2. **Night was not night.** The sky is printed on the back board, so at lights-out it stayed a sunset with the sun in it. Now a second sky card (deep blue, 90 stars, the ruins in silhouette) and a cut moon slot in front while the light is at its dimmest, and the sun is taken away. The moonlight is a little brighter and cooler.
+3. **The front looked like a bookshelf.** Plain grey floor edges, no names, and rooms that were mostly empty wall. Now every floor has a dark label strip along its front, as on a museum model ("1 · YOUR SUITE", "THE VAULT", down to "6 · PLANT ROOM", "STORES"); seven rooms have a hanging brass lamp; and there is more in the rooms: a shelf of tins behind the crates, a red valve wheel on a pipe in the plant room, a safe in the vault, a drip stand in the infirmary, blankets on the bunks, a bench, a jug, mugs and a pot in the mess and kitchen, a chair at the security desk.
+
+Also: the camera is closer (distance `max(86, 106 / aspect)`, was `max(99, 122 / aspect)`), so the model fills the box on a phone; and the atlas is printed again once the page's typeface has loaded, so the lettering on the model is in Barlow Condensed rather than whatever font was ready first.
+
+Fixed during the round: the first label lettering was too small to read (0.36 cm, now 0.5 cm); the first lamps hung behind the new label strips (the cord is now 0.5 cm longer).
+
+The model is now 233 parts and 16,800 triangles (was 181 and 10,400); the print atlas is still one 2048 sheet, at 30 px a cm (was 36). Frame cost on this PC (Intel UHD 615, frames drawn back to back, ended with a 1 x 1 `readPixels`): 10.2 ms at 794 x 595 on phone settings (was 9.6), 20.3 ms at 1500 x 1125 on desktop settings. Checked in the game at 375 px: a day, lights out (the night sky swapped in, staff out of sight in their bunks with the cameras off), and the next morning, with no errors. Rules unchanged.
+
 ## Not done, not checked
 
 - Still not played by a person from start to finish since round 2. The balance numbers come from players made of code, and the tyrant player is crude.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.
-- The flat picture (the fall-back) does not show requests or faults on it; they are still on the desk.
+- The flat picture (the fall-back) does not show requests or faults on it; they are still on the desk. It has not been given round 3's figures or night sky.
+- The model's lettering is small on a phone (about 7 px). It is decoration there; the desk names every room in full.
 - Left out of the outline on purpose: bugged rooms and the planted spy, air as its own resource, factions with names.
 - The hooks for the full game: a starting card is plain data (`src/data/cards.js`) and so is who came in at the hatch (`picks` in `newRun`), so Act 1 could deal both.

@@ -15,7 +15,7 @@ import { createPaperRenderer, QUALITY, LIGHT_RIG } from '../../engine/paperlight
 import { Rig } from '../../engine/fold.js';
 import { CardMesh } from '../../engine/cardmesh.js';
 import { buildAtlas } from '../../engine/atlas.js';
-import { faceMarkup } from './faces.js';
+import { faceMarkup, HATS } from './faces.js';
 
 // --- the model's measurements (cm) ---
 const FLOOR = 4.6;            // floor to floor
@@ -32,6 +32,39 @@ const OUT_D = 6.6;            // how far forward a pawn is lifted to move betwee
 const MOVING_PIXELS = 1.0e6;  // the moving picture is drawn at no more than this many pixels (stills are always full size)
 const MOODS = ['happy', 'content', 'flat', 'sour', 'angry', 'grin', 'dead'];
 const ROLES = ['security', 'chef', 'engineer', 'doctor', 'farmer', 'pa', 'cleaner', 'heir'];
+// The figure of a person: head and body in one cut piece, the face drawing from ui/faces.js printed on the head.
+const HEAD_Y = 1.95, HEAD_R = 0.78, SV = HEAD_R / 11.2;      // head centre and radius (cm); face drawing units to cm
+const sv = ([x, y]) => [(x - 16) * SV, HEAD_Y - (y - 23) * SV];   // a point of the face drawing, in the figure's cm
+const BODY = (() => {
+  const a0 = Math.atan2(1.258 - HEAD_Y, 0.36), a1 = Math.PI - a0, n = 16, arc = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n; arc.push([Math.cos(a) * HEAD_R, HEAD_Y + Math.sin(a) * HEAD_R]); }
+  return [[-1.1, 0], [1.1, 0], [1.02, 0.88], [0.8, 1.14], ...arc, [-0.8, 1.14], [-1.02, 0.88]];
+})();
+// Each hat (or hair) is its own small piece glued over the head; its outline follows the drawing (face units).
+const HAT_PTS = {
+  security: [[5, 15], [29.5, 15], [27, 12.2], [25.5, 12.2], [24.2, 9], [21, 6.3], [16, 5.3], [11, 6.3], [7.8, 9], [6.5, 12.2], [5, 12.2]],
+  chef: [[8, 14], [24, 14], [24, 11.5], [26.5, 9.5], [27.2, 7], [25, 4.2], [21.5, 3], [19, 2.9], [16, 0.9], [13, 2.9], [10.5, 3], [7, 4.2], [4.8, 7], [5.5, 9.5], [8, 11.5]],
+  engineer: [[4.5, 15.2], [27.5, 15.2], [27.5, 12.8], [25.4, 12.8], [24.6, 8.5], [21.5, 5], [16, 3.6], [10.5, 5], [7.4, 8.5], [6.6, 12.8], [4.5, 12.8]],
+  doctor: [[6.2, 15], [11, 12.3], [16, 11.5], [21, 12.3], [25.8, 15], [25.2, 11.6], [23.5, 9.6], [20.5, 8.6], [19.2, 8.4], [18.6, 7.9], [17.3, 7.35], [16, 7.25], [14.7, 7.35], [13.4, 7.9], [12.8, 8.4], [11.5, 8.6], [8.5, 9.6], [6.8, 11.6]],
+  farmer: [[1.5, 13], [2.5, 14.6], [6, 15.5], [16, 15.8], [26, 15.5], [29.5, 14.6], [30.5, 13], [29.5, 11.4], [26, 10.5], [23, 10.3], [23, 8], [21.5, 5.5], [16, 4.5], [10.5, 5.5], [9, 8], [9, 10.3], [6, 10.5], [2.5, 11.4]],
+  pa: [[5.8, 17], [11, 12.2], [16, 11.5], [21, 12.2], [26.2, 17], [25.5, 12], [23, 9.2], [19.6, 8.1], [19.9, 6], [18.8, 3.4], [16, 2.2], [13.2, 3.4], [12.1, 6], [12.4, 8.1], [9, 9.2], [6.5, 12]],
+  cleaner: [[5.6, 17.5], [10.5, 13], [16, 12], [21.5, 13], [26.4, 17.5], [26.3, 13.5], [27.5, 12.2], [28.6, 11.6], [30, 6.5], [24.8, 9.2], [22, 7.9], [16, 7], [10, 7.9], [7, 10.2], [5.7, 13.5]],
+  heir: [[8, 13.5], [7, 5], [11.5, 9], [14.5, 3.5], [18, 8.8], [22.5, 4], [23.5, 12.5]].map(([x, y]) => { const t = (-8 * Math.PI) / 180, dx = x - 16, dy = y - 9; return [16 + dx * Math.cos(t) - dy * Math.sin(t), 9 + dx * Math.sin(t) + dy * Math.cos(t)]; }),
+  you: [[5, 14.2], [27, 14.2], [27, 11.6], [22.5, 11.6], [22.5, 0.8], [9.5, 0.8], [9.5, 11.6], [5, 11.6]],
+};
+const HAT_COL = { security: '#3b4654', chef: '#fffdf6', engineer: '#f2c230', doctor: '#5b4a3a', farmer: '#e3c877', pa: '#3a2f45', cleaner: '#c9503c', heir: '#d94f6a', you: '#25261f' };
+// What each job wears, drawn on the body (cm, y up, the body runs from y 0 to about 1.26).
+const UNIFORM = {
+  security: ['#33415a', (c) => { fillRect(c, -1.1, 0.16, 1.1, 0.28, '#1d2533'); disc(c, -0.48, 0.78, 0.13, '#e8c352'); line(c, [[-0.36, 1.25], [0, 0.95], [0.36, 1.25]], '#e8c352', 0.05); }],
+  chef: ['#f7f4ea', (c) => { for (const x of [-0.25, 0.25]) for (const y of [0.3, 0.6, 0.9]) disc(c, x, y, 0.05, '#9a9384'); c.fillStyle = '#c23b2c'; c.beginPath(); c.moveTo(-0.34, 1.26); c.lineTo(0.34, 1.26); c.lineTo(0, 0.92); c.fill(); }],
+  engineer: ['#e07a2e', (c) => { fillRect(c, -1.1, 0.42, 1.1, 0.52, '#f2e9a0'); fillRect(c, -1.1, 0.74, 1.1, 0.82, '#f2e9a0'); fillRect(c, -0.08, 0, 0.08, 1.2, '#b85f1f'); }],
+  doctor: ['#f4f6f2', (c) => { line(c, [[-0.36, 1.25], [-0.1, 0.45]], '#c9cfc8', 0.05); line(c, [[0.36, 1.25], [0.1, 0.45]], '#c9cfc8', 0.05); c.strokeStyle = '#2c3337'; c.lineWidth = 0.05; c.beginPath(); c.moveTo(-0.3, 1.2); c.quadraticCurveTo(-0.45, 0.55, 0.12, 0.6); c.stroke(); disc(c, 0.16, 0.6, 0.08, '#8c98a4'); fillRect(c, 0.42, 0.62, 0.72, 0.8, '#dfe5e0'); }],
+  farmer: ['#c9503c', (c) => { fillRect(c, -0.8, 0, 0.8, 0.82, '#4d6e9a'); line(c, [[-0.55, 0.8], [-0.6, 1.16]], '#4d6e9a', 0.14); line(c, [[0.55, 0.8], [0.6, 1.16]], '#4d6e9a', 0.14); disc(c, -0.55, 0.74, 0.05, '#e8c352'); disc(c, 0.55, 0.74, 0.05, '#e8c352'); for (let y = 0.9; y < 1.3; y += 0.14) line(c, [[-1.1, y], [1.1, y]], 'rgba(255,255,255,.25)', 0.03); }],
+  pa: ['#5a5f6b', (c) => { c.fillStyle = '#f7f4ea'; c.beginPath(); c.moveTo(-0.3, 1.26); c.lineTo(0.3, 1.26); c.lineTo(0, 0.6); c.fill(); c.fillStyle = '#2b3a63'; c.beginPath(); c.moveTo(-0.06, 1.2); c.lineTo(0.06, 1.2); c.lineTo(0.09, 0.72); c.lineTo(0, 0.62); c.lineTo(-0.09, 0.72); c.fill(); fillRect(c, 0.45, 0.85, 0.7, 0.9, '#f7f4ea'); }],
+  cleaner: ['#6aa9c9', (c) => { fillRect(c, -0.6, 0, 0.6, 0.95, '#8cc0d9'); fillRect(c, -0.35, 0.3, 0.35, 0.6, '#6aa9c9'); line(c, [[-0.6, 0.9], [-0.95, 0.75]], '#8cc0d9', 0.06); }],
+  heir: ['#e98aa8', (c) => { c.fillStyle = '#f2c9a6'; c.beginPath(); c.moveTo(-0.28, 1.26); c.lineTo(0.28, 1.26); c.lineTo(0, 0.82); c.fill(); c.strokeStyle = '#e8c352'; c.lineWidth = 0.05; c.beginPath(); c.arc(0, 1.25, 0.3, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }],
+  you: ['#1e1f24', (c) => { c.fillStyle = '#f7f4ea'; c.beginPath(); c.moveTo(-0.32, 1.26); c.lineTo(0.32, 1.26); c.lineTo(0, 0.5); c.fill(); c.fillStyle = '#c23b2c'; c.beginPath(); c.moveTo(-0.22, 1.16); c.lineTo(0, 1.08); c.lineTo(0.22, 1.16); c.lineTo(0.22, 0.98); c.lineTo(0, 1.06); c.lineTo(-0.22, 0.98); c.fill(); c.strokeStyle = '#e8c352'; c.lineWidth = 0.04; c.beginPath(); c.moveTo(0.35, 0.55); c.quadraticCurveTo(0.6, 0.4, 0.8, 0.6); c.stroke(); disc(c, -0.6, 0.95, 0.09, '#c23b2c'); }],
+};
 const FAULT_AT = { generator: [0, -7.8], pump: [0, -2.9], fridge: [3, -8.8], lights: [1, 0.8], cabinet: [2, -8.2] };   // floor, x
 
 // Where pawns stand: floor (6 is the surface) and a stretch of x.
@@ -80,6 +113,24 @@ const fillRect = (c, x0, y0, x1, y1, col) => { c.fillStyle = col; c.fillRect(x0,
 const line = (c, pts, col, w) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.stroke(); };
 const disc = (c, x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fill(); };
 
+// The far ruins on the horizon, printed on the day sky and the night sky alike.
+function ruins(c, col) {
+  c.fillStyle = col;
+  c.beginPath(); c.moveTo(-20, GROUND);
+  for (const [x, y] of [[-20, 1.6], [-18.6, 1.6], [-18.6, 2.5], [-17.4, 2.5], [-17.4, 1.2], [-13, 1.2], [-13, 0.5], [-4, 0.5], [-4, 1.4], [-2.8, 1.4], [-2.8, 2.2], [-1.8, 2.6], [-1.8, 0.9], [6, 0.9], [6, 1.9], [7.4, 1.9], [7.4, 3], [8.6, 3], [8.6, 1.4], [16, 1.4], [16, 2.3], [17.6, 2.3], [17.6, 1], [20, 1]]) c.lineTo(x, GROUND + y);
+  c.lineTo(20, GROUND); c.closePath(); c.fill();
+}
+// The night: a second sky, slotted in front of the first when the lights go out.
+function paintNight(c) {
+  const g = c.createLinearGradient(0, GROUND, 0, TALL);
+  g.addColorStop(0, '#463c5c'); g.addColorStop(0.35, '#232848'); g.addColorStop(1, '#0c1128');
+  c.fillStyle = g; c.fillRect(-EARTH, GROUND, EARTH * 2, TALL - GROUND);
+  let s = 7;
+  const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  for (let i = 0; i < 90; i++) { const x = -EARTH + r() * EARTH * 2, y = GROUND + 1.6 + r() * (TALL - GROUND - 1.8); disc(c, x, y, 0.03 + r() * r() * 0.08, `rgba(255,248,225,${(0.45 + r() * 0.55).toFixed(2)})`); }
+  ruins(c, '#141725');
+}
+
 // --- the print on the back board: sky, earth, and the wall of every room ---
 const WALLS = ['#3b4440', '#3d3154', '#cfe2d5', '#dcc096', '#52616f', '#7b3340'];   // plant, farm, medical, kitchen, security, suite
 function paintBack(c) {
@@ -89,10 +140,7 @@ function paintBack(c) {
   c.fillStyle = sky; c.fillRect(-EARTH, GROUND, EARTH * 2, TALL - GROUND);
   c.fillStyle = 'rgba(255,236,190,.55)';
   for (const [x, y, w] of [[-14, 31.6, 9], [3, 30.2, 12], [14, 32.8, 7]]) { c.beginPath(); c.ellipse(x, y, w / 2, 0.22, 0, 0, 6.2832); c.fill(); }
-  c.fillStyle = '#b97a4c';   // far ruins
-  c.beginPath(); c.moveTo(-20, GROUND);
-  for (const [x, y] of [[-20, 1.6], [-18.6, 1.6], [-18.6, 2.5], [-17.4, 2.5], [-17.4, 1.2], [-13, 1.2], [-13, 0.5], [-4, 0.5], [-4, 1.4], [-2.8, 1.4], [-2.8, 2.2], [-1.8, 2.6], [-1.8, 0.9], [6, 0.9], [6, 1.9], [7.4, 1.9], [7.4, 3], [8.6, 3], [8.6, 1.4], [16, 1.4], [16, 2.3], [17.6, 2.3], [17.6, 1], [20, 1]]) c.lineTo(x, GROUND + y);
-  c.lineTo(20, GROUND); c.closePath(); c.fill();
+  ruins(c, '#b97a4c');
   // earth either side of the shaft
   fillRect(c, -EARTH, 0, EARTH, GROUND, '#6a5340');
   for (const [y0, y1, col] of [[20.5, 24, '#5d4838'], [11, 15.5, '#75604a'], [2, 6.5, '#57422f']]) {
@@ -237,16 +285,64 @@ function buildParts() {
   add({ id: 'sun', h, d: 0.12, pts: circle(12.6, 4.1, 1.5, 28), col: '#fbe6ad', back: '#fbe6ad', hasBack: false });
   for (let k = 0; k < 8; k++) add({ id: 'grave' + k, move: true, h, d: 3.6, pts: [[0.22, 0], [0.5, 0], [0.5, 1.05], [0.9, 1.05], [0.9, 1.32], [0.5, 1.32], [0.5, 1.75], [0.22, 1.75], [0.22, 1.32], [-0.18, 1.32], [-0.18, 1.05], [0.22, 1.05]], col: '#efe7d3', at: [-6 + k * 1.1, 0] });
 
+  add({ id: 'nightsky', move: true, d: 0.1, pts: rectPts(-EARTH, GROUND, EARTH, TALL), col: '#1c2140', back: '#1c2140', print: { box: [-EARTH, GROUND, EARTH, TALL], draw: paintNight } });
+  add({ id: 'moon', move: true, h: GROUND, d: 0.22, pts: circle(-11.5, 4.6, 1.15, 28), col: '#efe9d2', back: '#efe9d2', hasBack: false, print: { box: [-12.65, 3.45, -10.35, 5.75], draw: (c) => { fillRect(c, -12.7, 3.4, -10.3, 5.8, '#efe9d2'); for (const [x, y, r] of [[-11.9, 4.9, 0.28], [-11.1, 4.2, 0.2], [-11.3, 5.2, 0.12], [-12.1, 4.15, 0.1]]) disc(c, x, y, r, '#d9d2b8'); } } });
+
+  // a label strip along the front of every floor, as on a museum model
+  const NAMES = [['6 · PLANT ROOM', -4.4, 'STORES', 8.7], ['5 · HYDROPONIC FARM', 1.9, '', 0], ['4 · INFIRMARY', -5.2, 'DORMITORY', 7.9], ['3 · KITCHEN', -6.3, 'MESS HALL', 7.6], ['2 · SECURITY', -3, 'THE CELL', 10.2], ['1 · YOUR SUITE', -2.5, 'THE VAULT', 10.6]];
+  NAMES.forEach(([l, lx, r, rx], fl) => {
+    const top = 0.03, bot = -SLAB - 0.5;
+    add({ id: 'fascia' + fl, h: floorH(fl + 1), d: DEPTH + 0.05, pts: rectPts(SHAFT - 0.05, bot, HALF + 0.05, top), z0: -0.03, z1: 0.03, col: '#26302a', back: '#26302a', print: { box: [SHAFT - 0.05, bot, HALF + 0.05, top], draw: (c) => {
+      fillRect(c, SHAFT - 0.1, bot - 0.1, HALF + 0.1, top + 0.1, '#26302a');
+      line(c, [[SHAFT + 0.15, top - 0.12], [HALF - 0.15, top - 0.12]], 'rgba(233,223,198,.35)', 0.025);
+      line(c, [[SHAFT + 0.15, bot + 0.1], [HALF - 0.15, bot + 0.1]], 'rgba(233,223,198,.35)', 0.025);
+      text(c, l, lx, bot + 0.2, 0.5, '#e9dfc6', undefined, 'center');
+      if (r) text(c, r, rx, bot + 0.2, 0.5, '#e9dfc6', undefined, 'center');
+    } } });
+  });
+  // a lamp hanging in each room
+  const DROP = 0.5;   // the cord is long enough for the shade to hang below the label strip
+  const LAMP = [[-0.03, 0], [0.03, 0], [0.03, -0.68], [0.48, -1.05], [0.2, -1.05], [0.17, -1.15], [0.1, -1.22], [0, -1.25], [-0.1, -1.22], [-0.17, -1.15], [-0.2, -1.05], [-0.48, -1.05], [-0.03, -0.68]].map(([a, b]) => [a, b < -0.5 ? b - DROP : b]);
+  for (const [fl, x] of [[0, -6.4], [0, 8.7], [2, -3.2], [2, 8], [3, -5], [3, 8], [4, -1.5]]) add({ id: `lamp${fl}:${x}`, h: floorH(fl + 1) - SLAB, d: 2, pts: LAMP.map(([a, b]) => [a + x, b]), col: '#b08a3a', back: '#8a6a2a', print: { box: [-0.5, -1.27 - DROP, 0.5, 0.02], share: 'lamp', draw: (c) => { fillRect(c, -0.55, -1.3 - DROP, 0.55, 0.05, '#b08a3a'); fillRect(c, -0.05, -0.7 - DROP, 0.05, 0.05, '#2c2f2a'); c.fillStyle = '#fff3c4'; c.beginPath(); c.arc(0, -1.05 - DROP, 0.2, Math.PI, 0); c.fill(); line(c, [[-0.4, -1.02 - DROP], [0.4, -1.02 - DROP]], '#7a5a22', 0.04); } }, at: [0, 0] });
+
+  // more in the rooms
+  h = floorH(0);
+  add({ id: 'pipe', h, d: 1.2, pts: rectPts(1.3, 0, 1.6, FLOOR - SLAB), col: '#59635d', back: '#4c5552' });
+  add({ id: 'valve', h, d: 1.3, pts: circle(1.45, 2.1, 0.55, 24), holes: [circle(1.45, 2.1, 0.38, 20)], col: '#b5482e', back: '#8e2a20' });
+  add({ id: 'shelf', h, d: 1.2, pts: rectPts(3.6, 0, 14.4, 3.9), holes: [rectPts(3.85, 0.15, 14.15, 1.75), rectPts(3.85, 2.0, 14.15, 3.6)], col: '#7a5a30', back: '#6a4c26' });
+  add({ id: 'tins', h, d: 1.1, pts: rectPts(3.85, 2.0, 14.15, 2.8), col: '#343c38', print: { box: [3.85, 2.0, 14.15, 2.8], draw: (c) => { fillRect(c, 3.85, 2, 14.15, 2.8, '#343c38'); const cols = ['#b5482e', '#c9a13b', '#2f8580', '#b5482e', '#5d9f52', '#c9a13b']; for (let k = 0; k < 24; k++) { const x = 4 + k * 0.42; fillRect(c, x, 2.02, x + 0.34, 2.62, cols[k % 6]); fillRect(c, x, 2.25, x + 0.34, 2.4, '#efe7d3'); } } } });
+  h = floorH(2);
+  add({ id: 'drip', h, d: 2.1, pts: [[-5.65, 0], [-5.0, 0], [-5.0, 0.12], [-5.27, 0.12], [-5.27, 3.3], [-4.95, 3.3], [-4.95, 3.42], [-5.7, 3.42], [-5.7, 3.3], [-5.38, 3.3], [-5.38, 0.12], [-5.65, 0.12]], col: '#9aa39c', back: '#9aa39c' });
+  add({ id: 'dripbag', h, d: 2.15, pts: [[-5.5, 2.45], [-5.15, 2.45], [-5.1, 3.25], [-5.55, 3.25]], col: '#cfe8e4', back: '#cfe8e4' });
+  for (let k = 0; k < 3; k++) { const x = 3 + k * 3.9; for (const y of [1.1, 3.0]) add({ id: `blanket${k}:${y}`, h, d: 1.56, pts: rectPts(x + 0.22, y - 0.3, x + 3.08, y + 0.02), col: ['#c94f4f', '#5d9f52', '#c9a13b'][k], back: '#9c3a3a' }); }
+  h = floorH(3);
+  add({ id: 'bench', h, d: 3.05, pts: [[2.6, 0], [2.8, 0], [2.8, 0.45], [12.6, 0.45], [12.6, 0], [12.8, 0], [12.8, 0.62], [2.6, 0.62]], col: '#74492b', back: '#5f3b22' });
+  add({ id: 'jug', h, d: 2.42, pts: [[5, 1.3], [5.6, 1.3], [5.6, 2.15], [5.75, 2.32], [4.95, 2.32], [5, 2.15]], col: '#d8e2e6', back: '#c4ced2' });
+  add({ id: 'mug1', h, d: 2.42, pts: rectPts(7.2, 1.3, 7.55, 1.9), col: '#c23b2c', back: '#a8331f' });
+  add({ id: 'mug2', h, d: 2.42, pts: rectPts(9.6, 1.3, 9.95, 1.9), col: '#2f8580', back: '#2a7671' });
+  add({ id: 'pot', h, d: 2.0, pts: [[-6.6, 1.5], [-5.2, 1.5], [-5.2, 2.3], [-5.0, 2.4], [-6.8, 2.4], [-6.6, 2.3]], col: '#8c8f86', back: '#75786f' });
+  h = floorH(4);
+  add({ id: 'deskchair', h, d: 2.95, pts: [[-8.2, 0], [-8.0, 0], [-8.0, 0.55], [-7.0, 0.55], [-7.0, 0], [-6.8, 0], [-6.8, 0.75], [-6.9, 0.75], [-6.9, 1.8], [-8.1, 1.8], [-8.1, 0.75], [-8.2, 0.75]], col: '#2a323a', back: '#232a31' });
+  h = floorH(5);
+  add({ id: 'safe', h, d: 1.6, pts: rectPts(8.2, 0, 10.6, 2.4), col: '#4c5355', print: { box: [8.2, 0, 10.6, 2.4], draw: (c) => { fillRect(c, 8.2, 0, 10.6, 2.4, '#4c5355'); c.strokeStyle = '#2f3436'; c.lineWidth = 0.06; c.strokeRect(8.4, 0.2, 2, 2); disc(c, 9.4, 1.25, 0.36, '#8c8f86'); disc(c, 9.4, 1.25, 0.24, '#5c6163'); line(c, [[9.4, 1.25], [9.55, 1.45]], '#e8c352', 0.05); line(c, [[10.1, 0.9], [10.1, 1.6]], '#8c8f86', 0.09); } } });
+
   // cameras: one in the corner of each room, with a red eye
   for (let fl = 0; fl < 6; fl++) add({ id: 'cam' + fl, move: true, h: floorH(fl), d: 0.6, pts: [[13.3, 3.45], [14.5, 3.75], [14.5, 4.15], [13.3, 3.95]], col: '#25261f', print: { box: [13.3, 3.45, 14.5, 4.15], share: 'cam', draw: (c) => { fillRect(c, 13.3, 3.45, 14.5, 4.15, '#25261f'); disc(c, 13.62, 3.74, 0.17, '#ff4a3a'); } } });
   // markers: a hazard flag for each machine that can break
   for (const sys in FAULT_AT) add({ id: 'flag:' + sys, move: true, h: floorH(FAULT_AT[sys][0]), d: 3.9, pts: [[-0.95, 0], [0.95, 0], [0, 1.7]], col: '#f2c230', at: [FAULT_AT[sys][1], 2.3], print: { box: [-0.95, 0, 0.95, 1.7], share: 'flag', draw: (c) => { fillRect(c, -0.95, 0, 0.95, 1.7, '#f2c230'); c.strokeStyle = '#25261f'; c.lineWidth = 0.14; c.beginPath(); c.moveTo(-0.72, 0.12); c.lineTo(0.72, 0.12); c.lineTo(0, 1.42); c.closePath(); c.stroke(); fillRect(c, -0.08, 0.55, 0.08, 1.05, '#25261f'); disc(c, 0, 0.36, 0.1, '#25261f'); } } });
 
-  // pawns: one card for every mood of every person; only one of them stands at a time
-  const arch = [[-1.2, 0], [1.2, 0], [1.2, 1.6], ...Array.from({ length: 11 }, (_, i) => { const a = ((i + 1) / 12) * Math.PI; return [Math.cos(a) * 1.2, 1.6 + Math.sin(a) * 1.2]; }), [-1.2, 1.6]];
-  const pawnPrint = (role, mood) => ({ box: [-1.2, 0, 1.2, 2.8], draw: (c) => { fillRect(c, -1.3, -0.1, 1.3, 2.9, role === 'you' ? '#f0d68a' : '#f6f1e2'); fillRect(c, -1.3, -0.1, 1.3, 0.2, '#25261f'); c.save(); c.translate(-1.09, 2.74); c.scale(0.068, -0.068); drawSVG(c, faceMarkup(role, mood)); c.restore(); } });
-  for (const role of ROLES) for (const mood of MOODS) add({ id: `pawn:${role}:${mood}`, move: true, pts: arch, z0: -0.03, z1: 0.03, col: '#f6f1e2', back: '#e9e2cc', print: pawnPrint(role, mood) });
-  for (const mood of ['smug', 'sour', 'dead']) add({ id: `pawn:you:${mood}`, move: true, pts: arch, z0: -0.03, z1: 0.03, col: '#f6f1e2', back: '#e9e2cc', print: pawnPrint('you', mood) });
+  // people: one cut figure for every mood of every person (only one stands at a time), a hat each, and a stand
+  const figure = (role, mood) => ({ box: [-1.15, -0.05, 1.15, HEAD_Y + HEAD_R + 0.05], draw: (c) => {
+    const [col, dress] = UNIFORM[role];
+    fillRect(c, -1.2, -0.1, 1.2, 1.4, col); dress(c);
+    c.save(); c.translate(-16 * SV, HEAD_Y + 23 * SV); c.scale(SV, -SV); drawSVG(c, faceMarkup(role, mood, false)); c.restore();
+  } });
+  for (const role of [...ROLES, 'you']) {
+    for (const mood of role === 'you' ? ['smug', 'sour', 'dead'] : MOODS) add({ id: `pawn:${role}:${mood}`, move: true, pts: BODY, z0: -0.03, z1: 0.03, col: UNIFORM[role][0], back: '#e9e2cc', print: figure(role, mood) });
+    const hp = HAT_PTS[role].map(sv), xs = hp.map((q) => q[0]), ys = hp.map((q) => q[1]);
+    add({ id: 'hat:' + role, move: true, pts: hp, z0: 0.03, z1: 0.075, col: HAT_COL[role], back: HAT_COL[role], print: { box: [Math.min(...xs) - 0.05, Math.min(...ys) - 0.05, Math.max(...xs) + 0.05, Math.max(...ys) + 0.05], draw: (c) => { c.save(); c.translate(-16 * SV, HEAD_Y + 23 * SV); c.scale(SV, -SV); drawSVG(c, HATS[role]); c.restore(); } } });
+    add({ id: 'base:' + role, move: true, pts: circle(0, 0, 1, 24).map(([x, y]) => [x * 1.15, y * 0.55]), z0: -0.02, z1: 0.02, col: role === 'you' ? '#7b2731' : '#2f3b34', back: '#2f3b34' });
+  }
   for (const role of ROLES) {
     add({ id: 'ask:' + role, move: true, pts: [[-0.75, 0.35], [-0.2, 0.35], [0, 0], [0.2, 0.35], [0.75, 0.35], [0.75, 1.5], [-0.75, 1.5]], col: '#fffdf6', print: { box: [-0.75, 0, 0.75, 1.5], share: 'ask', draw: (c) => { fillRect(c, -0.75, 0, 0.75, 1.5, '#fffdf6'); text(c, '?', 0, 0.58, 1.05, '#b5482e', '700 SIZEpx Georgia, serif', 'center'); } } });
     add({ id: 'alert:' + role, move: true, pts: circle(0, 0, 0.42, 16), col: '#b5482e', print: { box: [-0.42, -0.42, 0.42, 0.42], share: 'alert', draw: (c) => { fillRect(c, -0.42, -0.42, 0.42, 0.42, '#b5482e'); fillRect(c, -0.06, -0.08, 0.06, 0.26, '#fff'); disc(c, 0, -0.22, 0.07, '#fff'); } } });
@@ -264,7 +360,7 @@ export function createDiorama(root) {
   light.centre = [0, 15, 3]; light.radius = 27;
   // the window is in front and to the left, and low, so the back of each room is lit under its ceiling's shadow
   const DAY = { dir: [-0.6, 0.4, 0.72], col: [3.3, 3.05, 2.65], fill: 1 };
-  const NIGHT = { dir: [0.55, 0.5, 0.66], col: [0.42, 0.56, 0.95], fill: 0.3 };
+  const NIGHT = { dir: [0.5, 0.45, 0.74], col: [0.55, 0.72, 1.2], fill: 0.32 };
   light.key.size = 5;
   light.fill = [
     { dir: [0, 1, 0.1], col: [0.2, 0.22, 0.26], cone: 32 },
@@ -318,6 +414,14 @@ export function createDiorama(root) {
   const built = mesh.finish(['all']);
   renderer.setMesh(built);
   renderer.setAtlas(['all'], atlas.canvas);
+  // The lettering on the model uses the page's own type. If it was not loaded yet, print the sheet again
+  // when it arrives (same sizes, so the same places in the atlas).
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('600 40px "Barlow Condensed"'), document.fonts.ready]).then(() => {
+      const again = buildAtlas(prints, 2048, small ? 30 : 38, '#efe7d3');
+      renderer.setAtlas(['all'], again.canvas); renderer.restart(); dirty = true; kick();
+    }).catch(() => {});
+  }
   const packed = new Float32Array(rig.frames.length * 12);
 
   // --- what moves ---
@@ -338,6 +442,8 @@ export function createDiorama(root) {
     const open = opening.v > 0.985;
     // the lift, the water in the tank, what your comforts look like
     show('lift', true, 0, liftCar.h, 2.6);
+    const night = dusk.v > 0.5;          // the night sky slots in while the light is at its dimmest
+    show('nightsky', night); show('moon', night); show('sun', !night);
     show('water', true, 0, floorH(0) + 0.5 - 3.2 * (1 - water.v), 1.9);
     for (const id of ['tubwater', 'steam', 'steam2']) show(id, !!(v.policy && v.policy.tub));
     show('film', !!(v.policy && v.policy.cinema));
@@ -355,9 +461,12 @@ export function createDiorama(root) {
       const a = pawns[role];
       const moods = role === 'you' ? ['smug', 'sour', 'dead'] : MOODS;
       for (const m of moods) { const p = frameOf[`pawn:${role}:${m}`]; if (m === a.mood && a.s > 0.02 && open) place(p, a.x, a.h, a.d, a.s, a.lying); else hide(p); }
+      const stands = a.s > 0.02 && open;
+      if (stands) place(frameOf['hat:' + role], a.x, a.h, a.d, a.s, a.lying); else hide(frameOf['hat:' + role]);
+      if (stands && !a.lying) place(frameOf['base:' + role], a.x, a.h, a.d, a.s, true); else hide(frameOf['base:' + role]);
       if (role === 'you') continue;
-      const up = a.h + 2.95 * a.s, on = a.s > 0.9 && open && !a.lying && !a.path.length;
-      show('ask:' + role, on && a.ask, a.x + 0.9, up - 0.3, a.d + 0.25);
+      const up = a.h + 3.3 * a.s, on = a.s > 0.9 && open && !a.lying && !a.path.length;
+      show('ask:' + role, on && a.ask, a.x + 1.15, up - 0.3, a.d + 0.25);
       show('alert:' + role, on && a.badge === 'alert', a.x + 1.05, a.h + 2.45, a.d + 0.2);
       show('eye:' + role, on && a.badge === 'eye', a.x + 1.05, a.h + 2.45, a.d + 0.2);
     }
@@ -367,7 +476,7 @@ export function createDiorama(root) {
   function camera() {
     const w = canvas.width || 4, h = canvas.height || 3, a = w / h;
     const target = [0, 16.6, 2.4];
-    const dist = Math.max(99, 122 / a);
+    const dist = Math.max(86, 106 / a);     // as close as keeps the top of the sky and the front of the base in view
     const cy = Math.cos(cam.pitch);
     return { eye: [target[0] + Math.sin(cam.yaw) * cy * dist, target[1] + Math.sin(cam.pitch) * dist, target[2] + Math.cos(cam.yaw) * cy * dist], target, fovY: 0.42, aperture: 0.22, groups: ['all'], blueprint: 0, near: 10, far: 600 };
   }
@@ -377,9 +486,9 @@ export function createDiorama(root) {
     const m = renderer.viewProjOf(v), cw = box.clientWidth, ch = box.clientHeight;
     const proj = (p) => { const x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15]; return [(x / w * 0.5 + 0.5) * cw, (0.5 - y / w * 0.5) * ch, w]; };
     const list = [];
-    for (const role in pawns) { const a = pawns[role]; if (a.s > 0.5 && a.shown) list.push({ key: 'p:' + role, role, label: a.label, c: proj(at(a.x, a.h + (a.lying ? 0.2 : 1.4), a.d)), r: proj(at(a.x + 1.2, a.h + 1.4, a.d)) }); }
+    for (const role in pawns) { const a = pawns[role]; if (a.s > 0.5 && a.shown) list.push({ key: 'p:' + role, role, label: a.label, c: proj(at(a.x, a.h + (a.lying ? 0.2 : 1.55), a.d)), r: proj(at(a.x + 1.2, a.h + 1.55, a.d)) }); }
     for (const f of (view && view.faults) || []) { const [fl, x] = FAULT_AT[f.sys]; list.push({ key: 'f:' + f.sys, matter: f.i, label: 'Fault: ' + f.sys, c: proj(at(x, floorH(fl) + 3.1, 3.9)), r: proj(at(x + 1, floorH(fl) + 3.1, 3.9)) }); }
-    for (const role in pawns) { const a = pawns[role]; if (a.ask && a.s > 0.9) list.push({ key: 'a:' + role, matter: a.askI, label: 'A request', c: proj(at(a.x + 0.9, a.h + 3.4, a.d)), r: proj(at(a.x + 1.7, a.h + 3.4, a.d)) }); }
+    for (const role in pawns) { const a = pawns[role]; if (a.ask && a.s > 0.9) list.push({ key: 'a:' + role, matter: a.askI, label: 'A request', c: proj(at(a.x + 1.15, a.h + 3.75, a.d)), r: proj(at(a.x + 1.9, a.h + 3.75, a.d)) }); }
     const key = list.map((h) => h.key).join();
     if (key !== hitKey) {
       hitKey = key;

@@ -107,6 +107,12 @@ The recipe Sam approved on build 15: silent at rest, short shaped bursts of nois
 
 **Mistakes fixed.** The first camera cut the top of the board and the front of the base (distance is now `max(99, 122 / aspect)`). The first hot-tub water had its steam in the same blue card (steam is now two cream pieces). A key light from behind, as in build 15, would have been blocked by the back board (see ROUNDS.md, round 2).
 
+**Round 3 additions.**
+- **A figure from a face drawing.** The body and head are one outline (`BODY`: a trapezoid with an arc of the head circle); the face drawing from `ui/faces.js` is printed on the head with the transform `translate(-16 * SV, HEAD_Y + 23 * SV); scale(SV, -SV)`, where `SV` is the head radius in cm over 11.2 (the head radius in the drawing). The hat is a separate part on the same frame, 0.03 to 0.075 cm in front, cut to a polygon traced from the hat drawing (`HAT_PTS`, in drawing units, mapped by `sv()`), and printed with the hat drawing alone (`faceMarkup(role, mood, false)` leaves the hat off the face). Any of the outline that the drawing misses is filled with the hat's main colour, so the trace need not be exact.
+- **A scene change on a card model with no emission.** Card cannot glow and the renderer has one key light, so "night" is a second sky card and a moon that are shown while the light is at its dimmest (`dusk.v > 0.5`), with the key light moved and cooled. The swap is not seen because it happens in the dark.
+- **Lettering that waits for its typeface.** The atlas is drawn as soon as the model is made; once `document.fonts.load()` for the page's face resolves, it is drawn again with the same sizes (so the same places) and handed to the renderer, which then starts its still again.
+- Cost at the end of round 3: 233 parts, 16,800 triangles, 30 px a cm in one 2048 atlas; 10.2 ms a moving frame at 794 x 595 (low), 20.3 ms at 1500 x 1125 (high).
+
 ## URL controls
 
 `?card=` start at once · `?crew=` eight digits, who came in at the hatch · `?seed=` the same run · `?day=N` play to day N with the careful player (`?as=tyrant` for the other one) · `?view=day|done|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion · `?flat=1` the flat picture instead of the card model.

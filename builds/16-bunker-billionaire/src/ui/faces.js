@@ -10,7 +10,7 @@ export const TOKEN = {
   pa: '#bfa9dc', cleaner: '#e6aea3', heir: '#93c4e6', you: '#e8c352',
 };
 
-const HATS = {
+export const HATS = {
   // a peaked cap
   security: '<path d="M6.5 12.5 Q16 3 25.5 12.5 Z" fill="#3b4654"/><path d="M5 12.2 H27 L29.5 15 H5 Z" fill="#232b35"/><circle cx="16" cy="9" r="1.4" fill="#e8c352"/>',
   // a toque
@@ -46,10 +46,10 @@ const MOODS = {
 };
 
 // The drawing inside a face, in a 32 x 36 box: head, mood, glasses, hat. (The card silo prints this on its pawns.)
-export function faceMarkup(role, mood = 'flat') {
+export function faceMarkup(role, mood = 'flat', hat = true) {
   const col = TOKEN[role] || '#ddd';
   const glasses = role === 'pa' && mood !== 'grin' ? `<circle cx="12" cy="21" r="3.3" fill="none" stroke="${INK}" stroke-width="0.9"/><circle cx="20" cy="21" r="3.3" fill="none" stroke="${INK}" stroke-width="0.9"/><path d="M15.3 21 H16.7" stroke="${INK}" stroke-width="0.9"/>` : '';
-  return `<circle cx="16" cy="23" r="11.2" fill="${col}"/><circle cx="16" cy="23" r="11.2" fill="none" stroke="rgba(37,38,31,.28)" stroke-width="0.8"/>${MOODS[mood] || MOODS.flat}${glasses}${HATS[role] || ''}`;
+  return `<circle cx="16" cy="23" r="11.2" fill="${col}"/><circle cx="16" cy="23" r="11.2" fill="none" stroke="rgba(37,38,31,.28)" stroke-width="0.8"/>${MOODS[mood] || MOODS.flat}${glasses}${hat ? HATS[role] || '' : ''}`;
 }
 export function faceSVG(role, mood = 'flat') {
   return `<svg class="face" viewBox="0 0 32 36" aria-hidden="true">${faceMarkup(role, mood)}</svg>`;
