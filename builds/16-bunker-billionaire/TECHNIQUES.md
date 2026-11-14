@@ -47,6 +47,8 @@ After the run ends, "What you never saw" draws each person's real loyalty and fe
 
 **Tags on loyalty changes** carry the traits: `'gift'` (greedy ×1.7, proud ×0.6), `'punish'` (proud ×1.7), `'promise'` and `'ideal'` (true believer ×1.6). A gossip who is wronged alone passes 30% of it to everyone.
 
+(Sections 1 to 6 describe round 1. The rules changed a good deal in round 2: one order a day became up to three actions, and the numbers quoted in section 4 are superseded by the table in ROUNDS.md, round 2.)
+
 ## 4. Balancing with players made of code (`src/engine/auto.js`, `demo/balance.html`)
 
 **What it does.** Three policies play whole runs: `random` (careless), `careful` (uses only what a person can see: faces, rumours, notes, the stores) and `seer` (reads the hidden numbers and tries each choice on a copy of the state). `simulate(n, policy, card)` counts endings. 120 runs of all five cards for one policy take about a second.
@@ -57,7 +59,7 @@ After the run ends, "What you never saw" draws each person's real loyalty and fe
 
 **Limits.** The careful player is a guess at a person. It keeps every promise and spends luxury freely, so it over-reports "kept your word" and under-reports deaths by trusting the wrong card. Real play-testing is still needed.
 
-## 5. The silo picture (`src/ui/silo.js`, `src/ui/faces.js`)
+## 5. The flat silo picture, now the fall-back (`src/ui/silo.js`, `src/ui/faces.js`)
 
 **What it does.** One SVG drawn once (about 9 KB of markup), with the staff as HTML buttons laid over it and moved by CSS transitions. Readings on the picture follow the stores: water in the tank, crates in the stores, bottles in your rack, crop height, the generator lamp. Night is two dark rectangles and a sky swap. Faces are 32 × 36 SVGs: one head, a hat per job, a mouth and brows per mood.
 
@@ -69,6 +71,42 @@ After the run ends, "What you never saw" draws each person's real loyalty and fe
 
 The recipe Sam approved on build 15: silent at rest, short shaped bursts of noise for paper and stamps, a three-partial bell for anything pitched (morning, night, a promise, an alarm, the ending). Off until "Enable sound" is clicked. Not heard on this PC; levels copy the approved build.
 
+## 7. Standing orders, comfort and the nightly forecast (round 2)
+
+**What it does.** Seven dials (`RULES.POLICY`, worded in `data/matters.js`) change what each night takes from the stores, what the staff think, and what happens to your comfort. `nightly(st)` is the one place that works out a night's consumption; `endDay` applies it and `forecast(st)` shows it, so the number under each store in the bar is exactly what tonight will take.
+
+**Why.** It gives the player something to run every day, and it makes the outline's central sentence literal: "every resource you spend on luxury is taken from survival". Comfort ties the two halves of the game together: your luxuries buy actions (`RULES.ACTIONS`: 3 at 60 or more, 2 at 30, else 1).
+
+**Key numbers.** `COMFORT_DECAY` 5 a night; table 0 / +2.5 / +5; tub +3; cinema +3; curfew +1.5. With everything on, the stores do not last 30 days: water goes first, after two to two and a half weeks depending on who runs the plant.
+
+**Gotcha.** The forecast uses how well each job is really being done, so a slacker shows in the bar before they show in a rumour. Left in on purpose: it is a sign for a player who watches the numbers.
+
+## 8. A ledger of reasons, so people can tell you what is wrong (round 2)
+
+**What it does.** Every change to a person's loyalty goes through `move(p, d, key)`, which adds it to `p.why[key]`. Keys are causes: `want`, `cameras`, `rations`, `ev:<event title>`, `or:<action>`, `ask:no` and so on. Each night every entry fades by 20%. "A quiet word" reads out the most negative entry (and the most positive) in a sentence from `WHY_BAD` / `WHY_GOOD`. Frightened people say nothing true; people at the top two steps of the ladder say something small and false. An interrogation reads the same ledger and the ladder step, truthfully, from anyone.
+
+**Why.** Sam: "Ilse is looking worse, but there's nothing I can do about that." A hidden number is only fun if there is a way to find out why it moved and a lever that answers it.
+
+## 9. Cruelty that pays (round 2)
+
+`RULES.CRUEL` (comfort gained) and `RULES.INFAMY` per cruel action; `INFAMY_FEAR` slows the fading of fear by 6% a point; a quiet word costs comfort. The counterweights are all in `endDay`: faces go blank at fear 66, people with loyalty under 14 and fear over 60 desert (5% a night), and fewer than three staff ends the run.
+
+## 10. The card silo (`src/ui/diorama.js`, `engine/`) (round 2)
+
+**What it does.** Draws the silo as a card model with build 15's engines, copied unchanged: `fold.js` (frames and packing), `cardmesh.js` and `atlas.js` (181 parts, 10,400 triangles, 85 prints in one 2048 atlas), `paperlight.js` (light, moving mode and still mode).
+
+**How the fold is solved.** The model is one hinge and a stack of parallelograms, so no linkage solver is needed: with the back board's direction `w = (0, sin t, cos t)` and forward `f = (0, 0, 1)`, a standing piece is at `x + h*w + d*f` with axes `(X, w)`, a floor at the same point with axes `(X, -f)`, a cross wall with axes `(f, w)`. `place()` is the whole of it.
+
+**Things worth reusing.**
+- **One card per state, and collapse the rest.** A pawn has seven moods; each is its own printed card on its own frame, and all but one have their frame's axes set to zero (and moved far away), so they draw as nothing. No texture is ever uploaded twice. The same trick shows and hides crates, gold bars, flags, cameras and graves.
+- **Reusing 2D art in a print.** `drawSVG()` (40 lines) paints the face drawings from `ui/faces.js` into the atlas, so the desk and the model show the same faces.
+- **Tap targets over a 3D canvas.** `placeHits()` projects each pawn and flag with `renderer.viewProjOf()` and lays an invisible button over it, so taps, keyboard focus and screen readers reach them.
+- **Life without losing the still.** A frame loop that never rests never gets the soft still. So motion comes in beats (a lift moves, a pawn shifts, every nine seconds), and the loop stops when the still is finished.
+
+**Cost** (Intel UHD 615, frames drawn back to back, ended with a 1 x 1 `readPixels`): 9.6 ms at 794 x 595 (low settings); 24.6 ms at 1700 x 1275 (high), which is why the moving picture is capped at a million pixels (`MOVING_PIXELS`); 72-frame still in 0.8 s.
+
+**Mistakes fixed.** The first camera cut the top of the board and the front of the base (distance is now `max(99, 122 / aspect)`). The first hot-tub water had its steam in the same blue card (steam is now two cream pieces). A key light from behind, as in build 15, would have been blocked by the back board (see ROUNDS.md, round 2).
+
 ## URL controls
 
-`?card=` start at once · `?seed=` the same run · `?day=N` play to day N with the careful player · `?view=event|order|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion.
+`?card=` start at once · `?crew=` eight digits, who came in at the hatch · `?seed=` the same run · `?day=N` play to day N with the careful player (`?as=tyrant` for the other one) · `?view=day|done|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion · `?flat=1` the flat picture instead of the card model.

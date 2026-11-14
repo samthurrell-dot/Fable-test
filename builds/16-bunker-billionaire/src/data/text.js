@@ -66,6 +66,14 @@ export const ENDINGS = {
     kind: 'Survived, but deposed', title: 'Early release',
     text: 'There is a vote you did not call, and it is unanimous. They give you a suit, a mask, three days of food and the readings from the Geiger counter, which are "probably fine". The hatch closes behind you, gently, the way you close a door on a sleeping child.',
   },
+  deposed_cracked: {
+    kind: 'Survived, but deposed', title: 'A hot bath',
+    text: 'Three nights without a proper meal, a warm room or a drink worth the name, and you find you would trade the whole bunker for a hot bath. So you do. The staff run you one, politely, and take the keys while you are in it. It is a very good bath.',
+  },
+  deposed_alone: {
+    kind: 'Abandoned', title: 'Nobody left to rule',
+    text: 'The last of them went up in the lift, or out through the airlock, or into the ground. The pumps are stopping one by one, because nobody is left who knows which lever does what. You have the whole bunker to yourself: every floor, every bottle, every chair. You give a short speech. The applause does not come.',
+  },
   deposed_hatch: {
     kind: 'Survived, but deposed', title: 'Left behind',
     text: 'The surface is safe. The staff walk out together, in a group you were never part of. Nobody tells you to stay and nobody waits. By evening you are the absolute ruler of one silo, six empty floors and a hot tub. The echo is excellent.',

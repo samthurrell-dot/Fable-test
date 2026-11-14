@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 13 Nov 2026 (Fable 5.2, build 16 Bunker Billionaire)
+Last updated: 14 Nov 2026 (Fable 5.2, build 16 Bunker Billionaire, round 2)
 
 ## Done
 - [x] Reviewed the 15 Maker Skool prompts and the video of results.
@@ -17,7 +17,7 @@ Last updated: 13 Nov 2026 (Fable 5.2, build 16 Bunker Billionaire)
 - **15-popup-book** – v1 plus five improvement rounds are done and working on `main`. "Where the river goes": five spreads, every mechanism in the brief, solved from the page angle; a spine with real leaf thickness; `book.check()` and `book.collisions()` test the paper rules and both pass. What is not checked (sound by ear, a real phone, dragging by hand) is near the bottom of `builds/15-popup-book/ROUNDS.md`.
   - Why 15 and not 06: Sam asked for the most complex build that needs no extra tools. 15 has the widest set of hard parts (six solved mechanisms, a book that turns, a renderer, five spreads of content) and can be checked properly on this PC; 06 is one deep shader that this PC's graphics chip can barely run.
 
-- **16-bunker-billionaire** – a game prototype from Sam's design outline ("Bunker Billionaire: Act 2", a Word file kept outside the repo), not a Maker Skool prompt. v1 and one improvement round are working on `main`: the whole daily loop, hidden loyalty and fear, 8 staff, 37 event cards, 5 starting cards, 16 endings, the silo as a cut-paper picture, a balance bench. Sam's steer: the game design leads; the paper engines in `knowledge/` were not used. Rounds and what is open are in `builds/16-bunker-billionaire/ROUNDS.md`.
+- **16-bunker-billionaire** – a game prototype from Sam's design outline ("Bunker Billionaire: Act 2", a Word file kept outside the repo), not a Maker Skool prompt. v1 and two rounds are working on `main`. Round 2 (14 Nov 2026) followed Sam playing it: the silo is now a card model drawn with the paper engines from build 15 (it folds up from flat); a day has standing orders, your comfort, up to three actions and things waiting for you; cruelty pays; and you choose who comes in at the hatch. Sam's steers so far: the game design leads; the picture must not be basic; there must be things to manage; being evil must be the fun path. He has not yet played round 2. Rounds and what is open are in `builds/16-bunker-billionaire/ROUNDS.md`.
 
 ## Site
 - GitHub Pages serves `main` from the root: https://samthurrell-dot.github.io/Fable-test/ . The home page is `index.html` at the top of the repo; add a card there for each new build. `.nojekyll` is on purpose.
@@ -34,4 +34,4 @@ Last updated: 13 Nov 2026 (Fable 5.2, build 16 Bunker Billionaire)
 |---|---|---|---|---|
 | 13-tree-seasons | Fable 5.2, default effort | Works; showcase piece | v1 + 5 (4 asked) | https://samthurrell-dot.github.io/Fable-test/builds/13-tree-seasons/ |
 | 15-popup-book | Fable 5.2, default effort | Works; showcase piece | v1 + 5 (4 asked) | https://samthurrell-dot.github.io/Fable-test/builds/15-popup-book/ |
-| 16-bunker-billionaire | Fable 5.2, default effort | Works; game prototype | v1 + 1 | https://samthurrell-dot.github.io/Fable-test/builds/16-bunker-billionaire/ |
+| 16-bunker-billionaire | Fable 5.2, default effort | Works; game prototype | v1 + 2 | https://samthurrell-dot.github.io/Fable-test/builds/16-bunker-billionaire/ |

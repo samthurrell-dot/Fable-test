@@ -27,3 +27,9 @@ What was taken from the earlier builds and the skills in this repo:
   - the cut-paper look of build 15, as flat SVG rather than its WebGL renderer.
 What was not used: the three engines in knowledge/ (fold kinematics, card mesher, paper renderer).
 A management game played a minute a day on a phone is better served by a light page.
+
+Round 2 (14 Nov 2026), after Sam played v1. His words are quoted in full at the top of round 2 in
+ROUNDS.md. In short: the picture was "incredibly basic" (use the paper engine); there was "not much
+player agency" and "nothing really to manage or take care of"; being evil must be fun, with fewer
+sensible options; and the start should let you choose your staff, each with pros and cons.
+From round 2 the three engines in knowledge/ ARE used, copied unchanged into engine/.

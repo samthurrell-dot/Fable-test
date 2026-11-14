@@ -17,7 +17,7 @@
 </head>
 <body>
 <h1>Balance bench</h1>
-<p>Plays whole runs of the rules with three players made of code: a careless one, a sensible one that sees only what a person sees, and one that reads the hidden numbers. The rules are right when the careless player mostly loses, the sensible one wins about half the time and the seer nearly always wins.</p>
+<p>Plays whole runs of the rules with four players made of code: a careless one, a sensible one that sees only what a person sees, a tyrant who rules by fear, and one that reads the hidden numbers. The rules are right when the careless player mostly loses, the sensible one wins about half the time and the seer nearly always wins.</p>
 <label>Runs each <input id="n" type="number" value="300" min="20" max="5000" step="20" style="width: 6em"></label>
 <button id="go" type="button">Run</button>
 <div id="out"></div>
@@ -29,7 +29,7 @@ export function run(n) {
   const kinds = ['king', 'word', 'deposed', 'killed', 'everyone'];
   let html = '<table><tr><th>Card</th><th>Player</th>' + kinds.map((k) => `<th>${k}</th>`).join('') + '<th>mean last day</th><th>staff left</th><th>food</th><th>water</th><th>power</th><th>med</th><th>lux</th></tr>';
   const all = {};
-  for (const c of CARDS) for (const p of ['random', 'careful', 'seer']) {
+  for (const c of CARDS) for (const p of ['random', 'careful', 'tyrant', 'seer']) {
     const r = simulate(n, p, c.id, 7);
     all[c.id + '/' + p] = r;
     html += `<tr><td>${c.name}</td><td>${p}</td>` + kinds.map((k) => `<td>${Math.round(((r.kinds[k] || 0) / n) * 100)}%</td>`).join('')
@@ -44,7 +44,7 @@ function brief(n = 80, players = ['random', 'careful', 'seer']) {
   for (const c of CARDS) for (const p of players) {
     const r = simulate(p === 'seer' ? Math.ceil(n / 3) : n, p, c.id, 7);
     const pc = (k) => Math.round(((r.kinds[k] || 0) / r.runs) * 100);
-    out.push(`${c.id.padEnd(9)} ${p.padEnd(7)} king ${pc('king')} word ${pc('word')} deposed ${pc('deposed')} killed ${pc('killed')} everyone ${pc('everyone')} | day ${r.meanDay.toFixed(1)} staff ${r.meanStaff.toFixed(1)} left ${Object.values(r.left).map((v) => v.toFixed(0)).join('/')}`);
+    out.push(`${c.id.padEnd(9)} ${p.padEnd(7)} king ${pc('king')} word ${pc('word')} deposed ${pc('deposed')} (cracked ${Math.round(((r.endings.deposed_cracked || 0) / r.runs) * 100)}) killed ${pc('killed')} everyone ${pc('everyone')} | day ${r.meanDay.toFixed(1)} staff ${r.meanStaff.toFixed(1)} acts ${r.acts.toFixed(0)} infamy ${(r.infamy || 0).toFixed(0)} left ${Object.values(r.left).map((v) => v.toFixed(0)).join('/')}`);
   }
   return out.join('\n');
 }

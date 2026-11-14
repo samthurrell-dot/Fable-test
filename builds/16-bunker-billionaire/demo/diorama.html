@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bunker Billionaire: the card silo alone</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1b211d; color: #efe7d3; font: 15px/1.4 Georgia, serif; }
+  body { display: grid; grid-template-rows: 1fr auto; }
+  #silo { min-height: 0; display: flex; align-items: center; justify-content: center; padding: 10px; }
+  .silo-box { position: relative; width: min(100%, calc((100dvh - 150px) * 4 / 3)); aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: #111; }
+  .silo-box canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  .pawns { position: absolute; inset: 0; pointer-events: none; }
+  .pawn { position: absolute; border: 1px dashed rgba(255, 255, 255, 0); background: none; padding: 0; pointer-events: auto; }
+  body.show .pawn { border-color: rgba(255, 220, 120, 0.8); }
+  form { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px 14px; align-items: center; }
+  label { display: flex; align-items: center; gap: 6px; }
+  input[type=range] { width: 150px; }
+  pre { margin: 0; font: 12px ui-monospace, Consolas, monospace; opacity: 0.8; }
+</style>
+</head>
+<body>
+<section id="silo"></section>
+<form onsubmit="return false">
+  <label>Folded up <input id="open" type="range" min="0" max="1" step="0.01" value="1"></label>
+  <label><input id="night" type="checkbox"> night</label>
+  <label><input id="cams" type="checkbox"> cameras</label>
+  <label><input id="comforts" type="checkbox" checked> hot tub and cinema</label>
+  <label><input id="faults" type="checkbox"> faults and requests</label>
+  <label><input id="hits" type="checkbox"> show tap targets</label>
+  <label>Food <input id="food" type="range" min="0" max="80" value="60"></label>
+  <label>Water <input id="water" type="range" min="0" max="70" value="50"></label>
+  <button id="shuffle" type="button">Move people</button>
+  <pre id="info"></pre>
+</form>
+<script type="module">
+import { createDiorama } from '../src/ui/diorama.js';
+const $ = (id) => document.getElementById(id);
+const d = createDiorama($('silo'));
+const posts = { security: 'security', chef: 'kitchen', engineer: 'plant', doctor: 'medical', farmer: 'farm', pa: 'suite', cleaner: 'medical', heir: 'suite' };
+const moods = ['happy', 'content', 'flat', 'sour', 'angry', 'grin', 'content', 'sour'];
+const zones = ['suite', 'vault', 'security', 'kitchen', 'mess', 'medical', 'bunks', 'farm', 'plant', 'stores'];
+const staff = Object.keys(posts).map((role, i) => ({ role, status: 'ok', zone: posts[role], mood: moods[i], label: role, badge: i === 1 ? 'alert' : i === 4 ? 'eye' : '' }));
+function draw() {
+  const f = $('faults').checked;
+  d.update({
+    staff, you: { zone: 'you', mood: 'smug' }, cameras: $('cams').checked, night: $('night').checked,
+    res: { food: +$('food').value, water: +$('water').value, lux: 40, power: 50 },
+    policy: { tub: +$('comforts').checked, cinema: +$('comforts').checked },
+    faults: f ? [{ sys: 'generator', i: 0 }, { sys: 'lights', i: 1, patched: true }] : [], asks: f ? { doctor: 2, security: 3 } : {},
+  });
+  document.body.classList.toggle('show', $('hits').checked);
+  $('info').textContent = JSON.stringify(d.info());
+}
+for (const id of ['night', 'cams', 'comforts', 'faults', 'hits', 'food', 'water']) $(id).addEventListener('input', draw);
+$('open').addEventListener('input', () => d.setOpen(+$('open').value, true));
+$('shuffle').addEventListener('click', () => { for (const p of staff) if (Math.random() < 0.6) p.zone = Math.random() < 0.4 ? posts[p.role] : zones[Math.floor(Math.random() * zones.length)]; draw(); });
+draw();
+window.__d = d; window.__draw = draw; window.__staff = staff;
+// Frame cost, measured the honest way: moving frames drawn back to back, ended by reading one pixel.
+window.__bench = (n = 20) => {
+  const r = d.renderer, gl = r.gl, px = new Uint8Array(4), c = document.querySelector('canvas');
+  const view = (i) => ({ eye: [20 + i * 1e-3, 30, 96], target: [0, 16.6, 2.4], fovY: 0.42, aperture: 0, groups: ['all'], blueprint: 0, near: 10, far: 600, changed: true, still: false });
+  r.render(view(0)); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const t0 = performance.now();
+  for (let i = 1; i <= n; i++) r.render(view(i));
+  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return { ms: +((performance.now() - t0) / n).toFixed(1), size: [c.width, c.height] };
+};
+</script>
+</body>
+</html>

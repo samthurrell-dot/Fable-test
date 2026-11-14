@@ -45,10 +45,14 @@ const MOODS = {
   none: '',
 };
 
-export function faceSVG(role, mood = 'flat') {
+// The drawing inside a face, in a 32 x 36 box: head, mood, glasses, hat. (The card silo prints this on its pawns.)
+export function faceMarkup(role, mood = 'flat') {
   const col = TOKEN[role] || '#ddd';
   const glasses = role === 'pa' && mood !== 'grin' ? `<circle cx="12" cy="21" r="3.3" fill="none" stroke="${INK}" stroke-width="0.9"/><circle cx="20" cy="21" r="3.3" fill="none" stroke="${INK}" stroke-width="0.9"/><path d="M15.3 21 H16.7" stroke="${INK}" stroke-width="0.9"/>` : '';
-  return `<svg class="face" viewBox="0 0 32 36" aria-hidden="true"><circle cx="16" cy="23" r="11.2" fill="${col}"/><circle cx="16" cy="23" r="11.2" fill="none" stroke="rgba(37,38,31,.28)" stroke-width="0.8"/>${MOODS[mood] || MOODS.flat}${glasses}${HATS[role] || ''}</svg>`;
+  return `<circle cx="16" cy="23" r="11.2" fill="${col}"/><circle cx="16" cy="23" r="11.2" fill="none" stroke="rgba(37,38,31,.28)" stroke-width="0.8"/>${MOODS[mood] || MOODS.flat}${glasses}${HATS[role] || ''}`;
+}
+export function faceSVG(role, mood = 'flat') {
+  return `<svg class="face" viewBox="0 0 32 36" aria-hidden="true">${faceMarkup(role, mood)}</svg>`;
 }
 
 export const MOOD_WORDS = { happy: 'beaming', content: 'content', flat: 'hard to read', sour: 'sour', angry: 'angry', grin: 'smiling, fixedly' };
