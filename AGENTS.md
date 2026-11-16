@@ -20,6 +20,7 @@ This repo is Sam's test bed for long "showpiece" builds (mostly on Claude Fable 
   - `prompt.txt` – the exact prompt used, and which model and effort level ran it.
 - `knowledge/` – technique cards harvested from builds (see `skills/build-harvest`).
 - `skills/` – skills usable by Claude and Gemini. Plain markdown, no product-only tool names.
+  - For game builds: read `skills/game-design-principles` when designing or changing rules, `skills/choice-and-systems-design` for strategy, management, card or survival games, and run `skills/game-design-review` before an improvement round.
 - `prompts/ready/` – prompts ready to paste.
 - `reference/maker-skool-prompts/` – the original 15 prompts by Nick Saraev (Maker Skool). Do not edit.
 - `plan/` – which builds to run on which model, and why.

@@ -96,6 +96,33 @@ Fixed during the round: the first label lettering was too small to read (0.36 cm
 
 The model is now 233 parts and 16,800 triangles (was 181 and 10,400); the print atlas is still one 2048 sheet, at 30 px a cm (was 36). Frame cost on this PC (Intel UHD 615, frames drawn back to back, ended with a 1 x 1 `readPixels`): 10.2 ms at 794 x 595 on phone settings (was 9.6), 20.3 ms at 1500 x 1125 on desktop settings. Checked in the game at 375 px: a day, lights out (the night sky swapped in, staff out of sight in their bunks with the cameras off), and the next morning, with no errors. Rules unchanged.
 
+## Review (16 Nov 2026, Opus 5.5, before round 4)
+
+Done with the new `skills/game-design-review` skill, against the design outline and `skills/game-design-principles`. Not a round: no code changed.
+
+Checked by the reviewer: read `src/engine/sim.js` and the data files; re-ran the balance bench in Node (120 runs each, 40 for the seer); loaded the game at 390 x 844 in headless Chromium with no console errors and the card model drawing. Not checked: a person playing start to finish, sound, a real phone. The staff figures did not show in two headless screenshots (title screen and `?day=5` morning); this may be timing or the software renderer, not confirmed.
+
+Bench, share of runs surviving as king (including "kept your word"):
+
+| Card | Careless | Careful | Tyrant | Seer |
+|---|---|---|---|---|
+| Inherited it | 2% | 45% | 32% | 93% |
+| Bought your way in | 6% | 48% | 44% | 95% |
+| Took it by force | 9% | 17% | 32% | 85% |
+| Promised them a vote | 3% | 77% | 35% | 93% |
+| Founder of the bunker | 2% | 10% | 26% | 100% |
+
+The tyrant loses 54 to 72% of its runs to "Nobody left to rule".
+
+Alignment with the outline: close. Every main system is in, often in the outline's words (loop, 5 starting cards with their promises and grudges, 8 roles, 4 traits, hidden loyalty/fear/unrest and the "low loyalty and low enough fear" rule, 7-step ladder, all 5 example promises with keep/break/forget, the endings). Changed on purpose: air folded into power; bugged rooms, planted spy and named factions left out. Added beyond the outline (from Sam's round 2 steers): the hatch, standing orders, comfort and 1 to 3 actions a day, 13 actions (6 cruel), requests, faults, the card model.
+
+The three weakest things (for round 4 to consider):
+1. **Cruelty is flat, not a slope.** Sam's steer stands: being evil must be the fun path. The issue is how. Each cruel act is a free-standing button that pays out comfort, so cruelty is simply efficient rather than a temptation you slide into. Frostpunk's Book of Laws and Papers, Please make each harsh step only a little worse than the last, so the player notices too late what they have become (principles 4.3, 3.1). Suggested fix: make cruelty escalate (one act opens the next, the bunker gets used to it, the rewards grow) and show who paid for it on the end screen. Keep evil fun and cheap; make it a path, not a menu.
+2. **A day may now be too full for a phone.** The outline aimed for about a minute a turn. A day now has an event, standing orders, comfort, up to three actions, requests and faults (principle 3.4). Nobody has timed a day on a phone. Suggested: time one; if it runs long, fold some standing orders or requests into the event cards.
+3. **Hidden information decides more than skill.** Careful vs seer: 10% vs 100% on Founder, 17% vs 85% on force (principles 2.3, 2.4). Suggested: give the careful player one reliable but costly way to read a person, or ease the two hard cards.
+
+Protect: fear hides faces (the grin); the same card can be harmless or an attempt on your life; an empty store is a political crisis before it is fatal.
+
 ## Not done, not checked
 
 - Still not played by a person from start to finish since round 2. The balance numbers come from players made of code, and the tyrant player is crude.
