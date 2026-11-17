@@ -299,6 +299,24 @@ h3 { font: 600 13px/1.2 var(--label); letter-spacing: 0.12em; text-transform: up
 .verdict { font-size: 18px; margin: 4px 0 2px; }
 .verdict b { font-family: var(--label); text-transform: uppercase; letter-spacing: 0.04em; font-size: 20px; color: var(--red); }
 .incidents li.you { border-left-color: var(--gold); background: rgba(201, 161, 59, 0.16); }
+.incidents li.slope { border-left-color: var(--ink); background: rgba(37, 38, 31, 0.08); font-style: italic; }
+/* the slope: harsh measures as steps going down */
+.tgroup.g-slope > span { color: var(--red); display: flex; justify-content: space-between; }
+.tgroup.g-slope > span em { font-style: normal; color: var(--soft); }
+.rungs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rungs li { position: relative; padding: 4px 0 4px 10px; border-left: 3px solid var(--red); }
+.rungs li:nth-child(2) { margin-left: 4px; } .rungs li:nth-child(3) { margin-left: 8px; } .rungs li:nth-child(4) { margin-left: 12px; } .rungs li:nth-child(5) { margin-left: 16px; }
+.rungs li > b { display: block; font: 600 12.5px/1.2 var(--label); letter-spacing: 0.08em; text-transform: uppercase; color: #7c2a17; margin-bottom: 4px; }
+.rungs li > div { display: grid; gap: 5px; }
+.rungs li small { display: block; font-size: 12.5px; color: var(--soft); font-style: italic; line-height: 1.25; margin-top: 3px; }
+.rungs li.shut { border-left: 3px dashed var(--paper3); }
+.rungs li.shut > b { color: var(--soft); opacity: 0.7; }
+.rungs li.used > b::after { content: ' ✓'; color: var(--red); }
+.rungs.past li { padding: 3px 0 3px 10px; }
+.rungs.past li > b { display: inline; }
+.tool.shut { border-style: dashed; }
+.reveal small.done { color: var(--red); font-style: normal; }
+.rumour.test { box-shadow: inset 3px 0 0 var(--ink); }
 .rumour.said { font-style: italic; box-shadow: inset 3px 0 0 var(--gold); }
 
 /* standing orders */

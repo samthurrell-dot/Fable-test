@@ -17,7 +17,7 @@ import { ROLES, ROLE_ORDER, STAGES, CANDIDATES } from '../data/staff.js';
 import { cardById } from '../data/cards.js';
 import { RUMOURS, RUMOURS_AFRAID, MOODS, SABOTAGE, THEFT } from '../data/text.js';
 import { EVENTS } from '../data/events.js';
-import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS } from '../data/matters.js';
+import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS, RUNGS } from '../data/matters.js';
 
 export const RULES = {
   DAYS: 30,                      // nights until the surface is safe
@@ -59,11 +59,17 @@ export const RULES = {
   },
   // Cruelty. Being a tyrant is restful: each cruel act gives you comfort, and adds to your infamy,
   // which slows the fading of everyone's fear. Listening to people costs comfort.
-  CRUEL: { interrogate: 3, example: 6, cell: 3, exile: 4, scapegoat: 5, divide: 2, confiscate: 3 },
-  INFAMY: { interrogate: 1, example: 2, cell: 1, exile: 3, scapegoat: 2, divide: 1, confiscate: 1 },
+  CRUEL: { reprimand: 2, confiscate: 3, interrogate: 3, divide: 2, example: 5, scapegoat: 5, cell: 4, exile: 6 },
+  INFAMY: { reprimand: 1, confiscate: 1, interrogate: 1, divide: 1, example: 2, scapegoat: 2, cell: 1, exile: 3 },
+  // The slope. Measures sit on rungs (RUNGS in data/matters.js); st.regime is how many rungs are open.
+  // Using the lowest open rung opens the next one the following morning. Each rung further down:
+  RELISH: 0.15,                  // cruelty gives this much more comfort (it gets easier)
+  NUMB: 0.18, NUMB_FLOOR: 0.45,  // measures from higher up shock bystanders this much less (they have seen worse)
+  SOUR: 0.12, SOUR_FLOOR: 0.4,   // perks, quiet words, speeches and promises are worth this much less (they know what you are)
+  FRIEND_LOSS: 7, FRIEND_LOSS_JUST: 2,   // loyalty a friend loses when someone is exiled, deserts or dies; and when they had it coming
   INFAMY_FEAR: 0.06,             // each point of infamy slows the fading of fear by this share
-  TALK_COMFORT: 2,               // what a quiet word costs you
-  DESERT_LOYALTY: 14, DESERT_FEAR: 60, DESERT: 0.05,
+  TALK_COMFORT: 3,               // what a quiet word costs you
+  DESERT_LOYALTY: 14, DESERT_FEAR: 60, DESERT: 0.06, DESERT_GUARDED: 0.25, DESERT_CURFEW: 0.6,
   ALONE: 3,                      // with fewer staff than this the silo cannot be run at all, and you have nobody to rule   // hated and terrified: chance a night that they take a suit and go
   CELL_NIGHTS: 3, ISOLATE_DAYS: 6, SCAPEGOAT_UNREST: 14, SCAPEGOAT_FADE: 0.6, SEARCH_FADE: 0.5,
   // You. Comfort falls every night and is held up by how you live. It sets how much you get done.
@@ -72,9 +78,10 @@ export const RULES = {
   INDULGE_COST: 4, INDULGE: 12,          // once a day: luxury spent on yourself, comfort gained
   CRACK_NIGHTS: 3,                       // nights at no comfort at all before you give the bunker up
   // Requests and faults.
-  ASK_CHANCE: 0.5, ASK_DAYS: 3, ASK_REFUSED: 5, ASK_LATE: 4,
-  FAULT_CHANCE: 0.09, PATCH: 0.4, PATCH_FAILS: 0.35, REPAIR: 3, REPAIR_NO_ENGINEER: 5,
+  ASK_CHANCE: 0.33, ASK_DAYS: 3, ASK_REFUSED: 5, ASK_LATE: 4,
+  FAULT_CHANCE: 0.09, PATCH: 0.4, PATCH_FAILS: 0.35, REPAIR: 3, REPAIR_NO_ENGINEER: 5, REPAIR_GRUDGE: 3,
   // Actions.
+  TEST_OFFENCE: 5,               // loyalty a loyal person loses for being tested (twice that if proud)
   TALK: 2, TALK_AGAIN: 3,        // loyalty for being asked; days before asking again counts
   PERK_COST: 5, PERK: 10, PERK_FADE: 0.6, INFORMANT_COST: 3, INFORMANT_TRUE: 0.84, INFORMANT_FOUND: 0.05,
   SPEECH: 6, SPEECH_FADE: 0.6, SPEECH_UNREST: 8,
@@ -176,6 +183,8 @@ function ctx(st) {
     remove(p, status) {
       if (!p) return;
       p.status = status; p.faction = false;
+      const fr = p.friend ? st.staff.find((x) => x.role === p.friend) : null;      // somebody down here will miss them
+      if (fr && fr.status === 'ok') { move(fr, -(p.exposed ? R.FRIEND_LOSS_JUST : R.FRIEND_LOSS), 'friend:' + p.role); fr.friend = null; }
       if (st.informant === p.role) st.informant = null;
       for (const pr of st.promises) if (pr.role === p.role && pr.state === 'owed') pr.state = 'void';
       st.matters = st.matters.filter((m) => m.role !== p.role);
@@ -247,9 +256,9 @@ function shuffle(st, arr) {
 export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {}) {
   const card = cardById(cardId);
   const st = {
-    v: 2, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report',
+    v: 3, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report',
     res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, crack: 0, delta: {},
-    policy: { rations: 1, shifts: 1, heating: 1, table: 1, tub: 1, cinema: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks,
+    policy: { rations: 1, shifts: 1, heating: 1, table: 1, tub: 1, cinema: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, rungUsed: {}, path: [],
     acts: 3, actsMax: 3, indulged: 0, eventDone: false, today: [], matters: [],
     staff: [], unrest: 0, word: 1, speeches: 0, informant: null,
     promises: [], flags: {}, queue: [], seen: {}, log: [],
@@ -272,6 +281,9 @@ export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {})
     p.stage = Math.min(2, stageOfLoyalty(p.loyalty), capOfFear(p.fear));
     return p;
   });
+  // friendships: four pairs, so that what you do to one person lands on another
+  const pairs = shuffle(st, st.staff.map((p) => p.role));
+  for (let i = 0; i + 1 < pairs.length; i += 2) { st.staff.find((p) => p.role === pairs[i]).friend = pairs[i + 1]; st.staff.find((p) => p.role === pairs[i + 1]).friend = pairs[i]; }
   st.unrest = clamp(18 + (55 - card.loyalty) * 0.5);
   for (const type of card.promises) {
     st.promises.push({ type, role: null, made: 0, due: type === 'vote' ? 20 : PROMISES[type].due || null, state: 'owed' });
@@ -425,6 +437,7 @@ export function choose(st, i) {
 
 export function setPolicy(st, key, v) {
   if (st.phase !== 'day') return false;
+  if (policyBlock(st, key, v)) return false;
   if (key === 'cameras') { if (st.flags.noCameras && v) return false; st.cameras = !!v; return true; }
   const def = R.POLICY[key];
   if (!def || v < 0 || v >= Object.values(def).find(Array.isArray).length) return false;
@@ -436,6 +449,7 @@ export const policyValue = (st, key) => (key === 'cameras' ? +st.cameras : st.po
 // Why a setting cannot be chosen, or ''.
 export function policyBlock(st, key, v) {
   if (key === 'cameras' && v && st.flags.noCameras) return 'You took them out, as promised';
+  if (key === 'curfew' && v && st.regime < 3) return 'Not yet. The bunker would not stand for it';
   if (st.flags.equalRations && ((key === 'table' && v > 0) || (key === 'rations' && v < 1))) return 'You promised equal rations';
   return '';
 }
@@ -481,15 +495,15 @@ export function matterView(st) {
         choices: [{ id: 'yes', label: def.t, cost: def.c, act: !!def.act, ok, why: ok ? '' : def.act && st.acts <= 0 ? 'No actions left today' : 'You can’t spare it' }, { id: 'no', label: 'Say no', cost: {}, ok: true, why: '' }],
       };
     }
+    // A broken machine: your luxury, or their goodwill. (Leaving it is the third choice, and costs a store every night.)
     const def = FAULTS[m.sys], eng = g.s('engineer');
     const price = { lux: -(eng && eng.stage < 3 ? R.REPAIR : R.REPAIR_NO_ENGINEER) };
-    const choices = [{ id: 'repair', label: 'Repair it properly, with parts from your stores', cost: price, ok: afford(price), why: afford(price) ? '' : 'Nothing left to strip for parts' }];
-    if (!m.patched) choices.push({ id: 'patch', label: 'Patch it', cost: {}, ok: true, why: '' });
-    if (!m.inspected) choices.push({ id: 'inspect', label: 'Go and look at it yourself', cost: {}, act: true, ok: st.acts > 0, why: st.acts > 0 ? '' : 'No actions left today' });
-    const drain = def.drain * (m.patched ? R.PATCH : 1);
     return {
-      i, kind: 'fault', zone: def.zone, sys: m.sys, title: def.name, patched: !!m.patched, drain: { [def.res]: -drain },
-      text: def.text + (m.patched ? ' It is patched, for now.' : '') + (m.finding ? ' ' + m.finding : ''), choices,
+      i, kind: 'fault', zone: def.zone, sys: m.sys, title: def.name, drain: { [def.res]: -def.drain }, text: def.text,
+      choices: [
+        { id: 'repair', label: 'Repair it with parts from your own stores', cost: price, ok: afford(price), why: afford(price) ? '' : 'Nothing left to strip for parts' },
+        { id: 'staff', label: 'Have the staff mend it in their own time', cost: {}, ok: true, why: '' },
+      ],
     };
   });
 }
@@ -503,63 +517,77 @@ export function decide(st, i, id) {
   st.delta = {};
   for (const k in ch.cost) g.res(k, ch.cost[k]);
   if (ch.act) st.acts--;
-  let text = '', gone = true;
+  let text = '';
   if (m.kind === 'ask') {
     const p = g.s(m.role), def = ASKS[m.role].find((a) => a.key === m.key);
     if (id === 'yes') { st.cause = 'ask:yes'; text = def.r(g, p); st.stats.asks++; } else { st.cause = 'ask:no'; g.loy(p, -R.ASK_REFUSED, 'punish'); text = def.no(p.first); }
   } else if (id === 'repair') {
-    text = `${view.title} is mended, with wire from your chandelier and a bearing from your exercise bike.`;
-    st.stats.repairs++;
-  } else if (id === 'patch') {
-    m.patched = true; gone = false;
-    text = 'Tape, a jubilee clip and a prayer. It still loses a little of what it should hold.';
-  } else {
-    m.inspected = true; gone = false;
-    g.fear('all', 1);
+    // whoever mends it properly sees how it broke
     const by = m.by ? g.s(m.by) : null;
-    if (m.by) {
-      m.finding = 'This was done on purpose.';
-      text = 'You get down on your knees with a torch. The bolts were undone from the inside, and the scratches are fresh. This was done on purpose' + (m.seen && by ? `, and the cameras have ${by.first} at it at three in the morning.` : ', by somebody who knows the machine.');
-      if (m.seen && by) g.note(by, `caught on camera breaking ${view.title.toLowerCase()}`);
-    } else {
-      m.finding = 'It was only wear.';
-      text = 'You get down on your knees with a torch. Metal fatigue, a perished seal. Nobody did this but time.';
-    }
+    text = `${view.title} is mended, with wire from your chandelier and a bearing from your exercise bike. `
+      + (m.by ? 'The bolts had been undone from the inside, and the scratches are fresh: this was done on purpose' + (m.seen && by ? `, and the cameras have ${by.first} at it at three in the morning.` : ', by somebody who knows the machine.') : 'It was metal fatigue and a perished seal. Nobody did this but time.');
+    if (m.seen && by) g.note(by, `caught on camera breaking ${view.title.toLowerCase()}`);
+    st.stats.repairs++;
+  } else {
+    st.cause = 'shifts';
+    g.loy('all', -R.REPAIR_GRUDGE);
+    text = `${view.title} is mended by the night shift, by torchlight, after a full day’s work. It runs. Nobody is thanked.`;
   }
   st.cause = null;
-  if (gone) st.matters.splice(i, 1);
+  st.matters.splice(i, 1);
   st.today.push({ title: view.title, text, delta: { ...st.delta } });
   st.log.push({ day: st.day, matter: m.kind, id });
   return text;
 }
 
 // --- Actions: as many a day as your comfort allows ------------------------------------------------------
+// The harsh ones are measures on a slope (RUNGS in data/matters.js): rung is which step each sits on.
 
 const ACTION_DEFS = [
-  { id: 'talk', group: 'Listen', name: 'A quiet word', short: 'Quiet word', hint: 'Ask one person what is wrong. They may tell you. It is tiresome.', cost: { comfort: -R.TALK_COMFORT }, target: true },
-  { id: 'interrogate', group: 'Listen', evil: true, name: 'Interrogate', short: 'Interrogate', hint: 'Two in the morning, a bright light. You learn exactly what they are up to. They do not forget it.', target: true },
-  { id: 'perk', group: 'Spend', name: 'Give a perk', short: 'Give a perk', hint: 'Loyalty up quickly, for one person. Works less each time.', cost: { lux: -R.PERK_COST }, target: true },
+  { id: 'talk', group: 'People', name: 'A quiet word', short: 'Quiet word', hint: 'Ask one person what is wrong. They may tell you. It is tiresome.', cost: { comfort: -R.TALK_COMFORT }, target: true },
+  { id: 'perk', group: 'People', name: 'Give a perk', short: 'Give a perk', hint: 'Loyalty up quickly, for one person. Works less each time.', cost: { lux: -R.PERK_COST }, target: true },
   { id: 'informant', group: 'Watch', name: 'Pay an informant', short: 'Informant', hint: 'A report on one person every morning. Paid in luxury. Might lie, might be found out.', cost: { lux: -R.INFORMANT_COST }, target: true },
-  { id: 'test', group: 'Watch', name: 'Loyalty test', short: 'Loyalty test', hint: 'Find out if one person is loyal. Offends the loyal ones.', target: true },
-  { id: 'example', group: 'Punish', evil: true, name: 'Make an example', short: 'Make an example', hint: 'Fear up for everyone. Loyalty down for everyone. They may want revenge.', target: true },
-  { id: 'cell', group: 'Punish', evil: true, name: 'Lock in the cell', short: 'The cell', hint: 'Three nights behind bars. They can plot nothing in there. Their job is done badly meanwhile.', target: true },
-  { id: 'exile', group: 'Punish', evil: true, name: 'Exile to the surface', short: 'Exile', hint: 'Removes a problem for good. You lose their skills and the others are horrified.', target: true },
-  { id: 'scapegoat', group: 'Rule', evil: true, name: 'Find a scapegoat', short: 'Scapegoat', hint: 'Blame one person, in public, for everything that is wrong. The bunker calms down. That person never forgives you.', target: true },
-  { id: 'divide', group: 'Rule', evil: true, name: 'Divide and rule', short: 'Divide and rule', hint: 'Tell one person the others are informing on them. For a week they trust nobody and can organise nothing.', target: true },
-  { id: 'confiscate', group: 'Rule', evil: true, name: 'Search the bunks', short: 'Search the bunks', hint: 'Seize what they have been hiding: food and valuables for you. Everyone resents it.' },
-  { id: 'speech', group: 'Promise', name: 'Give a speech', short: 'Speech', hint: 'A small loyalty boost. Each speech works less than the last.' },
-  { id: 'promise', group: 'Promise', name: 'Make a promise', short: 'Promise', hint: 'Loyalty now, for nothing. A debt later. Nobody says you have to mean it.', sub: true },
+  { id: 'test', group: 'Watch', name: 'Loyalty test', short: 'Loyalty test', hint: 'Find out exactly where one person stands. Offends the loyal ones.', target: true },
+  { id: 'speech', group: 'Say', name: 'Give a speech', short: 'Speech', hint: 'A small loyalty boost. Each speech works less than the last.' },
+  { id: 'promise', group: 'Say', name: 'Make a promise', short: 'Promise', hint: 'Loyalty now, for nothing. A debt later. Nobody says you have to mean it.', sub: true },
+  { id: 'reprimand', rung: 0, name: 'A dressing-down', short: 'Dressing-down', hint: 'Tell one person exactly what you think of them, where the others can hear. A slacker goes back to work.', target: true },
+  { id: 'confiscate', rung: 0, name: 'Search the bunks', short: 'Search the bunks', hint: 'Seize what they have been hiding: food and valuables for you. Everyone resents it.' },
+  { id: 'interrogate', rung: 1, name: 'Interrogate', short: 'Interrogate', hint: 'Two in the morning, a bright light. You learn exactly what they are up to. They do not forget it.', target: true },
+  { id: 'divide', rung: 1, name: 'Divide and rule', short: 'Divide and rule', hint: 'Tell one person their closest friend is informing on them. The friendship ends, and for a week they can organise nothing.', target: true },
+  { id: 'example', rung: 2, name: 'Make an example', short: 'Make an example', hint: 'Fear up for everyone. Loyalty down for everyone. They may want revenge.', target: true },
+  { id: 'scapegoat', rung: 3, name: 'Find a scapegoat', short: 'Scapegoat', hint: 'Blame one person, in public, for everything that is wrong. The bunker calms down. That person never forgives you.', target: true },
+  { id: 'cell', rung: 3, name: 'Lock in the cell', short: 'The cell', hint: 'Three nights behind bars. They can plot nothing in there. Their job is done badly meanwhile.', target: true },
+  { id: 'exile', rung: 4, name: 'Exile to the surface', short: 'Exile', hint: 'Removes a problem for good. You lose their skills and the others are horrified.', target: true },
 ];
+const RUNG_OF = Object.fromEntries(ACTION_DEFS.filter((o) => o.rung !== undefined).map((o) => [o.id, o.rung]));
 
+// How much a measure still shocks the people watching: less, once they have seen worse.
+const shock = (st, id) => Math.max(R.NUMB_FLOOR, 1 - R.NUMB * (st.regime - 1 - RUNG_OF[id]));
+// How much kindness is still worth from you: less, the further down the slope you are.
+export const kindness = (st) => Math.max(R.SOUR_FLOOR, 1 - R.SOUR * (st.regime - 1));
+// What a measure gives you in comfort: more, the further down you are. It gets easier.
+export const relish = (st, id) => Math.round(R.CRUEL[id] * (1 + R.RELISH * (st.regime - 1)));
+
+// Every action, with whether it can be afforded (ok) and, for a measure, whether its rung is still shut (locked).
+// A locked exile or cell may still be used on someone who has been caught trying to remove you.
 export function actionList(st) {
   return ACTION_DEFS.map((o) => {
-    const d = { ...o, ok: true, why: '' };
+    const d = { ...o, ok: true, why: '', evil: o.rung !== undefined, locked: o.rung !== undefined && o.rung >= st.regime };
+    if (d.evil) d.gain = { comfort: relish(st, o.id) };
     if (o.id === 'informant' && st.informant) d.hint = `Move your informant from ${st.staff.find((p) => p.role === st.informant).first} to someone else.`;
     for (const k in o.cost || {}) if (st.res[k] + o.cost[k] < 0) { d.ok = false; d.why = k === 'comfort' ? 'You have not the patience today' : 'Not enough luxury'; }
     if (o.id === 'promise' && !promiseList(st).some((p) => p.ok)) { d.ok = false; d.why = 'Nothing left to promise'; }
+    if (o.id === 'divide' && !st.staff.some((p) => p.status === 'ok' && p.friend)) { d.ok = false; d.why = 'Nobody down here is close to anybody any more'; }
     if (st.acts <= 0) { d.ok = false; d.why = 'No actions left today'; }
     return d;
   });
+}
+// May this measure be used on this person today?
+export function mayUse(st, o, p) {
+  if (!o.ok) return false;
+  if (o.id === 'divide' && !(p && p.friend)) return false;
+  if (!o.locked) return true;
+  return !!(p && p.exposed && (o.id === 'exile' || o.id === 'cell'));
 }
 
 export function promiseList(st) {
@@ -578,13 +606,14 @@ export function promiseList(st) {
 const PERKS = ['a case of your second-best wine', 'a real coffee, with real coffee in it', 'an hour in the hot tub, alone', 'the good blanket', 'a tin of peaches and a silver spoon to eat it with', 'your spare dressing gown'];
 
 // What someone says when asked what is wrong. Frightened people say nothing true; plotters say something small.
-function whyLine(key, good, p) {
+function whyLine(st, key, good, p) {
   if (key === 'want') return good ? 'I have what I asked for. That counts.' : `What do I want? ${p.wantText} I am not getting it.`;
   if (key.startsWith('ev:')) return good ? `That business with “${key.slice(3).toLowerCase()}”: you did right by us.` : `It was that business with “${key.slice(3).toLowerCase()}”. You know what you did.`;
+  if (key.startsWith('friend:')) { const f = st.staff.find((x) => x.role === key.slice(7)); return good ? `You were good to ${f.first}. I noticed that.` : `It is what you did to ${f.first}. ${f.first} is my friend.`; }
   return (good ? WHY_GOOD : WHY_BAD)[key] || (good ? 'Things have been a little better.' : 'A lot of small things.');
 }
 function talk(st, g, p) {
-  if (st.day - (p.talked ?? -9) >= R.TALK_AGAIN) g.loy(p, R.TALK + (p.trait === 'proud' ? 2 : 0));
+  if (st.day - (p.talked ?? -9) >= R.TALK_AGAIN) g.loy(p, (R.TALK + (p.trait === 'proud' ? 2 : 0)) * kindness(st));
   p.talked = st.day; p.noticed = st.day; st.stats.talks++;
   let said;
   if (p.fear >= 66) said = g.pick(SAYS.afraid);
@@ -593,7 +622,7 @@ function talk(st, g, p) {
     const all = Object.entries(p.why).filter(([k]) => k !== 'or:talk');
     const bad = all.filter(([, v]) => v <= -1.5).sort((a, b) => a[1] - b[1])[0];
     const good = all.filter(([, v]) => v >= 1.5).sort((a, b) => b[1] - a[1])[0];
-    said = (bad ? whyLine(bad[0], false, p) : g.pick(SAYS.none)) + (good ? ' ' + whyLine(good[0], true, p) : '');
+    said = (bad ? whyLine(st, bad[0], false, p) : g.pick(SAYS.none)) + (good ? ' ' + whyLine(st, good[0], true, p) : '');
   }
   p.said = { day: st.day, text: said };
   return `You sit down with ${p.first}. “${said}”${p.fear >= 66 ? ` ${p.first} keeps smiling until you leave.` : ''}`;
@@ -602,27 +631,41 @@ function talk(st, g, p) {
 export function act(st, id, arg = {}) {
   if (st.phase !== 'day') return null;
   const g = ctx(st), def = actionList(st).find((o) => o.id === id);
-  if (!def || !def.ok) return null;
+  if (!def) return null;
   const p = arg.role ? g.s(arg.role) : null;
   if (def.target && !p) return null;
+  if (!mayUse(st, def, p)) return null;
   if (id === 'promise') { const opt = promiseList(st).find((o) => o.type === arg.type); if (!opt || !opt.ok || (opt.target && !p)) return null; }
   st.delta = {}; st.cause = 'or:' + id;
   for (const k in def.cost || {}) g.res(k, def.cost[k]);
+  const soft = kindness(st), jolt = def.evil ? shock(st, id) : 1;
+  const friend = p && p.friend ? g.s(p.friend) : null;
+  const grieve = (k) => { if (friend) g.move(friend, -k, 'friend:' + p.role); };     // what you do to one, their friend feels
   let text = '', title = def.name;
   switch (id) {
     case 'talk': text = talk(st, g, p); title = `A talk with ${p.first}`; break;
     case 'perk': {
-      g.loy(p, R.PERK * Math.pow(R.PERK_FADE, p.perks), 'gift');
+      g.loy(p, R.PERK * Math.pow(R.PERK_FADE, p.perks) * soft, 'gift');
       p.perks++; p.noticed = st.day; st.stats.perks++;
       g.loy('not:' + p.role, p.trait === 'gossip' ? -2 : -1);
-      const react = p.trait === 'greedy' ? 'They check it twice and smile with all their teeth.' : p.trait === 'proud' ? 'They accept it as no more than their due.' : p.trait === 'gossip' ? 'By supper everyone has heard about it, in detail.' : 'They seem pleased.';
+      if (friend) g.move(friend, 2.5, 'friend:' + p.role);
+      const react = soft < 0.7 ? 'They take it, and look at it twice, and at you once.' : p.trait === 'greedy' ? 'They check it twice and smile with all their teeth.' : p.trait === 'proud' ? 'They accept it as no more than their due.' : p.trait === 'gossip' ? 'By supper everyone has heard about it, in detail.' : 'They seem pleased.';
       text = `${p.first} gets ${g.pick(PERKS)}. ${react}`;
+      break;
+    }
+    case 'reprimand': {
+      g.loy(p, -3, 'punish'); g.fear(p, 9); g.fear('not:' + p.role, 2);
+      grieve(1.5);
+      const back = p.stage === 2;
+      if (back) p.stage = 1;
+      text = `You tell ${p.first} exactly what you think of them, in the mess hall, at some length. ${back ? `${p.first} is back at work within the hour.` : `${p.first} says “yes” eleven times.`} You feel a good deal better.`;
       break;
     }
     case 'interrogate': {
       const worst = Object.entries(p.why).filter(([k, v]) => v <= -1.5 && k !== 'or:interrogate').sort((x, y) => x[1] - y[1])[0];
       g.loy(p, -6, 'punish'); g.fear(p, 12); g.fear('not:' + p.role, 3);
-      const said = worst ? whyLine(worst[0], false, p) : 'There is nothing. I swear there is nothing.';
+      grieve(3);
+      const said = worst ? whyLine(st, worst[0], false, p) : 'There is nothing. I swear there is nothing.';
       p.rumour = { text: `Under questioning: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
       p.said = { day: st.day, text: said };
       g.note(p, `interrogated; was ${STAGES[p.stage]}`);
@@ -633,7 +676,8 @@ export function act(st, id, arg = {}) {
     }
     case 'cell': {
       p.cell = st.day + R.CELL_NIGHTS;
-      g.loy(p, -10, 'punish'); g.fear(p, 14); g.fear('not:' + p.role, 8); g.loy('not:' + p.role, -3);
+      g.loy(p, -10, 'punish'); g.fear(p, 14); g.fear('not:' + p.role, 8); g.loy('not:' + p.role, -3 * jolt);
+      grieve(5);
       g.note(p, 'locked in the cell for three nights');
       text = `${p.first} is marched down to the cell on the security level. The door makes a very satisfying noise. Somebody else will have to do the job for three nights.` + g.violate(['purges']);
       break;
@@ -643,25 +687,25 @@ export function act(st, id, arg = {}) {
       st.scapegoats++;
       g.loy(p, -22, 'punish'); g.fear(p, 10);
       g.loy('not:' + p.role, 3 * f); g.unrest(-R.SCAPEGOAT_UNREST * f);
+      grieve(6);
       if (p.trait === 'proud') p.grudge = true;
       g.note(p, 'blamed in public for everything');
       text = `You call everyone to the mess hall and explain, with slides, that every shortage, breakdown and bad smell in this bunker is the fault of ${p.first}. ${f > 0.7 ? 'It is astonishing how much better everyone feels.' : 'It works less well than last time. People are starting to notice the pattern.'} ${p.first} says nothing.`;
       break;
     }
     case 'divide': {
-      const others = g.here().filter((q) => q !== p);
-      const q = others.length ? g.pick(others) : null;
       p.isolated = st.day + R.ISOLATE_DAYS;
-      g.loy(p, -4); if (q) { g.loy(q, -4); q.isolated = Math.max(q.isolated || 0, st.day + 3); }
-      g.unrest(-8);
-      text = q ? `You tell ${p.first}, in confidence, that ${q.first} has been reporting on them. Then you tell ${q.first} the same about ${p.first}. They stop sitting together. They stop sitting with anyone.` : `You tell ${p.first} that everyone is reporting on them. There is no one else left for it to be true of.`;
+      g.loy(p, -4); g.unrest(-8);
+      if (friend) { g.move(friend, -4, 'or:divide'); friend.isolated = Math.max(friend.isolated || 0, st.day + 3); friend.friend = null; }
+      p.friend = null;
+      text = friend ? `You tell ${p.first}, in confidence, that ${friend.first} has been reporting on them. Then you tell ${friend.first} the same about ${p.first}. They stop sitting together. They stop sitting with anyone.` : `You tell ${p.first} that everyone is reporting on them. They stop sitting with anyone.`;
       break;
     }
     case 'confiscate': {
       const f = Math.pow(R.SEARCH_FADE, st.searches);
       st.searches++;
       g.res('food', Math.round(5 * f)); g.res('lux', Math.round(4 * f));
-      g.loy('all', -5); g.fear('all', 4);
+      g.loy('all', -5 * jolt); g.fear('all', 4);
       text = f > 0.7 ? 'Every bunk is turned out at dawn. Tinned peaches, a ham, two bottles of your own brandy and a surprising amount of chocolate. It all goes up in the lift to your floor.' : 'Every bunk is turned out again. They have learned to hide things better, or there is less to hide. A few tins. A great deal of silence.';
       break;
     }
@@ -670,16 +714,20 @@ export function act(st, id, arg = {}) {
       text = `Somebody will keep an eye on ${p.first} and report to you each morning. They want paying every day.`;
       break;
     case 'test': {
-      const loyal = p.loyalty >= 50;
-      p.tested = { day: st.day, loyal };
-      if (loyal) { g.loy(p, p.trait === 'proud' ? -13 : -7); text = `You leave a “lost” master key where ${p.first} will find it. It is back on your desk within the hour, with a note. ${p.first} is loyal, and now knows you had to check.`; } else { g.fear(p, 8); text = `You leave a “lost” master key where ${p.first} will find it. It is not handed in. ${p.first} is not loyal, and now knows that you know.`; }
-      g.note(p, loyal ? 'passed a loyalty test' : 'failed a loyalty test');
+      // the one reading you can rely on: exactly where they stand, today
+      const band = p.loyalty >= 66 ? 'devoted' : p.loyalty >= 50 ? 'loyal' : p.loyalty >= 33 ? 'wavering' : 'hostile';
+      p.tested = { day: st.day, band };
+      const how = { devoted: `It is back on your desk within ten minutes, polished. ${p.first} is devoted, and a little hurt.`, loyal: `It is back on your desk within the hour, with a note. ${p.first} is loyal, and now knows you had to check.`, wavering: `It comes back two days later, after ${p.first} has had a good think. ${p.first} is wavering.`, hostile: `It is not handed in. ${p.first} is hostile, and now knows that you know.` }[band];
+      if (p.loyalty >= 50) g.loy(p, p.trait === 'proud' ? -R.TEST_OFFENCE * 2 : -R.TEST_OFFENCE); else g.fear(p, 8);
+      text = `You leave a “lost” master key where ${p.first} will find it. ${how}`;
+      g.note(p, `loyalty test: ${band}`);
       break;
     }
     case 'example': {
       const proud = p.trait === 'proud';
-      g.fear('not:' + p.role, R.EXAMPLE_FEAR); g.loy('not:' + p.role, -R.EXAMPLE_LOYALTY);
+      g.fear('not:' + p.role, R.EXAMPLE_FEAR); g.loy('not:' + p.role, -R.EXAMPLE_LOYALTY * jolt);
       g.fear(p, proud ? 10 : R.EXAMPLE_FEAR_TARGET); g.loy(p, -R.EXAMPLE_LOYALTY_TARGET, 'punish');
+      grieve(5);
       if (proud) p.grudge = true;
       const avgFear = g.here().reduce((a, x) => a + x.fear, 0) / g.here().length;
       g.unrest(avgFear >= 50 ? -6 : 6);
@@ -691,33 +739,39 @@ export function act(st, id, arg = {}) {
     case 'exile': {
       const just = !!p.exposed;
       g.remove(p, 'exiled');
-      g.fear('all', R.EXILE_FEAR + (just ? 5 : 0)); g.loy('all', just ? -2 : -R.EXILE_LOYALTY, 'ideal');
+      g.fear('all', R.EXILE_FEAR + (just ? 5 : 0)); g.loy('all', just ? -2 : -R.EXILE_LOYALTY * jolt, 'ideal');
       g.unrest(just ? 0 : R.EXILE_UNREST);
       st.stats.exiles++;
       text = `${p.first} is given a suit, a mask and a short walk to the hatch. ${just ? 'Nobody argues. They know what ' + p.first + ' tried to do.' : 'The others watch the lift go up and come back empty.'} Somebody untrained will have to do the job now.` + g.violate(['noexile', 'purges', 'seat']);
       break;
     }
     case 'speech': {
-      const f = Math.pow(R.SPEECH_FADE, st.speeches);
+      const f = Math.pow(R.SPEECH_FADE, st.speeches) * soft;
       g.loy('all', R.SPEECH * f); g.unrest(-R.SPEECH_UNREST * f);
-      text = ['You speak in the mess hall about sacrifice, family and the future. There is real applause.', 'You speak again about sacrifice. The applause is polite. Somebody checks the clock.', 'You speak about sacrifice a third time, from behind a glass of wine. People clap the way they queue.', 'You give a speech. They have heard it. Someone mouths along.'][Math.min(3, st.speeches)];
+      text = soft < 0.7 ? 'You speak in the mess hall about sacrifice, family and the future. They listen with their hands flat on the table. Nobody is going to be the first to stop clapping.' : ['You speak in the mess hall about sacrifice, family and the future. There is real applause.', 'You speak again about sacrifice. The applause is polite. Somebody checks the clock.', 'You speak about sacrifice a third time, from behind a glass of wine. People clap the way they queue.', 'You give a speech. They have heard it. Someone mouths along.'][Math.min(3, st.speeches)];
       st.speeches++;
       break;
     }
     case 'promise': {
       const opt = promiseList(st).find((o) => o.type === arg.type);
+      const word = st.word;
+      st.word = word * soft;                       // a promise from you is worth what your name is worth
       g.makePromise(arg.type, opt.target ? p.role : null);
+      st.word = word;
       const pr = st.promises[st.promises.length - 1];
-      text = `You promise: “${promiseText(st, pr)}.” ${st.word < 0.8 ? 'A few people remember your last promise and say nothing.' : 'The mood lifts at once. It cost you nothing, today.'}${pr.due ? ` It falls due on day ${pr.due}.` : ''}`;
+      text = `You promise: “${promiseText(st, pr)}.” ${word * soft < 0.8 ? 'A few people remember what else you have said and done, and say nothing.' : 'The mood lifts at once. It cost you nothing, today.'}${pr.due ? ` It falls due on day ${pr.due}.` : ''}`;
       break;
     }
     default: st.cause = null; return null;
   }
   st.cause = null;
   st.acts--;
-  if (R.CRUEL[id]) {            // it felt good
-    g.res('comfort', R.CRUEL[id]);
+  if (def.evil) {               // it felt good; and it is on the record
+    g.res('comfort', relish(st, id));
     st.infamy += R.INFAMY[id]; st.stats.cruel++;
+    if (!def.locked) st.rungUsed[def.rung] = true;
+    st.path.push({ day: st.day, id, role: p ? p.role : null, rung: def.rung });
+    if (p) { p.done = p.done || {}; p.done[id] = (p.done[id] || 0) + 1; }
   }
   st.today.push({ title, text, delta: { ...st.delta } });
   st.log.push({ day: st.day, order: id, role: arg.role, type: arg.type });
@@ -805,7 +859,8 @@ export function endDay(st) {
     p.faction = p.stage >= 5;
     if ((p.cell || 0) > st.day) { p.faction = false; continue; }      // locked up: they can do nothing tonight
     // Terror has a price. Someone who hates you and dares do nothing else may simply leave.
-    if (p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && g.chance(R.DESERT)) {
+    // (A head of security who is doing the job keeps the airlock; a curfew keeps people in their bunks.)
+    if (p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && g.chance(R.DESERT * (secOK && p !== sec ? R.DESERT_GUARDED : 1) * (pol.curfew ? R.DESERT_CURFEW : 1))) {
       g.remove(p, 'exiled'); p.fled = st.day;
       for (const q of here) if (q !== p) g.move(q, -3, 'or:exile');
       inc.push({ kind: 'bad', text: `${p.first} took a suit from the airlock in the night and went up to the surface, rather than spend another day down here with you. Nobody else can do that job properly.` });
@@ -909,6 +964,11 @@ export function endDay(st) {
   const now = actionsFor(st.res.comfort);
   if (st.crack >= 1) inc.push({ kind: 'crit', text: 'You have not slept, eaten properly or been warm for days. You cannot go on like this much longer.' });
   else if (now < actionsFor(before)) inc.push({ kind: 'you', text: now === 2 ? 'You slept badly and woke up cross. You will get less done today.' : 'You are cold, tired and living like the staff. You can manage one thing today.' });
+  // The slope: what was done yesterday is, by morning, just how things are. The next rung opens.
+  if (st.regime < RUNGS.length && st.rungUsed[st.regime - 1]) {
+    inc.push({ kind: 'slope', text: `Nobody mentions ${RUNGS[st.regime - 1].used} any more. It is just how things are done now. ${RUNGS[st.regime].opens}` });
+    st.regime++;
+  }
   st.day++;
   beginDay(st, inc);
 }

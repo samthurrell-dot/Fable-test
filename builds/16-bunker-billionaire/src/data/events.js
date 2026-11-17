@@ -473,7 +473,7 @@ const list = [
   },
   {
     id: 'lottery', title: 'The lottery', grim: true, weight: 1.3,
-    when: (g) => g.st.day >= 6 && g.here().length >= 6 && (g.st.res.food < 40 || g.st.unrest >= 30),
+    when: (g) => g.st.regime >= 4 && g.here().length >= 6 && (g.st.res.food < 40 || g.st.unrest >= 30),
     setup: (g) => { const pool = g.here().filter((p) => p.role !== 'heir'); const low = pool.slice().sort((a, b) => a.loyalty - b.loyalty)[0]; return low ? { pick: g.pick(pool).role, low: low.role } : null; },
     text: () => 'A thought, over the second bottle: one mouth fewer would make the food last. A lottery would be fair. A lottery would also concentrate minds wonderfully.',
     choices: () => [

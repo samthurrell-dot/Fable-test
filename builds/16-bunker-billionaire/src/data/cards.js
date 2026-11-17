@@ -20,8 +20,8 @@ export const CARDS = [
   {
     id: 'force', name: 'Took it by force',
     line: 'There was a list. Some people were on it. You have promised there is no second list.',
-    blurb: 'High fear, low loyalty. Fear fades. Memory does not.',
-    level: 'Brutal', loyalty: 40, fear: 72, promises: ['purges'], grudge: 'doctor',
+    blurb: 'High fear, low loyalty. They have already seen what you will do, so you start well down the slope.',
+    level: 'Brutal', loyalty: 40, fear: 72, promises: ['purges'], grudge: 'doctor', regime: 3,
     grudgeLine: 'The doctor, who treated the people on your list.',
   },
   {
@@ -35,7 +35,7 @@ export const CARDS = [
     id: 'founder', name: 'Founder of the bunker',
     line: 'Your name is on the door, the brochure and the air filters. You hired every one of them.',
     blurb: 'Full stores, low loyalty. They have read the brochure.',
-    level: 'Hard', loyalty: 43, fear: 34, promises: ['seat'], grudge: 'engineer', stores: 18,
+    level: 'Hard', loyalty: 46, fear: 34, promises: ['seat'], grudge: 'engineer', stores: 18,
     grudgeLine: 'The engineer, who does the work your name is on.',
   },
 ];

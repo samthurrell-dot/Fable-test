@@ -123,9 +123,47 @@ The three weakest things (for round 4 to consider):
 
 Protect: fear hides faces (the grin); the same card can be harmless or an attempt on your life; an empty store is a political crisis before it is fatal.
 
+## Round 4 (16 to 17 Nov 2026): the review's three weakest things
+
+Sam asked for "another run at the game, using the latest skills" (`skills/game-design-principles`, `skills/choice-and-systems-design`, `skills/game-design-review`, added 16 Nov 2026). Started on Fable 5.2 and finished on Opus 5.5 after a usage limit.
+
+The three weakest things, as the review of 16 Nov 2026 named them:
+1. **Cruelty is flat, not a slope.** "Each cruel act is a free-standing button that pays out comfort, so cruelty is simply efficient rather than a temptation you slide into."
+2. **A day may now be too full for a phone.**
+3. **Hidden information decides more than skill.**
+
+What changed:
+
+1. **The slope** (principles 4.3, 3.1). The eight harsh measures now sit on five steps: a firm hand (a dressing-down, a new action; searching the bunks), questions at night (interrogate, divide and rule), examples (make an example, and the curfew), enemies within (scapegoat, the cell), the surface (exile). Only the first step is open at the start. Use the lowest open step once and, the next morning, the report says "Nobody mentions the knock on the door at two in the morning any more. It is just how things are done now." and the next step opens. Each step down: cruelty pays 15% more comfort (it gets easier); measures from higher up shock the others less (they have seen worse); and perks, quiet words, speeches and promises are worth 12% less (they know what you are), down to 40%. "Took it by force" starts three steps down. The lottery card only comes once you are four steps down. Exile and the cell stay available, whatever the step, for someone caught trying to remove you.
+   - **Friends.** Everyone has one friend at the start (four pairs). What you do to one, the other feels, and a quiet word tells you so ("It is what you did to Bruno. Bruno is my friend."). Divide and rule now ends a friendship. Exile, desertion and death cost the friend 7 loyalty (2 if the person had it coming).
+   - **Who paid.** The end screen now lists how far you went, step by step with the day, and under each person what you did to them ("turned against a friend, shouted at ×3, made an example of ×2, questioned at 2am"). Each person's file shows the same, and who they are close to.
+2. **A lighter day** (principle 3.4). Requests come on a third of mornings, not half. A broken machine has two answers, not three (repair it with your luxury, and see who broke it; or have the staff mend it in their own time, which costs everyone 3 loyalty); patching and inspecting are gone. Measured by the bench (it now counts what a day puts in front of the player): the careful player reads 133 words and makes 2.6 decisions a day, with 0.9 things waiting; before this round it was 161 words, 2.8 decisions and 1.75 things waiting. Not timed on a phone.
+3. **One reliable reading** (principles 2.3, 2.4). The loyalty test now tells you exactly where someone stands today (devoted, loyal, wavering, hostile), at the cost of offending them if they are loyal (5 loyalty, 10 if proud).
+
+Mistakes made and fixed during the round:
+- **The tyrant could win by leaving nobody.** Its first runs on the slope still ended "Nobody left to rule" in up to 74% of runs: terrified, hated staff deserted. A head of security who is doing the job now guards the airlock (desertion a quarter as likely), and so does a curfew (60%). The code tyrant also learned to keep one friend: the person with the keys.
+- **The careful player tested everyone and lost.** With the test exact, the code player tested 18 times a run and offended its loyal staff. The test's offence went from 7 to 5, and the code player only tests people whose faces have soured.
+- **Kindness was too cheap.** The saint won 84% on "Promised them a vote" while the tyrant was crude. A quiet word now costs 3 comfort, not 2.
+
+Balance at the end of the round (`demo/balance.html`, 120 runs each, 40 for the seer; who comes in at the hatch is random in every run). Share of runs that end with you still in charge:
+
+| Card | Careless | Careful | Saint (no harsh measures) | Tyrant (down the slope) | Sees the hidden numbers |
+|---|---|---|---|---|---|
+| Inherited it | 3% | 40% | 66% | 78% | 98% |
+| Bought your way in | 5% | 57% | 63% | 62% | 100% |
+| Took it by force | 4% | 14% | 16% | 28% | 88% |
+| Promised them a vote | 2% | 63% | 83% | 45% | 98% |
+| Founder of the bunker | 1% | 15% | 32% | 43% | 100% |
+
+Both styles the design wants now have a real chance on every card (choice-and-systems-design, section 6), and neither wins everywhere: the tyrant wins more on the hard cards and when the start was harsh, the saint more where people start loyal. The tyrant loses 8 to 22% of runs to "Nobody left to rule" (was 54 to 72%). The gap between the careful player and the seer is still wide (40% against 98% on "Inherited it"): hidden information still decides a lot, and the careful player is a crude stand-in for a person.
+
+Checked: a whole run clicked through the real buttons at 375 px, leaning on harsh measures (20 days, down four steps, 43 cruel acts, deposed by the vote): no errors. The day and the slope read at 375 px with no sideways scroll, and at 1200 px. The end screen's record read in that run.
+
+Also added: `DESIGN.md` in the build folder, with the spine, the resource table and the decision audit that `skills/choice-and-systems-design` asks for.
+
 ## Not done, not checked
 
-- Still not played by a person from start to finish since round 2. The balance numbers come from players made of code, and the tyrant player is crude.
+- Still not played by a person from start to finish since round 2. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

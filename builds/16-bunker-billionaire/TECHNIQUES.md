@@ -113,6 +113,18 @@ The recipe Sam approved on build 15: silent at rest, short shaped bursts of nois
 - **Lettering that waits for its typeface.** The atlas is drawn as soon as the model is made; once `document.fonts.load()` for the page's face resolves, it is drawn again with the same sizes (so the same places) and handed to the renderer, which then starts its still again.
 - Cost at the end of round 3: 233 parts, 16,800 triangles, 30 px a cm in one 2048 atlas; 10.2 ms a moving frame at 794 x 595 (low), 20.3 ms at 1500 x 1125 (high).
 
+## 11. The slope: creeping normality as a rule (round 4)
+
+**What it does.** Harsh measures sit on rungs (`RUNGS` in `data/matters.js`; `rung` on each action in `ACTION_DEFS`). `st.regime` is how many rungs are open. Using the lowest open rung sets `st.rungUsed[r]`; at the end of the night, if the lowest open rung was used, `regime` goes up by one and the morning report says so in words from the rung (`used`, `opens`). Three numbers change with `regime`: `relish(st, id)` (comfort a measure gives you, +15% a rung), `shock(st, id)` (how much a measure upsets bystanders: 18% less for each rung it sits above the deepest one open, down to 45%), and `kindness(st)` (what perks, quiet words, speeches and promises are worth, 12% less a rung, down to 40%).
+
+**Why.** The review found cruelty was a menu of efficient buttons, not a temptation (principles 4.3 and 3.1; Frostpunk's Book of Laws: "every law should be a little bit more than the previous one"). The slope makes each step only a little worse than the last, makes it feel normal the next morning, makes the next step pay better, and makes the way back dearer.
+
+**What to watch.** The slope must never stop a player dealing with someone caught trying to kill them: `mayUse()` lets a locked exile or cell through for an exposed person. A curfew is a standing order but belongs on rung 3, so `policyBlock()` refuses it before then. The screen shows the slope as a staircase, with the next step's condition written under it.
+
+**Friends.** Four pairs at the start (`p.friend`). Harm to one is filed in the other's ledger as `friend:<role>`, so a quiet word can name it. Divide and rule ends a pair.
+
+**Measuring a day.** `playDay()` counts what a day puts in front of the player when `st.load` is set: words in the report, the event, waiting things and results, and decisions made. The bench reports words, decisions and things waiting a day. It is a stand-in for timing a day on a phone, not a replacement.
+
 ## URL controls
 
 `?card=` start at once · `?crew=` eight digits, who came in at the hatch · `?seed=` the same run · `?day=N` play to day N with the careful player (`?as=tyrant` for the other one) · `?view=day|done|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion · `?flat=1` the flat picture instead of the card model.

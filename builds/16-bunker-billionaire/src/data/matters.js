@@ -16,6 +16,18 @@ export const POLICY_INFO = {
   cinema: { name: 'Your cinema and heated floors', mine: true, opts: ['Off', 'On'], notes: ['Saves power. Socks in bed.', 'Power every night, for your comfort.'] },
 };
 
+// The slope: harsh measures, in the order the bunker gets used to them. A rung opens the morning
+// after you first use the one above it. used: what people stop mentioning; opens: the thought that follows.
+export const RUNGS = [
+  { name: 'A firm hand', acts: ['reprimand', 'confiscate'], used: 'the shouting and the bunk searches' },
+  { name: 'Questions at night', acts: ['interrogate', 'divide'], used: 'the knock on the door at two in the morning', opens: 'Questions at night would not seem like much of a step from here.' },
+  { name: 'Examples', acts: ['example'], policy: 'curfew', used: 'the toothbrush', opens: 'Making an example of somebody would hardly raise an eyebrow now. Nor would a curfew.' },
+  { name: 'Enemies within', acts: ['scapegoat', 'cell'], used: 'the cell door', opens: 'A scapegoat, or a few nights in the cell for somebody, is only a little further.' },
+  { name: 'The surface', acts: ['exile'], used: 'the lift', opens: 'There is one step left. The lift goes all the way up.' },
+];
+// What was done to a person, for their file and for the end of the run.
+export const DONE = { reprimand: 'shouted at', interrogate: 'questioned at 2am', divide: 'turned against a friend', example: 'made an example of', scapegoat: 'blamed for everything', cell: 'locked in the cell', exile: 'sent to the surface' };
+
 // Each ask: { key, text(n), t: what saying yes is called, c: open cost, act: true if it costs one of
 // your actions, r(g, p): what happens (returns the words), no(n): what a refusal looks like }.
 export const ASKS = {
@@ -83,6 +95,7 @@ export const WHY_BAD = {
   'or:exile': 'You sent one of us up to the surface.',
   'or:perk': 'Somebody else got a present. I got the smell of it.',
   'or:test': 'You tested me. Like a lock.',
+  'or:reprimand': 'You shouted at me in front of everybody.',
   'or:interrogate': 'Two in the morning. A light in my face. You know what you did.',
   'or:cell': 'Three nights in a cell. Everyone saw.',
   'or:scapegoat': 'You stood up in front of everyone and said it was all my fault.',

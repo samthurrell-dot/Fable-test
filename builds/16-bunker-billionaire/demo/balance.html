@@ -29,7 +29,7 @@ export function run(n) {
   const kinds = ['king', 'word', 'deposed', 'killed', 'everyone'];
   let html = '<table><tr><th>Card</th><th>Player</th>' + kinds.map((k) => `<th>${k}</th>`).join('') + '<th>mean last day</th><th>staff left</th><th>food</th><th>water</th><th>power</th><th>med</th><th>lux</th></tr>';
   const all = {};
-  for (const c of CARDS) for (const p of ['random', 'careful', 'tyrant', 'seer']) {
+  for (const c of CARDS) for (const p of ['random', 'careful', 'saint', 'tyrant', 'seer']) {
     const r = simulate(n, p, c.id, 7);
     all[c.id + '/' + p] = r;
     html += `<tr><td>${c.name}</td><td>${p}</td>` + kinds.map((k) => `<td>${Math.round(((r.kinds[k] || 0) / n) * 100)}%</td>`).join('')

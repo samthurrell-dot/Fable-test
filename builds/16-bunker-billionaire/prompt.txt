@@ -33,3 +33,8 @@ ROUNDS.md. In short: the picture was "incredibly basic" (use the paper engine); 
 player agency" and "nothing really to manage or take care of"; being evil must be fun, with fewer
 sensible options; and the start should let you choose your staff, each with pros and cons.
 From round 2 the three engines in knowledge/ ARE used, copied unchanged into engine/.
+
+Round 4 (16 to 17 Nov 2026), Sam's words: "have another run at the game, using the latest skills that have
+been added to the folder/repo". The skills: skills/game-design-principles, skills/choice-and-systems-design,
+skills/game-design-review (added 16 Nov 2026 with a review of this build in ROUNDS.md). Round 4 took the
+review's three weakest things as its brief. Started on Fable 5.2, finished on Opus 5.5.
