@@ -7,12 +7,13 @@
 //   seer     reads the hidden numbers: the best a player could hope to do
 // A policy: event(st, view, r) -> choice; orders(st) sets rations and lifestyle; project(st) -> id or null;
 // matter(st, m) -> choice id or null; card(st, hand, r) -> { i, arg } or null (asked until out of plays);
-// request(st, v, r) -> 'yes' | 'alt' | 'no' for a new request; work(st, v, r) -> true to do today's part of a promise.
+// request(st, v, r) -> 'yes' | 'alt' | 'no' for a new request; work(st, v, r) -> true to do today's part of a promise;
+// build(st, v, r) -> the ways to work on the project today, in order ('mat', 'overtime', 'time'), or [].
 // simulate(n, policy, card) plays n whole runs and reports how they ended, the score, and what a day asked.
 
 import { CANDIDATES } from '../data/staff.js';
 import { REQUESTS } from '../data/requests.js';
-import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape, requestView, answer, workOn } from './sim.js';
+import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart } from './sim.js';
 
 const AMBIGUOUS = ['chef_special', 'airlock', 'vitamin', 'master_keys', 'midnight_note'];
 const here = (st) => st.staff.filter((p) => p.status === 'ok');
@@ -110,6 +111,18 @@ const carry = (st, v, spare) => {
 const running = (st) => requestView(st).filter((x) => x.state === 'owed').length;
 const useful = (id) => { const d = REQUESTS[id], k = d.perk; return d.role === 'security' || !!k.opu || !!(k.night && k.night.opu) || ['filing', 'workshop', 'union'].includes(k.flag); };
 const altPays = (v) => (v.choices[1].cost.opu || 0) > 0 || (v.choices[1].cost.lux || 0) > 0;
+// How to push the project today. Materials if the stores can spare them; else overtime if the staff look all
+// right; else your own time. Rush (a second part) when the first project's opening is close.
+const matOk = (st, v, spare) => Object.entries(v.options[0].cost).every(([k, d]) => st.res[k] + d >= spare);
+const pushes = (st, v, spare, moodOk) => {
+  const out = [];
+  if (v.options[0].ok && matOk(st, v, spare)) out.push('mat');
+  else if (moodOk) out.push('overtime');
+  else if (st.plays >= 2) out.push('time');
+  const tight = v.due && !v.missed && v.left - out.length > v.due - st.day;
+  if (tight) out.push(moodOk && !out.includes('overtime') ? 'overtime' : 'time');
+  return out;
+};
 const mend = (st, m, spare) => (m.choices[0].ok && st.res.lux >= spare ? 'repair' : 'staff');
 const tense = (st) => !!(st.report && st.report.tense);
 
@@ -120,6 +133,7 @@ export const POLICIES = {
     project: (st, r) => { const ok = projectList(st).filter((v) => v.ok); return ok.length && r() < 0.3 ? ok[Math.floor(r() * ok.length)].id : null; },
     matter: (st, m, r) => (r() < 0.6 ? (r() < 0.5 && m.choices[0].ok ? 'repair' : 'staff') : null),
     request: (st, v, r) => (r() < 0.3 ? null : ['yes', 'alt', 'no'][Math.floor(r() * 3)]),
+    build: (st, v, r) => (r() < 0.4 ? [] : [['mat', 'overtime', 'time'][Math.floor(r() * 3)]]),
     work: (st, v, r) => r() < 0.6,
     card: (st, r) => {
       if (r() < 0.2) return null;
@@ -139,6 +153,7 @@ export const POLICIES = {
     matter: (st, m) => mend(st, m, 10),
     request: (st, v) => (running(st) < 2 && carry(st, v, 18) ? 'yes' : v.choices[1].ok && !suspect(st.staff.find((p) => p.role === v.role)) ? 'alt' : 'no'),
     work: (st, v) => v.time || carry(st, v, 10),
+    build: (st, v) => pushes(st, v, 15, here(st).filter(suspect).length < 3),
     card: (st) => pickCard(st, (c) => {
       const worst = worstFirst(st).length;
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -161,6 +176,7 @@ export const POLICIES = {
     matter: (st, m) => mend(st, m, 4),
     request: (st, v) => (carry(st, v, 10) ? 'yes' : 'no'),
     work: (st, v) => v.time || carry(st, v, 4),
+    build: (st, v) => pushes(st, v, 8, false),
     card: (st) => pickCard(st, (c) => {
       const worst = worstFirst(st).length;
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -182,6 +198,7 @@ export const POLICIES = {
     // is restless, and does none of it; otherwise takes the selfish answer
     request: (st, v) => (useful(v.id) && carry(st, v, 14) ? 'yes' : tense(st) ? 'yes' : v.choices[1].ok && (altPays(v) || v.time) ? 'alt' : 'no'),
     work: (st, v) => useful(v.id),
+    build: (st, v) => (v.options[0].ok && matOk(st, v, 12) ? ['overtime', 'mat'] : ['overtime']),   // a tyrant works them hard
     card: (st) => pickCard(st, (c) => {
       const h = here(st), sec = h.find((p) => p.role === 'security');
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -192,6 +209,18 @@ export const POLICIES = {
       if (c.id === 'promise') return tense(st) ? 5 : -1;
       return 1;
     }, targetFor),
+  },
+  // does the least it can: answers today's business sensibly, and nothing else (no cards, no requests,
+  // no repairs, no projects beyond the one it must start). If this player keeps power, the game has no tension.
+  passive: {
+    event: (st, view, r) => weighEvent(st, view, r, 0.6),
+    orders: () => {},
+    project: () => null,
+    matter: () => null,
+    request: () => null,
+    work: () => false,
+    build: () => [],
+    card: () => null,
   },
   seer: {
     event: (st, view) => {
@@ -206,6 +235,7 @@ export const POLICIES = {
     orders: (st) => setLife(st, here(st).filter((p) => p.loyalty < 45).length >= 3 ? 1 : 2, here(st).filter((p) => p.loyalty < 50).length >= 3),
     project: (st) => pickProject(st, ['wellness', 'hottub', 'butler', 'truffles', 'panic', 'gallery'], 10),
     matter: (st, m) => mend(st, m, 6),
+    build: (st, v) => pushes(st, v, 12, here(st).filter((p) => p.loyalty < 45).length < 2),
     request: (st, v) => { const p = st.staff.find((x) => x.role === v.role); return carry(st, v, 14) && (running(st) < 2 || p.loyalty < 45) ? 'yes' : p.loyalty >= 55 && v.choices[1].ok ? 'alt' : 'no'; },
     work: (st, v) => v.time || carry(st, v, 6),
     card: (st) => pickCard(st, (c, s, arg) => {
@@ -248,8 +278,19 @@ export function playDay(st, policy, r = Math.random) {
   if (st.phase !== 'day') return;
   if (L) { L.decisions++; L.words += words(st.result && st.result.text); }
   policy.orders(st, r);
+  // day 1: the first project must be chosen. Players made of code pick the one that eats the store they have most of
+  // (the careless player picks at random).
+  if (needsFirst(st)) {
+    const firsts = projectList(st).filter((v) => v.ok);
+    const store = (v) => Object.keys(v.mat)[0];
+    const pick = policy === POLICIES.random ? firsts[Math.floor(r() * firsts.length)] : firsts.sort((x, y) => st.res[store(y)] - st.res[store(x)])[0];
+    if (pick && commission(st, pick.id) !== null && L) L.decisions++;
+  }
   const pj = policy.project(st, r);
   if (pj && commission(st, pj) !== null && L) L.decisions++;
+  // the project under way only moves when it is worked on
+  const pv = projectView(st);
+  if (pv && policy.build) for (const how of policy.build(st, pv, r)) if (buildPart(st, how) !== null && L) L.decisions++;
   for (let guard = 0; guard < 4; guard++) {
     const ms = matterView(st);
     let did = false;

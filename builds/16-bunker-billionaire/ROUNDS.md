@@ -228,9 +228,39 @@ Against round 5: careful players keep power a little more often (71% on average,
 
 Checked: a 24-day run clicked through the real buttons at 375 px (inherited, seed 41): requests promised, worked on and kept; one left to lapse and broken; the third answer and refusals; the ledger and the end screen. No errors. A strike and the workshop and filing perks checked directly in the rules.
 
+## Round 7 (21 Nov 2026): projects you have to push, a first project, and cards that say what they do
+
+Sam played round 6. His words: "I have one option to just make a solemn promise, but there isn't any indication of why I should do that or what will be involved ... I also think a mandatory starting project to start with would be compelling and also introduce some resource scarcity. From the start I can basically do nothing and survive to day 30 so there's not much tension there." Then, mid-round: "The writing is clearly better though. The project still doesn't require anything of me, I just need to wait. The actual projects seem interesting though." And: "Some of the writing in the promises though don't feel tight", with a screenshot of the Sunday roast request.
+
+What the bench said about doing nothing: a player that only answers the day's event (and, in a second version, also sets a sensible lifestyle) kept power in 0 to 19% of runs, so doing nothing did lose, but only around day 25 to 30, when the stores ran dry. For three weeks nothing threatened it. That is the lack of tension Sam felt.
+
+What changed:
+- **Projects need you.** A project no longer builds itself overnight. It has parts (2 to 6) and moves only when you work on it, up to two parts a day, each one paid one of three ways: buy the materials (a store: power, water, food or luxury, by project), put the staff on overtime (everyone likes you a little less), or supervise it yourself (one of your card plays). A day with no work is a day with no progress. Upfront luxury costs are about a third lower to make room for the materials.
+- **A first project, chosen on day 1.** A cinema the size of a cathedral, an indoor beach with waves, or a banqueting hall for one: already paid for, built with power, water or food, and opulence every night once open. Lights out stays locked until you pick one. Its grand opening is announced for day 9: miss it and it opens in front of the scaffolding (opulence, mood and loyalty all take a hit).
+- **Every card shows what it does to people**, as small tags beside its costs: liked by one or all (up or down), calmer or stirred, more feared, find something out, a debt. Ruthless cards always show that they stir the bunker.
+- **The Solemn Promise explains itself.** The card says what you get now and what keeping and breaking cost; the picker shows "Today: everyone likes you more, and the bunker calms down. Free." against "Break it later: ...", and the day each promise falls due.
+- **Tighter writing for all 18 requests.** One-line asks, the deal in one line ("Promise: 3 × −6 food, one a day, within 5 days"), "Keep it" and "Break it" lines with numbers in them, and third answers of five words or fewer. The hint is one sentence.
+- Bench: two new code players, passive (answers the event only) and lazy (also sets a sensible lifestyle), to measure whether doing nothing is punished.
+
+Balance at the end of the round (`demo/balance.html`, seed 7, 100 runs each). Share of runs still in charge on day 30, and mean opulence when in charge:
+
+| Card | Does nothing | Careless | Careful | Saint | Tyrant |
+|---|---|---|---|---|---|
+| Inherited it | 7% | 2% | 67% (244) | 87% (204) | 50% (531) |
+| Bought your way in | 17% | 10% | 68% (257) | 77% (210) | 68% (554) |
+| Promised them a vote | 4% | 5% | 54% (239) | 92% (215) | 28% (522) |
+| Took it by force | 1% | 5% | 50% (242) | 50% (207) | 50% (565) |
+| Founder of the bunker | 5% | 6% | 59% (258) | 78% (230) | 59% (576) |
+
+Against round 6: careful players keep power less often (60% on average, was 71%), saints about the same (77%, was 78%), tyrants a little less (51%, was 55%); scores are higher because more gets built (the tyrant, who works the staff hard, builds about 4 projects a run). Doing nothing keeps power 7% of the time and builds nothing. A day now asks about 245 words and 3.8 decisions (was 235 and 3.5).
+
+Checked: day 1 at 375 px (the first-project card, lights out locked until it is chosen, the effect tags, the promise picker); a 25-day founder run clicked through the real buttons, pushing projects by hand (4 built, 13 parts pushed), requests answered and worked on, deposed by a vote on 418 opulence: no errors.
+
+Not fixed: doing nothing still loses late (around day 25 to 28), not early. The first project's opening on day 9 is now the first moment idleness costs something you can see.
+
 ## Not done, not checked
 
-- Rounds 5 and 6 have not been played by a person. Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
+- Round 7 has not been played by a person (Sam played round 6). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

@@ -11,7 +11,7 @@
 //   ?view=<day|done|night>   step that far into the day                   ?end=<ending id>  show an ending
 //   ?still=1      no ambient motion                                        ?flat=1  the flat picture, not the card model
 
-import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape, requestView, answer, workOn } from '../engine/sim.js';
+import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart } from '../engine/sim.js';
 import { POLICIES, playOut } from '../engine/auto.js';
 import { ROLES, ROLE_ORDER, TRAITS, STAGES, CANDIDATES } from '../data/staff.js';
 import { CARDS as STARTS, cardById } from '../data/cards.js';
@@ -180,7 +180,7 @@ function stopAttract() { clearInterval(attract); attract = null; }
 
 function renderTitle() {
   const save = store.get('bb.save', null), found = store.get('bb.endings', []);
-  const ok = save && save.v === 5 && save.phase !== 'ended';
+  const ok = save && save.v === 6 && save.phase !== 'ended';
   desk.innerHTML = `<article class="card title-card deal">
     <p class="kicker">Act 2 · a management game for one bunker</p>
     <h1>Bunker Billionaire</h1>
@@ -281,6 +281,7 @@ function renderDay() {
   const log = st.today.length ? `<ul class="today">${st.today.map((t) => `<li><b>${rich(t.title)}</b> ${rich(t.text)} ${chips(t.delta)}</li>`).join('')}</ul>` : '';
   const firstDays = st.day <= 2 && !st.today.length;
   desk.innerHTML = `${top}
+  ${needsFirst(st) ? projectsCard() : ''}
   ${requestsCard()}
   ${faults.map((m) => matterCard(m, false)).join('')}
   <article class="card hand">
@@ -290,16 +291,16 @@ function renderDay() {
     ${log}
   </article>
   ${tonight()}
-  ${projectsCard()}
+  ${needsFirst(st) ? '' : projectsCard()}
   ${canEscape(st) ? `<button type="button" class="go ghost pod" data-act="escape">Board the escape pod (with ${Math.round(st.res.opu)} opulence)</button>` : ''}
-  <button type="button" class="go" data-act="night"${st.eventDone ? '' : ' disabled'}>${st.eventDone ? 'Lights out' : 'Settle today’s business first'}</button>`;
+  <button type="button" class="go" data-act="night"${st.eventDone && !needsFirst(st) ? '' : ' disabled'}>${!st.eventDone ? 'Settle today’s business first' : needsFirst(st) ? 'Choose your first project first' : 'Lights out'}</button>`;
 }
 
 // Requests: what the staff have asked for, and what you promised them. Each promise is a job: a part a day,
 // paid in stores or in your time (a card play), finished in time or broken.
 const pipsOf = (v) => Array.from({ length: v.steps }, (_, k) => `<i class="${k < v.done ? 'on' : ''}"></i>`).join('');
 const partChips = (v) => (v.time ? '<span class="chip act">1 play</span>' : chips(v.part));
-const stakes = (v) => `<p class="stakes"><span class="good"><b>Kept:</b> ${esc(v.perkText)}.</span> <span class="bad"><b>Broken:</b> ${esc(v.falloutText)}.</span></p>`;
+const stakes = (v) => `<p class="stakes"><span class="good"><b>Keep it:</b> ${esc(v.perkText)}</span> <span class="bad"><b>Break it:</b> ${esc(v.falloutText)}</span></p>`;
 function requestsCard() {
   const list = requestView(st);
   if (!list.length) return '';
@@ -307,21 +308,41 @@ function requestsCard() {
   const ask = (v) => `<div class="req ask">
       <p class="rq-head"><b>${esc(v.title)}</b><span class="stamp">${v.left <= 1 ? 'answer today' : `answer within ${v.left} days`}</span></p>
       <p class="body">${rich(v.text)}</p>
-      <p class="terms">If you promise: ${v.steps} ${v.steps === 1 ? 'part' : 'parts'}, one a day, all within ${v.days} days. Each part ${partChips(v)}</p>
+      <p class="terms"><b>Promise:</b> ${v.steps} × ${partChips(v)} one a day, within ${v.days} days</p>
       ${stakes(v)}
       <div class="choices small">${v.choices.map((c) => `<button type="button" class="choice${c.id === 'yes' ? ' yes' : ''}" data-act="answer" data-i="${v.i}" data-id="${c.id}"${c.ok ? '' : ' disabled'}><span class="t">${esc(c.label)}${c.ok ? '' : `<small>${esc(c.why)}</small>`}</span><span class="costs">${chips(c.cost)}</span></button>`).join('')}</div>
     </div>`;
   const job = (v) => `<div class="req job${v.late ? ' late' : ''}">
       <p class="rq-head">${whoChip(person(v.role))}<b>${esc(v.title)}</b><span class="rpips">${pipsOf(v)}</span></p>
-      <p class="terms">${v.late ? '<b class="warn">Can no longer be finished in time.</b> ' : ''}${v.steps - v.done} ${v.steps - v.done === 1 ? 'part' : 'parts'} to go, ${v.left <= 1 ? 'today is the last day' : `${v.left} days left`}.</p>
+      <p class="terms">${v.late ? '<b class="warn">Too late to finish.</b> ' : ''}${v.steps - v.done} to go · ${v.left <= 1 ? 'last day today' : `${v.left} days left`}</p>
       ${stakes(v)}
       <button type="button" class="tool work" data-act="work" data-i="${v.i}"${v.work.ok ? '' : ' disabled'}>${v.work.ok ? `Do today’s part ${partChips(v)}` : esc(v.work.why)}</button>
     </div>`;
   return `<article class="card requests deal">
     <header><h2>Requests</h2><span class="left">${[owed.length ? `${owed.length} promised` : '', asked.length ? `${asked.length} waiting` : ''].filter(Boolean).join(' · ')}</span></header>
-    ${st.day <= 8 && !st.stats.reqMade ? '<p class="hintline">The staff ask for things that take days. Promise, and you owe a part every day until it is done: kept, it pays for good; broken, it costs you. Or give them the third answer.</p>' : ''}
+    ${st.day <= 8 && !st.stats.reqMade ? '<p class="hintline">Promise, and you pay for it a day at a time. Finish in time for a reward; miss it and it backfires.</p>' : ''}
     ${asked.map(ask).join('')}${owed.map(job).join('')}
   </article>`;
+}
+
+// What a card does to people, as small tags (fx in data/deck.js). good: whether it helps you keep power.
+const FX_ICON = {
+  like: '<svg viewBox="0 0 16 16"><path d="M8 14 L2.2 8.2 A3.3 3.3 0 0 1 8 3.6 A3.3 3.3 0 0 1 13.8 8.2 Z" fill="currentColor"/></svg>',
+  calm: '<svg viewBox="0 0 16 16"><path d="M1.5 6 Q4.5 3 8 6 T14.5 6 M1.5 11 Q4.5 8 8 11 T14.5 11" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>',
+  fear: '<svg viewBox="0 0 16 16"><path d="M1 8 Q8 1 15 8 Q8 15 1 8 Z" fill="currentColor"/><circle cx="8" cy="8" r="2.4" fill="var(--paper)"/></svg>',
+  know: '<svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.5 9.5 L14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  debt: ICON.scroll,
+};
+const FX_TAG = {
+  '+like1': ['like', 'up', 'one'], '-like1': ['like', 'down', 'one'], '+likeAll': ['like', 'up', 'all'], '-likeAll': ['like', 'down', 'all'], '~like1': ['like', 'odd', 'gamble'],
+  '+calm': ['calm', 'up', 'calmer'], '-calm': ['calm', 'down', 'stirs'], '+fear1': ['fear', 'odd', 'one'], '+fearAll': ['fear', 'odd', 'all'],
+  '+know': ['know', 'up', 'learn'], '+debt': ['debt', 'down', 'owe'],
+};
+const FX_SAY = { like: 'liked', calm: 'mood', fear: 'feared', know: 'find out', debt: 'a debt' };
+function fxTags(c) {
+  const list = (c.fx || '').split(' ').filter(Boolean);
+  if (c.kind === 'cruel' && !list.includes('-calm')) list.push('-calm');   // every ruthless card stirs the bunker
+  return list.map((t) => { const [k, dir, word] = FX_TAG[t]; return `<span class="fx ${dir}" title="${FX_SAY[k]}">${FX_ICON[k]}${dir === 'up' && k === 'like' ? '+' : dir === 'down' && k === 'like' ? '−' : ''}${word}</span>`; }).join('');
 }
 
 // A card in your hand: what kind it is, what it does, the joke, and what it costs or pays.
@@ -332,7 +353,7 @@ function cardTile(c) {
     <b>${esc(c.name)}</b>
     <span class="pt">${esc(c.text)}</span>
     <em>${esc(c.flavour)}</em>
-    <span class="pfoot">${chips(cost)}${c.target ? '<span class="tgt">on someone</span>' : ''}${c.played ? '<span class="stampd">Played</span>' : !c.ok ? `<span class="why">${esc(c.why)}</span>` : ''}</span>
+    <span class="pfoot">${fxTags(c)}${chips(cost)}${c.target ? '<span class="tgt">on someone</span>' : ''}${c.played ? '<span class="stampd">Played</span>' : !c.ok ? `<span class="why">${esc(c.why)}</span>` : ''}</span>
   </button>`;
 }
 
@@ -352,19 +373,29 @@ function tonight() {
 
 // The upgrade path: what is being built, what is built, and the button to build more.
 function projectsCard() {
-  const list = projectList(st), built = list.filter((p) => p.built), open = list.filter((p) => p.ok).length;
-  const now = st.project ? PROJECTS[st.project.id] : null;
+  if (needsFirst(st)) return `<article class="card projects first deal">
+    <header><h2>Your first project</h2></header>
+    <p class="body">Ordered before the sirens and already paid for. Pick one. The grand opening is set for day ${RULES.FIRST_DUE}, and it will not build itself.</p>
+    <button type="button" class="go" data-act="projects">Choose your first project</button>
+  </article>`;
+  const built = Object.keys(st.built).map((id) => PROJECTS[id]), open = projectList(st).filter((p) => p.ok).length;
+  const v = projectView(st);
+  const opt = (o) => `<button type="button" class="tool push" data-act="push" data-how="${o.id}"${o.ok ? '' : ' disabled'}><span>${esc(o.label)}${o.ok ? '' : `<small>${esc(o.why)}</small>`}</span><span class="costs">${o.play ? '<span class="chip act">1 play</span>' : o.mood ? '<span class="fx down">' + FX_ICON.like + '−all</span>' : chips(o.cost)}</span></button>`;
+  const due = v && v.due && !v.missed ? (v.due - st.day <= 0 ? ' · opens today' : ` · opens day ${v.due}`) : '';
   return `<article class="card projects">
-    <header><h2>Projects</h2><span class="left">${built.length} of ${list.length} built</span></header>
-    ${now ? `<p class="building"><b>Building: ${esc(now.name)}</b> <span>${st.project.left} ${st.project.left === 1 ? 'night' : 'nights'} to go. The staff are on overtime.</span><i style="--p:${(1 - st.project.left / now.days).toFixed(2)}"></i></p>` : ''}
+    <header><h2>Projects</h2><span class="left">${built.length} built</span></header>
+    ${v ? `<div class="building"><p class="rq-head"><b>${esc(v.name)}</b><span class="rpips">${Array.from({ length: v.parts }, (_, k) => `<i class="${k < v.done ? 'on' : ''}"></i>`).join('')}</span></p>
+      <p class="terms">${v.left} ${v.left === 1 ? 'part' : 'parts'} to go${due} · up to 2 a day</p>
+      <div class="pushes">${v.options.map(opt).join('')}</div></div>` : ''}
     ${built.length ? `<p class="builtlist">${built.map((p) => `<span>${esc(p.name)}</span>`).join('')}</p>` : ''}
-    ${!now ? `<button type="button" class="go ghost" data-act="projects">${open ? `Commission a project (${open} you can afford)` : 'See what you could build'}</button>` : ''}
+    ${!v ? `<button type="button" class="go ghost" data-act="projects">${open ? `Commission a project (${open} you can afford)` : 'See what you could build'}</button>` : ''}
   </article>`;
 }
 function projectsSheet() {
-  openSheet(`<h2>Commission a project</h2><p class="fine">One at a time. The staff build it in their own time, which they mind. When it is done you get ${RULES.PROJECT_DONE} opulence at once, and whatever it gives every night.</p>
+  const first = needsFirst(st);
+  openSheet(`<h2>${first ? 'Your first project' : 'Commission a project'}</h2><p class="fine">${first ? `Already paid for. Grand opening on day ${RULES.FIRST_DUE}: miss it and you open in front of the scaffolding.` : 'One at a time.'} Each part is done by buying its materials, putting the staff on overtime, or supervising it yourself. Finished: ${RULES.PROJECT_DONE} opulence at once, and what it gives every night.</p>
     <ul class="plist">${projectList(st).map((p) => `<li class="${p.built ? 'built' : ''}"><b>${esc(p.name)}</b><em>${esc(p.flavour)}</em><span>${esc(p.text)}${(p.cards || []).length ? ` New cards: ${p.cards.map((c) => DECK[c].name).join(', ')}.` : ''}</span>
-      <span class="pmeta">${chips(p.cost)} · ${p.days} nights${Object.keys(p.night || {}).filter((k) => k !== 'loyalty').length ? ` · then ${chips(Object.fromEntries(Object.entries(p.night).filter(([k]) => k !== 'loyalty')), true)} a night` : ''}</span>
+      <span class="pmeta">${Object.keys(p.cost).length ? chips(p.cost) + ' · ' : ''}${p.days} parts · materials ${chips(p.mat || {})} a part${Object.keys(p.night || {}).filter((k) => k !== 'loyalty').length ? ` · then ${chips(Object.fromEntries(Object.entries(p.night).filter(([k]) => k !== 'loyalty')), true)} a night` : ''}</span>
       <button type="button" class="tool" data-act="build" data-id="${p.id}"${p.ok ? '' : ' disabled'}>${p.ok ? 'Build it' : esc(p.why)}</button></li>`).join('')}</ul>`);
 }
 
@@ -461,7 +492,7 @@ function pickTarget(i) {
   openSheet(`<h2>${esc(c.name)}: on whom?</h2><p class="fine">${esc(c.text)}</p><ul class="picker">${who.map((p) => `<li><button type="button" data-act="playon" data-i="${i}" data-role="${p.role}">${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)} · ${(TRAITS[p.trait] || { name: 'gagged' }).name.toLowerCase()}${locked(p) ? ' · in the cell' : ''}${p.friend ? ` · close to ${esc(person(p.friend).first)}` : ''}</small>${p.rumour ? `<small class="r">${esc(p.rumour.text)}</small>` : ''}</span></button></li>`).join('')}</ul>`);
 }
 function pickPromise(i, role) {
-  openSheet(`<h2>A Solemn Promise</h2><p class="fine">Loyalty goes up at once and costs nothing today. Keep it later and trust builds. Break it and everyone who heard it remembers. Nobody said you have to mean it.</p><ul class="picker">${promiseList(st).map((o) => `<li><button type="button" data-act="${o.target && !role ? 'promiseWho' : 'promise'}" data-i="${i}" data-type="${o.type}"${role ? ` data-role="${role}"` : ''}${o.ok ? '' : ' disabled'}><span><b>“${esc(o.name)}”</b><small>Cost of keeping it: ${esc(o.cost)}</small><small>${o.ok ? (o.due ? `Falls due in ${o.due} days` : 'Stands until the hatch opens') : esc(o.why)}</small></span></button></li>`).join('')}</ul>`);
+  openSheet(`<h2>A Solemn Promise</h2><p class="stakes"><span class="good"><b>Today:</b> everyone likes you more, and the bunker calms down. Free.</span><span class="bad"><b>Break it later:</b> everyone likes you a lot less, the bunker stirs, and your word is worth half.</span></p><p class="fine">What do you promise? Nobody said you have to mean it.</p><ul class="picker">${promiseList(st).map((o) => `<li><button type="button" data-act="${o.target && !role ? 'promiseWho' : 'promise'}" data-i="${i}" data-type="${o.type}"${role ? ` data-role="${role}"` : ''}${o.ok ? '' : ' disabled'}><span><b>“${esc(o.name)}”</b><small><i>To keep it:</i> ${esc(o.cost)}</small><small>${o.ok ? (o.due ? `Due on day ${st.day + o.due}` : 'Stands until the hatch opens: kept by never breaking it') : esc(o.why)}</small></span></button></li>`).join('')}</ul>`);
 }
 function pickPromiseWho(i, type) {
   openSheet(`<h2>Who gets the next bunk upgrade?</h2><p class="fine">Cost of keeping it: ${esc(PROMISES.bunk.cost)}</p><ul class="picker">${st.staff.filter((p) => p.status === 'ok').map((p) => `<li><button type="button" data-act="promise" data-i="${i}" data-type="${type}" data-role="${p.role}">${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)}</small></span></button></li>`).join('')}</ul>`);
@@ -480,7 +511,7 @@ function help() {
     <p><b>Each day:</b> settle one piece of business; play two of the four cards in your hand; set your lifestyle and the staff’s rations for the night; then lights out.</p>
     <p><b>Cards.</b> Generous ones cost you and please them. Spin is cheap and absurd, and sometimes works. Ruthless ones pay you in opulence, frighten everyone, and open worse ones the morning after. Indulgent ones are just for you.</p>
     <p><b>Requests.</b> Every few days one of the staff asks for something that takes days to deliver. Promise it and you owe a part a day, paid from the stores or with your own time (a card play), until it is done. Keep it and you get something for good; let the days run out and it is broken, with consequences. Or refuse, or give the funny third answer.</p>
-    <p><b>Projects</b> are the upgrade path: a gold hot tub, a radio station, your own currency, a robot butler, an escape pod. Each adds opulence or new cards. The staff build them on overtime, and mind.</p>
+    <p><b>Projects</b> are the upgrade path: a gold hot tub, a radio station, your own currency, a robot butler, an escape pod. Each adds opulence or new cards. You choose your first on day 1; its grand opening is on day 9. A project only moves when you work on it, up to two parts a day: buy the materials, put the staff on overtime (they mind), or supervise it yourself (a card play).</p>
     <p><b>The stores are a closed system.</b> Nothing new comes in. The number under each store is what tonight will take. Decadence costs food, water and power; if one runs out and stays out, everyone dies.</p>
     <p><b>You never see what people think.</b> You see a face each morning and hear rumours; both can be wrong, and frightened people smile whatever they feel. The bunker’s mood, under the silo, is the one thing you can always see: let it reach “On the brink” and they act together.</p>
     <p><b>Everyone has one friend down here.</b> What you do to one of them, the other feels.</p>
@@ -520,7 +551,7 @@ function doPlay(i, arg) {
   if (last) last.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
 }
 async function lightsOut() {
-  if (busy || st.phase !== 'day' || !st.eventDone) return;
+  if (busy || st.phase !== 'day' || !st.eventDone || needsFirst(st)) return;
   busy = true; closeSheet();
   sound.play('lights'); sound.play('night');
   app.dataset.phase = 'night';
@@ -572,6 +603,7 @@ document.addEventListener('click', (ev) => {
     case 'set': if (setPolicy(st, d.k, +d.v)) { sound.play('tap'); save(); renderBar(); const y = desk.scrollTop; renderSilo(false); renderDay(); desk.scrollTop = y; } break;
     case 'answer': { const text = answer(st, +d.i, d.id); if (text === null) break; sound.play(d.id === 'yes' ? 'promise' : d.id === 'no' ? 'stamp' : 'good'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'work': { const text = workOn(st, +d.i); if (text === null) break; sound.play(st.requests[+d.i].state === 'kept' ? 'win' : 'coin'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
+    case 'push': { const text = buildPart(st, d.how); if (text === null) break; sound.play(st.project ? 'coin' : 'win'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'projects': projectsSheet(); break;
     case 'build': { const text = commission(st, d.id); if (text === null) break; closeSheet(); sound.play('promise'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'escape': if (escape(st)) { finish(); render(); } break;

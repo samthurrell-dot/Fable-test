@@ -487,3 +487,31 @@ button:focus-visible { outline: 2.5px solid var(--haz); outline-offset: 2px; }
 .req.late .rq-head > b { color: var(--red); }
 .req .warn { color: var(--red); }
 .incidents li.ask { border-left-color: var(--gold); }
+
+/* ================================================================ round 7: card effects, pushing projects, the first project */
+.fx { display: inline-flex; align-items: center; gap: 2px; font: 600 12px var(--label); letter-spacing: 0.03em; text-transform: uppercase; padding: 1px 5px 1px 3px; border-radius: 9px; background: rgba(37, 38, 31, 0.08); color: var(--soft); white-space: nowrap; }
+.fx svg { width: 12px; height: 12px; }
+.fx.up { color: #2f6b3a; background: rgba(47, 107, 58, 0.12); }
+.fx.down { color: #9c3a22; background: rgba(181, 72, 46, 0.12); }
+.fx.odd { color: #6b4a9a; background: rgba(107, 74, 154, 0.12); }
+.pcard .pfoot { gap: 3px; }
+.projects .building { padding: 0; margin: 0 0 8px; }
+.projects .building .terms { font-size: 14.5px; color: var(--soft); margin: 2px 0 8px; }
+.pushes { display: grid; gap: 6px; }
+.tool.push > span:first-child { display: grid; }
+.projects .building .rpips i { position: static; width: 14px; height: 9px; background: transparent; border-radius: 2px; }
+.projects .building .rpips i.on { background: var(--gold); }
+.projects .left { white-space: nowrap; }
+.tool.push small { font: 500 12.5px var(--body); color: var(--soft); text-transform: none; letter-spacing: 0; }
+.tool.push .costs { display: flex; gap: 3px; }
+.projects.first { box-shadow: inset 4px 0 0 var(--gold), 0 7px 16px rgba(0, 0, 0, 0.45); }
+.projects.first .body { margin: 2px 0 10px; }
+#sheet-body > .stakes { display: grid; gap: 4px; font-size: 14.5px; line-height: 1.3; margin: 4px 0 10px; }
+#sheet-body > .stakes span { padding: 5px 8px; border-left: 3px solid; border-radius: 0 3px 3px 0; }
+#sheet-body > .stakes .good { border-color: var(--green); background: rgba(47, 107, 58, 0.09); }
+#sheet-body > .stakes .bad { border-color: var(--red); background: rgba(181, 72, 46, 0.08); }
+.projects .building .rpips { display: flex; }
+.projects .building .costs { display: flex; }
+.projects .building .chip, .projects .building .fx { display: inline-flex; font-size: inherit; color: inherit; }
+.projects .building .fx { font-size: 12px; color: #9c3a22; }
+.projects .building .tool.push > span:first-child { display: grid; font-size: inherit; color: inherit; }

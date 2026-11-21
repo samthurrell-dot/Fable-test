@@ -1,12 +1,12 @@
 # Bunker Billionaire: design notes
 
-The working design for the prototype, kept as `skills/choice-and-systems-design` asks: the spine, the resources and an audit of every decision in a day. Sam's own outline ("Bunker Billionaire: Act 2", a Word file outside the repo) is the source; this records what the build does with it. Updated 21 Nov 2026, round 6. (The decision audit below is from round 4, with requests added in round 6; actions are now cards, see ROUNDS.md.)
+The working design for the prototype, kept as `skills/choice-and-systems-design` asks: the spine, the resources and an audit of every decision in a day. Sam's own outline ("Bunker Billionaire: Act 2", a Word file outside the repo) is the source; this records what the build does with it. Updated 21 Nov 2026, round 7. (The decision audit below is from round 4, with requests added in round 6; actions are now cards, see ROUNDS.md.)
 
 ## Spine
 
 1. **Feeling:** the guilty, funny pleasure of living absurdly well at everyone else's expense, and the creeping unease of not knowing who is about to stop you.
 2. **Question:** how lavishly can you live, and what will you do to the people below you to keep it up?
-3. **Loop:** read the morning, settle one piece of business, answer a request or do today's part of what you promised, play two of four cards, set your lifestyle and their rations, lights out.
+3. **Loop:** read the morning, settle one piece of business, answer a request or do today's part of what you promised, push the project (materials, overtime or your own time), play two of four cards, set your lifestyle and their rations, lights out. Day 1 also chooses the first project.
 4. **Run shape:** 30 days. Starts with how you got the bunker, who you let in at the hatch and a management philosophy; builds through projects and a growing deck; ends with your score and title, or with you removed, and a reckoning of who paid.
 5. **Goal and score:** opulence, with five titles. Still being in charge on day 30 is what makes the score count.
 6. **Cut line:** no research tree, no combat screen, no exact loyalty numbers, no factions with names, no bugged rooms or planted spies, no world beyond the radio and the hatch. (Round 5 cut comfort, five standing orders, requests and informants.)

@@ -131,6 +131,14 @@ The recipe Sam approved on build 15: silent at rest, short shaped bursts of nois
 
 What made it balance: the reward for keeping a request goes to the asker and their friend only, and the perk carries the rest. When everyone was pleased by every kept request, kind players could not lose. Breaking moves the asker a step up the threat ladder at once, which is what makes a broken promise frightening rather than just a number. The code tyrant needed its own request policy (keep the useful ones, lie when the bunker is restless) before the bench said anything useful about evil play.
 
+## 13. Projects as daily choices, and a do-nothing player (round 7)
+
+A project is now `st.project = { id, left, parts, due, today }` and only moves through `buildPart(st, how)`, with `how` one of 'mat' (pay the project's `mat`), 'overtime' (`RULES.OVERTIME` loyalty from everyone, halved by the union perk) or 'time' (one card play), at most `RULES.RUSH` parts a day. `projectView(st)` gives the screen the three options with their costs and why one is shut. The first project is the PROJECTS entries marked `first`; `needsFirst(st)` locks `endDay` until one is chosen, and `RULES.FIRST_DUE` / `FIRST_MISS` are its opening date and the price of missing it.
+
+The cheapest test of tension is a player that does nothing: `POLICIES.passive` (answers the event only). If it keeps power, the game has no pressure. Ours lost, but late; the useful number was the day it lost, not whether.
+
+Card effect tags come from `fx` on each card in `data/deck.js` (see the comment there for the tokens); `fxTags()` in `ui/main.js` draws them.
+
 ## URL controls
 
 `?card=` start at once · `?crew=` eight digits, who came in at the hatch · `?seed=` the same run · `?day=N` play to day N with the careful player (`?as=tyrant` for the other one) · `?view=day|done|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion · `?flat=1` the flat picture instead of the card model.

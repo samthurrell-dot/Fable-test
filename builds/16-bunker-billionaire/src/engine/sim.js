@@ -33,7 +33,7 @@ export const RULES = {
   GRUDGE_START: 16,              // loyalty the person with a grudge starts short by
   // Each night, loyalty drifts by:
   WANT_MET: 0.3, WANT_UNMET: -1.5,   // whether the person's want is met
-  CABIN: 0.07,                   // lost a night per day spent underground so far: it wears on everyone
+  CABIN: 0.065,                   // lost a night per day spent underground so far: it wears on everyone
   CAMERA_LOYALTY: 0.6,           // lost a night while the cameras are on
   GRUDGE: 1.2,                   // lost a night by the person with a grudge
   TRUST_KEPT: 0.12, TRUST_BROKEN: 0.6,   // per promise kept or broken so far
@@ -62,7 +62,8 @@ export const RULES = {
   // Your hand. Each morning you draw HAND cards and may play PLAYS of them.
   HAND: 4, PLAYS: 2,
   // Projects: while one is being built the staff work overtime; when done, a one-off reward.
-  OVERTIME: 0.8, PROJECT_DONE: 10, POD_DAY: 20,
+  OVERTIME: 1.5, PROJECT_DONE: 10, POD_DAY: 20,  // loyalty everyone loses each time you put them on overtime
+  RUSH: 2, FIRST_DUE: 9, FIRST_MISS: { opu: -10, unrest: 8, loyalty: -2 },   // most parts a day; the first project's grand opening, and missing it
   // The ruthless steps (TIERS in data/deck.js); st.regime is how many are open. Playing a card from the
   // deepest open step opens the next the following morning, and adds its cards to your deck. Each step down:
   RELISH: 0.1,                   // ruthless cards pay this much more opulence (it gets easier)
@@ -263,7 +264,7 @@ function shuffle(st, arr) {
 export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {}) {
   const card = cardById(cardId);
   const st = {
-    v: 5, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report', requests: [], perks: [],
+    v: 6, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report', requests: [], perks: [],
     res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, delta: {},
     policy: { rations: 1, life: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, tierUsed: {}, path: [],
     deck: [], discard: [], hand: [], played: [], gone: [], plays: R.PLAYS, built: {}, project: null,
@@ -720,13 +721,16 @@ function talk(st, g, p) {
 
 // --- Projects: the upgrade path -------------------------------------------------------------------------
 
+// The first project (round 7): one of the PROJECTS marked first must be chosen on day 1 before lights out.
+export const needsFirst = (st) => !st.flags.firstChosen;
 export function projectList(st) {
-  return Object.entries(PROJECTS).map(([id, d]) => {
+  const first = needsFirst(st);
+  return Object.entries(PROJECTS).filter(([, d]) => !!d.first === first).map(([id, d]) => {
     // kept requests make projects cheaper (filing) and quicker (the workshop)
-    const cost = st.flags.filing ? { ...d.cost, lux: Math.min(0, d.cost.lux + R.FILING) } : d.cost;
+    const cost = st.flags.filing && d.cost.lux ? { ...d.cost, lux: Math.min(0, d.cost.lux + R.FILING) } : d.cost;
     const days = st.flags.workshop ? Math.max(1, d.days - 1) : d.days;
     const v = { id, ...d, cost, days, built: !!st.built[id], building: st.project && st.project.id === id, ok: true, why: '' };
-    if (v.built) { v.ok = false; v.why = 'Built'; } else if (v.building) { v.ok = false; v.why = `${st.project.left} ${st.project.left === 1 ? 'night' : 'nights'} to go`; } else if (st.project) { v.ok = false; v.why = 'One project at a time'; } else if (st.day + days > R.DAYS) { v.ok = false; v.why = 'Not enough days left to finish it'; }
+    if (v.built) { v.ok = false; v.why = 'Built'; } else if (v.building) { v.ok = false; v.why = `${st.project.left} ${st.project.left === 1 ? 'part' : 'parts'} to go`; } else if (st.project) { v.ok = false; v.why = 'One project at a time'; } else if (st.day + days > R.DAYS) { v.ok = false; v.why = 'Not enough days left to finish it'; }
     else for (const k in cost) if (st.res[k] + cost[k] < 0) { v.ok = false; v.why = 'Not enough luxury'; }
     return v;
   });
@@ -738,12 +742,68 @@ export function commission(st, id) {
   const g = ctx(st);
   st.delta = {};
   for (const k in v.cost) g.res(k, v.cost[k]);
-  st.project = { id, left: v.days };
-  const text = `Work begins on ${v.name.replace(/^A /, 'a ').replace(/^An /, 'an ').replace(/^The /, 'the ')}. The staff will do it in their own time, over ${v.days} nights, for nothing. They have been told it is good for team spirit.`;
+  st.project = { id, left: v.days, parts: v.days, due: v.first ? R.FIRST_DUE : null };
+  if (v.first) st.flags.firstChosen = true;
+  const name = v.name.replace(/^A /, 'a ').replace(/^An /, 'an ').replace(/^The /, 'the ');
+  const text = v.first ? `The plans for ${name} are unrolled on the mess-hall table. It was ordered before the sirens and it is already paid for. The grand opening is announced for day ${R.FIRST_DUE}. It is ${v.days} parts of work, and none of it will do itself.` : `Work begins on ${name}: ${v.days} parts of work. It moves only when you put work in.`;
   st.today.push({ title: 'A new project', text, delta: { ...st.delta } });
   st.log.push({ day: st.day, project: id });
   return text;
 }
+// The project under way, ready to show: how far along, and the three ways to do a part of it today.
+export function projectView(st) {
+  if (!st.project) return null;
+  const d = PROJECTS[st.project.id], pj = st.project;
+  const used = pj.today && pj.today.day === st.day ? pj.today.used : [];
+  const full = used.length >= R.RUSH;
+  const opt = (id, label, cost, extra) => {
+    let ok = !full && !used.includes(id), why = full ? `${R.RUSH} parts today already` : used.includes(id) ? 'Done today' : '';
+    if (ok && id === 'mat' && !afford(st, cost)) { ok = false; why = 'Not enough in the stores'; }
+    if (ok && id === 'time' && st.plays <= 0) { ok = false; why = 'No plays left today'; }
+    return { id, label, cost, ok, why, ...extra };
+  };
+  return {
+    id: pj.id, name: d.name, flavour: d.flavour, text: d.text, parts: pj.parts || d.days, left: pj.left, done: (pj.parts || d.days) - pj.left,
+    due: pj.due, missed: !!pj.missed, today: used.length,
+    options: [
+      opt('mat', 'Buy the materials', d.mat || {}),
+      opt('overtime', 'Put the staff on overtime', {}, { mood: true }),
+      opt('time', 'Supervise it yourself', {}, { play: true }),
+    ],
+  };
+}
+// Do one part of the project today: how = 'mat' | 'overtime' | 'time'.
+export function buildPart(st, how) {
+  if (st.phase !== 'day') return null;
+  const v = projectView(st);
+  const o = v && v.options.find((x) => x.id === how);
+  if (!o || !o.ok) return null;
+  const g = ctx(st), pj = st.project, d = PROJECTS[pj.id];
+  st.delta = {};
+  if (!pj.today || pj.today.day !== st.day) pj.today = { day: st.day, used: [] };
+  pj.today.used.push(how);
+  let text;
+  if (how === 'mat') { for (const k in d.mat || {}) g.res(k, d.mat[k]); text = 'The materials go down in the lift. Somebody signs for them with a sigh.'; }
+  else if (how === 'overtime') {
+    st.cause = 'overtime'; g.loy('all', -R.OVERTIME * (st.flags.union ? R.UNION : 1)); st.cause = null;
+    text = g.pick(['Everyone works until two in the morning. Nobody is thanked. Somebody hums the anthem, bitterly.', 'Another late night on your project. The staff eat their dinner standing up, holding spanners.', 'Overtime again. A rota goes up. Someone has drawn a small skull on it.']);
+  } else { st.plays--; text = g.pick(['You stand near it all afternoon in a hard hat, pointing. It helps, somehow.', 'You supervise personally: a clipboard, a whistle, and strong opinions about grout.', 'You carry one plank, very visibly. Work speeds up, mostly so that you will leave.']); }
+  pj.left--;
+  if (pj.left <= 0) text += ' ' + finishProject(st, g);
+  else text += ` ${pj.left} ${pj.left === 1 ? 'part' : 'parts'} to go.`;
+  st.today.push({ title: d.name, text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, build: pj.id, how });
+  return text;
+}
+function finishProject(st, g) {
+  const id = st.project.id, d = PROJECTS[id], late = st.project.missed;
+  st.built[id] = true; st.project = null;
+  if (d.cameras) st.cameras = true;
+  for (const c of d.cards || []) addCard(st, c);
+  g.res('opu', R.PROJECT_DONE);
+  return `It is finished. ${d.flavour}${late ? ' The grand opening is held at last, to an audience that has seen the scaffolding.' : ''}${(d.cards || []).length ? ` New in your deck: ${d.cards.map((c) => CARDS[c].name).join(' and ')}.` : ''}`;
+}
+
 // The escape pod: from day 20, leave whenever you like, with your score.
 export const canEscape = (st) => !!st.built.pod && st.day >= R.POD_DAY && st.phase === 'day';
 export function escape(st) { if (!canEscape(st)) return false; ctx(st).end('escaped'); return true; }
@@ -867,7 +927,7 @@ function keepRequest(st, g, r) {
   if (k.titled && p) p.titled = true;
   if (k.noticed && p) p.noticed = st.day + k.noticed - 8;   // wantMet counts 8 days from being noticed
   if (k.delay && st.project) st.project.left += k.delay;
-  return `${d.keep} Kept: ${d.perkText.charAt(0).toLowerCase() + d.perkText.slice(1)}.`;
+  return `${d.keep} Promise kept: ${d.perkText.charAt(0).toLowerCase() + d.perkText.slice(1)}.`;
 }
 
 function breakRequest(st, g, r, inc) {
@@ -890,7 +950,7 @@ function breakRequest(st, g, r, inc) {
   if (f.loyAll) g.loy('all', f.loyAll);
   if (f.opu) g.res('opu', f.opu);
   st.cause = was;
-  inc.push({ kind: 'bad', text: `${d.fail(p ? p.first : 'Somebody')} You promised. Broken: ${d.falloutText.charAt(0).toLowerCase() + d.falloutText.slice(1)}.` });
+  inc.push({ kind: 'bad', text: `${d.fail(p ? p.first : 'Somebody')} Promise broken. ${d.falloutText}.` });
 }
 
 // --- Night ------------------------------------------------------------------------------------------
@@ -930,7 +990,7 @@ function attemptEvent(role) {
 }
 
 export function endDay(st) {
-  if (st.phase !== 'day' || !st.eventDone) return;
+  if (st.phase !== 'day' || !st.eventDone || needsFirst(st)) return;
   const g = ctx(st), inc = [], P = R.POLICY, pol = st.policy;
   st.delta = {};
   const here = g.here();
@@ -959,7 +1019,6 @@ export function endDay(st) {
   const wellness = st.built.wellness ? PROJECTS.wellness.night.loyalty : 0;
   for (const p of here) {
     for (const k in p.why) { p.why[k] *= 0.8; if (Math.abs(p.why[k]) < 0.3) delete p.why[k]; }   // old reasons fade
-    if (st.project) g.move(p, -R.OVERTIME * (st.flags.union ? R.UNION : 1), 'overtime');
     if (wellness) g.move(p, wellness, 'wellness');
     g.move(p, ROLES[p.role].wantMet(st, p) ? R.WANT_MET : R.WANT_UNMET, 'want');
     if (st.cameras) g.move(p, -R.CAMERA_LOYALTY, 'cameras');
@@ -1057,14 +1116,13 @@ export function endDay(st) {
     const free = Object.keys(FAULTS).filter((s) => !faulty(s));
     if (free.length) { const s = g.pick(free); st.matters.push({ kind: 'fault', sys: s, born: st.day, by: null }); inc.push({ kind: 'bad', text: FAULTS[s].text }); }
   }
-  // The project under way: one night nearer. When it is done: the reward, and its cards go in your deck.
-  if (st.project && --st.project.left <= 0) {
-    const id = st.project.id, d = PROJECTS[id];
-    st.built[id] = true; st.project = null;
-    if (d.cameras) st.cameras = true;
-    for (const c of d.cards || []) addCard(st, c);
-    g.res('opu', R.PROJECT_DONE);
-    inc.push({ kind: 'built', text: `${d.name} is finished. ${d.flavour}${(d.cards || []).length ? ` New in your deck: ${d.cards.map((c) => CARDS[c].name).join(' and ')}.` : ''}` });
+  // The first project's grand opening: if it is not finished by then, it opens anyway, in front of the scaffolding.
+  if (st.project && st.project.due && !st.project.missed && st.day >= st.project.due) {
+    const d = PROJECTS[st.project.id], M = R.FIRST_MISS;
+    st.project.missed = true;
+    g.res('opu', M.opu); g.unrest(M.unrest);
+    for (const q of here) g.move(q, M.loyalty, 'opening');
+    inc.push({ kind: 'bad', text: `The grand opening of ${d.name.replace(/^A /, 'a ').replace(/^An /, 'an ')} went ahead, on the date you announced, in a half-built room. You cut a ribbon in front of the scaffolding. Nobody claps until you look at them.` });
   }
 
   // 3. Night: the silo uses up supplies, and you live as you have chosen to.
