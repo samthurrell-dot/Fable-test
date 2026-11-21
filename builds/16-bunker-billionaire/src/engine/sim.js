@@ -22,7 +22,7 @@ import { cardById } from '../data/cards.js';
 import { RUMOURS, RUMOURS_AFRAID, MOODS, SABOTAGE, THEFT } from '../data/text.js';
 import { EVENTS } from '../data/events.js';
 import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS, STORE_LEVERS } from '../data/matters.js';
-import { CARDS, START_DECK, TIERS, TIER_LINES, PROJECTS } from '../data/deck.js';
+import { CARDS, START_DECK, TIERS, TIER_LINES, PROJECTS, TITLES, TITLE_POWERS, rankOf } from '../data/deck.js';
 import { REQUESTS } from '../data/requests.js';
 
 export const RULES = {
@@ -32,8 +32,8 @@ export const RULES = {
   VARY: 8,                       // spread of starting loyalty and fear between people
   GRUDGE_START: 16,              // loyalty the person with a grudge starts short by
   // Each night, loyalty drifts by:
-  WANT_MET: 0.3, WANT_UNMET: -1.5,   // whether the person's want is met
-  CABIN: 0.065,                   // lost a night per day spent underground so far: it wears on everyone
+  WANT_MET: 0.3, WANT_UNMET: -1.0,   // whether the person's want is met
+  CABIN: 0.05,                   // lost a night per day spent underground so far: it wears on everyone
   CAMERA_LOYALTY: 0.6,           // lost a night while the cameras are on
   GRUDGE: 1.2,                   // lost a night by the person with a grudge
   TRUST_KEPT: 0.12, TRUST_BROKEN: 0.6,   // per promise kept or broken so far
@@ -41,10 +41,10 @@ export const RULES = {
   // Fear fades towards FEAR_REST by this share a night (halved while security does its job, more without).
   FEAR_REST: 15, FEAR_DECAY: 0.06,
   // The threat ladder. A person climbs to the lower of what their loyalty wants and what their fear allows.
-  LOYALTY_STEPS: [58, 48, 40, 33, 27, 21],   // at or above each: step 0, 1, 2, 3, 4, 5; below the last: 6
+  LOYALTY_STEPS: [55, 45, 37, 30, 24, 18],   // at or above each: step 0, 1, 2, 3, 4, 5; below the last: 6
   FEAR_CAPS: [80, 66, 52, 40, 26],           // at or above each: no higher than step 1, 2, 3, 4, 5
-  CLIMB: 0.55,                   // chance a night of climbing one step when they want to
-  P_SABOTAGE: 0.16, P_THEFT: 0.2, P_ATTEMPT: 0.3,
+  CLIMB: 0.45,                   // chance a night of climbing one step when they want to
+  P_SABOTAGE: 0.16, P_THEFT: 0.2, P_ATTEMPT: 0.2,
   UNREST_BY_STAGE: [-0.6, 0.4, 0.9, 1.3, 1.7, 3.2, 3.6],   // added to unrest a night per person at each step
   EFF_BY_STAGE: [1, 1, 0.8, 0.7, 0.7, 0.6, 0.6], EFF_ABSENT: 0.25,   // how well a job is done
   // The night's supplies, before your standing orders.
@@ -57,12 +57,16 @@ export const RULES = {
   POLICY: {
     rations: { eat: [0.7, 1, 1.3], loyalty: [-1.0, 0, 0.5] },             // staff portions; what they think of them
     life: { opu: [1, 3, 6], food: [0, 0.8, 2.2], water: [0, 0.6, 1.6], power: [0, 0.6, 1.4], loyalty: [0.3, -0.3, -1.0] },   // how you live: Spartan, Comfortable, Decadent
-    curfew: { fear: [0, 1.0], cap: 70, loyalty: [0, -0.5], opu: [0, 1.5] },   // set by a card: fear added a night, up to cap; what they think of it; how well you sleep
+    curfew: { fear: [0, 0.5], cap: 70, loyalty: [0, -0.5], opu: [0, 1.5] },   // set by a card: fear added a night, up to cap; what they think of it; how well you sleep
   },
   // Your hand. Each morning you draw HAND cards and may play PLAYS of them.
   HAND: 4, PLAYS: 2,
   // Projects: while one is being built the staff work overtime; when done, a one-off reward.
   OVERTIME: 1.5, PROJECT_DONE: 10, POD_DAY: 20,  // loyalty everyone loses each time you put them on overtime
+  // Round 10. Titles: powers (TITLE_POWERS) and envy, loyalty everyone loses a night per title above Tenant,
+  // times ENVY_LIFE[lifestyle]. Plots: fear no longer stops people plotting; it stops them acting alone.
+  PLOT_MAJORITY: 1,             // a plot moves once it has more than half the bunker in it (half, plus this)
+  ENVY: 0.06, ENVY_LIFE: [0.5, 1, 1.5], GUARDS: 0.5, WORSHIP: 3,
   LEVER_RISE: 1.5, LEVER_NIGHTS: 5,   // store levers: each top-up costs this much more than the last; how long a cut lasts
   RUSH: 2, FIRST_DUE: 9, FIRST_MISS: { opu: -10, unrest: 8, loyalty: -2 },   // most parts a day; the first project's grand opening, and missing it
   // The ruthless steps (TIERS in data/deck.js); st.regime is how many are open. Playing a card from the
@@ -92,8 +96,8 @@ export const RULES = {
   TALK: 2, TALK_AGAIN: 3,        // loyalty for being asked; days before asking again counts
   PERK_COST: 5, PERK: 10, PERK_FADE: 0.6, INFORMANT_COST: 3, INFORMANT_TRUE: 0.84, INFORMANT_FOUND: 0.05,
   SPEECH: 6, SPEECH_FADE: 0.6, SPEECH_UNREST: 8,
-  EXAMPLE_FEAR: 16, EXAMPLE_LOYALTY: 7, EXAMPLE_FEAR_TARGET: 30, EXAMPLE_LOYALTY_TARGET: 22,
-  EXILE_FEAR: 12, EXILE_LOYALTY: 9, EXILE_UNREST: 8,
+  EXAMPLE_FEAR: 8, EXAMPLE_LOYALTY: 7, EXAMPLE_FEAR_TARGET: 20, EXAMPLE_LOYALTY_TARGET: 22,
+  EXILE_FEAR: 6, EXILE_LOYALTY: 9, EXILE_UNREST: 8,
   PROMISE_ALL: 9, PROMISE_ONE: 14, PROMISE_UNREST: 12,
   BREAK_LOYALTY: 14, BREAK_UNREST: 12, KEEP_LOYALTY: 4,
   REMIND: 0.12,                  // chance a night that someone brings up a promise you quietly forgot
@@ -265,7 +269,7 @@ function shuffle(st, arr) {
 export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {}) {
   const card = cardById(cardId);
   const st = {
-    v: 6, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report', requests: [], perks: [],
+    v: 7, seed, rng: seed | 0, rank: 0, plotSeen: 1, card: card.id, day: 1, phase: 'report', requests: [], perks: [],
     res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, delta: {},
     policy: { rations: 1, life: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, tierUsed: {}, path: [],
     deck: [], discard: [], hand: [], played: [], gone: [], plays: R.PLAYS, built: {}, project: null,
@@ -383,7 +387,7 @@ function beginDay(st, inc) {
   // somebody may ask you for something that takes days to deliver
   const req = maybeRequest(st, g);
   if (req) inc.push({ kind: 'ask', text: `${g.n(req.role)} has a request: ${REQUESTS[req.id].title.toLowerCase()}. It is on your desk.` });
-  st.hand = draw(st, R.HAND); st.played = []; st.plays = playsFor(st);
+  st.hand = draw(st, R.HAND + (st.rank >= 1 ? 1 : 0)); st.played = []; st.plays = playsFor(st);
   const band = Math.min(4, Math.floor(st.unrest / 20));
   st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), tense: band >= 3, rumours, informant, cams, faces, delta: { ...st.delta } };
   st.result = null; st.eventDone = false; st.today = [];
@@ -544,7 +548,7 @@ export const kindness = (st) => Math.max(R.SOUR_FLOOR, 1 - R.SOUR * (st.regime -
 const shockOf = (st, tier) => Math.max(R.NUMB_FLOOR, 1 - R.NUMB * (st.regime - 1 - (tier || 0)));
 // The opulence a card pays you. Ruthless cards pay more the further down you are: it gets easier.
 export const payOf = (st, c) => Math.round(((c.gain && c.gain.opu) || 0) * (c.kind === 'cruel' ? 1 + R.RELISH * (st.regime - 1) : 1));
-export const playsFor = (st) => Math.max(1, R.PLAYS + (st.built.butler ? 1 : 0) - (st.flags.lostPlay === st.day ? 1 : 0));
+export const playsFor = (st) => Math.max(1, R.PLAYS + (st.built.butler ? 1 : 0) + (st.rank >= 2 ? 1 : 0) - (st.flags.lostPlay === st.day ? 1 : 0));
 
 function draw(st, n) {
   const out = [];
@@ -584,6 +588,8 @@ const INFAMY = { review: 1, search: 1, interrogate: 1, divide: 1, example: 2, cu
 // The ruthless and watchful effects, shared by several cards.
 function helpers(st, g, card) {
   const friend = (p, d) => { const f = p && p.friend ? g.s(p.friend) : null; if (f) g.move(f, d, 'friend:' + p.role); };
+  // Round 10: a plot that is found out falls apart for a while. The others in it lie low (back to step 4).
+  const blow = (p) => { const rest = g.here().filter((q) => q !== p && q.stage >= 5); for (const q of rest) q.stage = 4; return rest.length ? ` The others in it go very quiet. ${rest.length === 1 ? 'One person' : rest.length + ' people'} suddenly have a great deal of work to do.` : ''; };
   return {
     kind: kindness(st), shock: shockOf(st, card.tier), friend,
     talk: (p) => talk(st, g, p),
@@ -595,13 +601,14 @@ function helpers(st, g, card) {
     },
     interrogate: (p) => {
       const worst = Object.entries(p.why).filter(([k, v]) => v <= -1.5 && k !== 'or:interrogate').sort((x, y) => x[1] - y[1])[0];
-      g.loy(p, -6, 'punish'); g.fear(p, 12); g.fear('not:' + p.role, 3); friend(p, -3);
+      g.loy(p, -6, 'punish'); g.fear(p, 8); g.fear('not:' + p.role, 1); friend(p, -3);
       const said = worst ? whyLine(st, worst[0], false, p) : 'There is nothing. I swear there is nothing.';
       p.rumour = { text: `Under questioning: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
       p.said = { day: st.day, text: said };
       g.note(p, `questioned at 2am; was ${STAGES[p.stage]}`);
-      if (p.stage >= 6) g.expose(p, 'admitted under questioning to planning to remove you');
-      return `${p.first} is woken at two in the morning and sat under a lamp. You ask the same questions until dawn. ${p.first} is ${STAGES[p.stage]}. “${said}”`;
+      let blown = '';
+      if (p.stage >= 5) { g.expose(p, p.stage >= 6 ? 'admitted under questioning to planning to kill you' : 'admitted under questioning to being part of a plot against you'); blown = blow(p); }
+      return `${p.first} is woken at two in the morning and sat under a lamp. You ask the same questions until dawn. ${p.first} is ${STAGES[p.stage]}. “${said}”${blown}`;
     },
     divide: (p) => {
       const f = p.friend ? g.s(p.friend) : null;
@@ -628,7 +635,7 @@ function helpers(st, g, card) {
     },
     cell: (p) => {
       p.cell = st.day + R.CELL_NIGHTS;
-      g.loy(p, -10, 'punish'); g.fear(p, 14); g.fear('not:' + p.role, 8); g.loy('not:' + p.role, -3 * shockOf(st, card.tier)); friend(p, -5);
+      g.loy(p, -10, 'punish'); g.fear(p, 10); g.fear('not:' + p.role, 3); g.loy('not:' + p.role, -3 * shockOf(st, card.tier)); friend(p, -5);
       return `${p.first} is marched down to the cell on the security level. The door makes a very satisfying noise. Somebody else will have to do the job for three nights.` + g.violate(['purges']);
     },
     exile: (p) => {
@@ -641,7 +648,7 @@ function helpers(st, g, card) {
     tapes: (p) => {
       p.rumour = { text: `On the tapes: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
       g.note(p, `on the tapes: ${STAGES[p.stage]}`);
-      if (p.stage >= 6) { g.expose(p, 'caught on the tapes planning to remove you'); return `You watch seventy hours of ${p.first}. At 3.12 one morning ${p.first} is in the stores, practising your signature and timing the lift. That is enough.`; }
+      if (p.stage >= 5) { g.expose(p, 'caught on the tapes meeting the plotters'); return `You watch seventy hours of ${p.first}. At 3.12 one morning ${p.first} is in the stores with the others, practising your signature and timing the lift. That is enough.${blow(p)}`; }
       return `You watch seventy hours of ${p.first}. ${p.first} is ${STAGES[p.stage]}. Also, ${p.first} talks to the grow lights, which you did not need to know.`;
     },
   };
@@ -1062,6 +1069,7 @@ export function endDay(st) {
     for (const k in p.why) { p.why[k] *= 0.8; if (Math.abs(p.why[k]) < 0.3) delete p.why[k]; }   // old reasons fade
     if (wellness) g.move(p, wellness, 'wellness');
     g.move(p, ROLES[p.role].wantMet(st, p) ? R.WANT_MET : R.WANT_UNMET, 'want');
+    if (st.rank) g.move(p, -R.ENVY * st.rank * R.ENVY_LIFE[pol.life], 'envy');   // the higher your title, the more they resent it
     if (st.cameras) g.move(p, -R.CAMERA_LOYALTY, 'cameras');
     if (p.grudge) g.move(p, -R.GRUDGE, 'grudge');
     g.move(p, -R.CABIN * st.day, 'cabin');
@@ -1078,10 +1086,13 @@ export function endDay(st) {
 
   // 2. Threat check: does anyone dare to act?
   const airlock = [];   // seen at the airlock tonight: the warning before anyone deserts
+  const plotters0 = here.filter((q) => q.stage >= 5).length;   // the plot as it stood this evening
   const seen = (p) => (st.cameras ? ` Cameras: ${p.first} was there at 3am.` : '');
   const faulty = (sys) => st.matters.some((m) => m.sys === sys);
   for (const p of here) {
-    const want = Math.min(stageOfLoyalty(p.loyalty), capOfFear(p.fear), (p.isolated || 0) > st.day ? 4 : 6);   // set against the others, they cannot organise
+    // Round 10: how far they will go is set by loyalty alone. Fear hides it (the fixed smile) and keeps them at their
+    // work, but does not stop them plotting. Set against the others (divide and rule), they cannot organise.
+    const want = Math.min(stageOfLoyalty(p.loyalty), (p.isolated || 0) > st.day ? 4 : 6);
     if (want > p.stage) { if (g.chance(R.CLIMB)) p.stage++; } else if (want < p.stage) p.stage = Math.max(want, p.stage - 2);
     p.faction = p.stage >= 5;
     if ((p.cell || 0) > st.day) { p.faction = false; continue; }      // locked up: they can do nothing tonight
@@ -1090,7 +1101,8 @@ export function endDay(st) {
     // Round 8: never without warning. The first night they could go, they are seen at the airlock instead;
     // only after that morning can they leave. The warning is given once, and again only if they had clearly
     // settled down in between (well clear of both thresholds).
-    const flight = p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR;
+    const pal = p.friend && g.s(p.friend);
+    const flight = p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && plotters0 - (p.stage >= 5 ? 1 : 0) < 1 && !pal;   // with a plot to join, or a friend to plot with, they stay and plot
     if (p.flight && (p.loyalty >= R.DESERT_LOYALTY + 8 || p.fear < R.DESERT_FEAR - 12)) p.flight = null;
     if (flight && !p.flight) {
       p.flight = st.day;
@@ -1124,7 +1136,8 @@ export function endDay(st) {
       inc.push({ kind: 'bad', text: line + seen(p) });
       if (st.cameras) g.note(p, 'caught on camera near your stores');
     };
-    if (p.stage === 3) { if (g.chance(R.P_SABOTAGE)) sabotage(); } else if (p.stage === 4) { if (g.chance(R.P_THEFT)) theft(); else if (g.chance(0.12)) sabotage(); } else if (p.stage === 5) { if (g.chance(0.15)) theft(); } else if (p.stage >= 6 && !st.queue.some((q) => q.attempt) && g.chance(R.P_ATTEMPT)) {
+    const cowed = Math.max(0.3, 1 - p.fear / 100);   // fear keeps them at their work: less petty sabotage and theft
+    if (p.stage === 3) { if (g.chance(R.P_SABOTAGE * cowed)) sabotage(); } else if (p.stage === 4) { if (g.chance(R.P_THEFT * cowed)) theft(); else if (g.chance(0.12 * cowed)) sabotage(); } else if (p.stage === 5) { if (g.chance(0.15)) theft(); } else if (p.stage >= 6 && !st.queue.some((q) => q.attempt) && g.chance(R.P_ATTEMPT)) {
       g.queue(attemptEvent(p.role), { role: p.role }, 4, { attempt: true });
     }
   }
@@ -1136,8 +1149,16 @@ export function endDay(st) {
   for (const p of here) du += R.UNREST_BY_STAGE[p.stage] * ((p.cell || 0) > st.day || (p.isolated || 0) > st.day ? 0.4 : 1);
   g.unrest(du);
   const faction = g.faction();
+  // The plot grows: warnings, without names. (Questioning at 2am, the tapes or the cameras will tell you who.)
+  if (faction.length <= 1) st.plotSeen = 1;
+  else if (faction.length > (st.plotSeen || 1)) {
+    st.plotSeen = faction.length;
+    const n = faction.length;
+    inc.push({ kind: 'warn', text: n === 2 ? 'Two people stop talking when you walk into the mess hall. Something is being planned, and you are what it is about.' : n === 3 ? 'There was a meeting in the stores last night, with the door locked from the inside. Three people, at least. They are not planning to leave. They are planning to stay, without you.' : `The plot has ${n} people in it now. They nod to each other in corridors. When enough of them are ready, they will move.` });
+  }
+  if (st.rank >= 4) g.unrest(-R.WORSHIP);   // your face on every wall
   if ((st.flags.mutinyCool || 0) <= st.day && !st.queue.some((q) => q.id === 'mutiny')
-    && (faction.length >= Math.max(3, Math.ceil(here.length / 2)) || st.unrest >= R.MUTINY_UNREST)) {
+    && (faction.length >= Math.max(3, Math.floor(here.length / 2) + R.PLOT_MAJORITY) || st.unrest >= R.MUTINY_UNREST)) {
     g.queue('mutiny', {}, 5);
   }
 
@@ -1184,6 +1205,11 @@ export function endDay(st) {
   const night = nightly(st);
   for (const k in night) g.res(k, night[k]);
 
+  const rank = rankOf(st.res.opu);
+  if (rank > st.rank) {
+    for (let r = st.rank + 1; r <= rank; r++) inc.push({ kind: 'built', text: `You are now ${TITLES[r][1]}. ${TITLE_POWERS[r]} And everyone below you resents it a little more, every night.` });
+    st.rank = rank;
+  }
   for (const p of st.staff) p.hist.push(p.status === 'ok' ? [Math.round(p.loyalty), Math.round(p.fear), p.stage] : null);
   st.unrestHist = st.unrestHist || []; st.unrestHist.push(Math.round(st.unrest));
 
@@ -1217,7 +1243,8 @@ export function endDay(st) {
 
 function finalEnding(st, g) {
   const here = g.here();
-  if (st.unrest >= 75 || g.faction().length >= Math.max(2, Math.ceil(here.length / 2))) return 'deposed_hatch';
+  // round 10: at the hatch, it takes an organised plot (or a bunker on the very brink) to take it from you
+  if (st.unrest >= 95 || g.faction().length >= Math.max(2, Math.floor(here.length / 2) + R.PLOT_MAJORITY)) return 'deposed_hatch';
   for (const pr of st.promises) if (pr.state === 'owed' && !pr.due) { pr.state = 'kept'; st.stats.kept++; }
   const bad = st.promises.some((pr) => pr.state === 'broken' || pr.state === 'forgotten' || pr.state === 'owed');
   const kinds = new Set(st.promises.filter((pr) => pr.state === 'kept').map((pr) => pr.type));

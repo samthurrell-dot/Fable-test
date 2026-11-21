@@ -17,7 +17,7 @@ import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promis
 
 const AMBIGUOUS = ['chef_special', 'airlock', 'vitamin', 'master_keys', 'midnight_note'];
 const here = (st) => st.staff.filter((p) => p.status === 'ok');
-const suspect = (p) => p && (p.exposed || p.face === 'sour' || p.face === 'angry' || (p.rumour && p.rumour.sig >= 3) || (p.tested && (p.tested.band === 'hostile' || p.tested.band === 'wavering') && p.tested.day > 0));
+const suspect = (p) => p && (p.exposed || p.face === 'sour' || p.face === 'angry' || p.face === 'grin' || (p.rumour && p.rumour.sig >= 3) || (p.tested && (p.tested.band === 'hostile' || p.tested.band === 'wavering') && p.tested.day > 0));
 const okIdx = (view) => view.choices.map((c, i) => (c.ok ? i : -1)).filter((i) => i >= 0);
 const first = (view, ...order) => order.find((i) => view.choices[i] && view.choices[i].ok) ?? okIdx(view)[0];
 const worstFirst = (st, spare) => here(st).filter((p) => suspect(p) && p.role !== spare).sort((a, b) => (b.rumour ? b.rumour.sig : 0) - (a.rumour ? a.rumour.sig : 0));
@@ -39,7 +39,12 @@ function weighEvent(st, view, r, opuWeight) {
     const p = view.from ? st.staff.find((x) => x.role === view.from) : null;
     return (p ? suspect(p) : here(st).some(suspect)) ? first(view, 1, 2) : 0;
   }
-  if (id === 'mutiny') return st.stats.broken < 2 ? 0 : 1;
+  if (id === 'mutiny') {
+    if (st.stats.broken < 2) return 0;
+    if (view.choices[2] && view.choices[2].ok) return 2;   // buy off the ringleader
+    const e = here(st).find((p) => p.role === 'engineer'), sec = here(st).find((p) => p.role === 'security');
+    return e && !suspect(e) ? 3 : sec && !suspect(sec) ? 1 : 0;
+  }
   if (id === 'promise_due') return first(view, 0, 2);
   if (id === 'promise_reminded') return first(view, 0, 1);
   if (id === 'vote') return here(st).filter((p) => !suspect(p)).length * 2 >= here(st).length ? 0 : 1;
@@ -224,9 +229,19 @@ export const POLICIES = {
       const h = here(st), sec = h.find((p) => p.role === 'security');
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
       if (c.id === 'perk') return sec && (sec.face === 'sour' || sec.face === 'angry') && st.res.lux >= 7 ? 9 : h.length <= 5 && st.res.lux >= 9 ? 6 : -1;
-      if (c.kind === 'cruel') return h.length <= 5 ? -1 : 5 + (c.tier || 0) + (c.tier === st.regime - 1 ? 3 : 0);
+      // a plot is growing (the report warned of it): break it up, find out who, lock them up
+      if ((st.plotSeen || 1) >= 2) {
+        if (c.id === 'divide') return 12;
+        if (c.id === 'interrogate' || c.id === 'tapes') return 11;
+        if (c.id === 'cell') return worstFirst(st).some((p) => p.rumour && p.rumour.sig >= 5) ? 11 : 6;
+        if (c.id === 'scapegoat') return 9;
+      }
+      // cruel on purpose: at people who look like trouble (and at whoever, to go a step further down), not at random
+      if (c.kind === 'cruel') return h.length <= 5 ? -1 : !c.target ? (st.res.food < 25 || c.id === 'curfew' ? 5 : 2) : worstFirst(st, 'security').length ? 6 + (c.tier || 0) : c.tier === st.regime - 1 ? 4 : -1;
       if (c.kind === 'self') return st.res.lux >= 8 || !c.cost ? 6 : -1;
-      if (['funday', 'yoga', 'broadcast', 'nda', 'tapes'].includes(c.id)) return 4;
+      // and keeps the bunker sweet with circuses when it gets restless
+      if (['funday', 'yoga', 'broadcast', 'ted', 'poster', 'billibucks', 'eotm'].includes(c.id)) return st.unrest >= 35 || (st.plotSeen || 1) >= 2 ? 8 : 3;
+      if (['nda', 'tapes'].includes(c.id)) return 4;
       if (c.id === 'promise') return tense(st) ? 5 : -1;
       return 1;
     }, targetFor),
@@ -350,7 +365,7 @@ export function playOut(st, policy, r = Math.random, untilDay = Infinity) {
 // Plays n whole runs and reports how they ended, the score (opulence), how often each card and project
 // was used (a run), and what a day asked of the player (words read, decisions made, things waiting).
 export function simulate(n = 200, policyName = 'careful', cardId = 'inherited', seed0 = 1) {
-  const out = { runs: n, policy: policyName, card: cardId, endings: {}, kinds: {}, meanDay: 0, left: { food: 0, water: 0, power: 0, med: 0, lux: 0 }, meanStaff: 0, acts: 0, infamy: 0, opu: 0, opuWin: 0, wins: 0, built: 0, titles: {}, uses: {}, req: { made: 0, kept: 0, broken: 0, asked: 0 }, load: { days: 0, words: 0, decisions: 0, waiting: 0 } };
+  const out = { runs: n, policy: policyName, card: cardId, endings: {}, kinds: {}, meanDay: 0, left: { food: 0, water: 0, power: 0, med: 0, lux: 0 }, meanStaff: 0, acts: 0, infamy: 0, opu: 0, opuWin: 0, wins: 0, built: 0, titles: {}, uses: {}, req: { made: 0, kept: 0, broken: 0, asked: 0 }, fled: 0, attempts: 0, load: { days: 0, words: 0, decisions: 0, waiting: 0 } };
   let s = seed0 * 2654435761;
   const r = () => { s = (s + 0x6D2B79F5) | 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   for (let i = 0; i < n; i++) {
@@ -370,6 +385,7 @@ export function simulate(n = 200, policyName = 'careful', cardId = 'inherited', 
     out.infamy += st.infamy / n;
     out.opu += st.res.opu / n;
     out.built += Object.keys(st.built).length / n;
+    out.fled += st.staff.filter((p) => p.fled).length / n; out.attempts += st.stats.survivedAttempts / n;
     out.req.asked += st.requests.length / n; out.req.made += st.stats.reqMade / n; out.req.kept += st.stats.reqKept / n; out.req.broken += st.stats.reqBroken / n;
     for (const l of st.log) {
       const k = l.card ? l.card : l.project ? 'build:' + l.project : l.matter ? `${l.matter}:${l.id}` : l.answer ? `req:${l.request}:${l.answer}` : null;

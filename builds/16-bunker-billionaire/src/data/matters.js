@@ -29,7 +29,7 @@ export const STORE_LEVERS = {
 
 export const POLICY_INFO = {
   rations: { name: 'Staff rations', opts: ['Lean', 'Fair', 'Generous'], notes: ['Saves food. They are hungry, and they know why.', 'Enough, and no more.', 'Costs food every night. They notice, and like it.'] },
-  life: { name: 'Your lifestyle', opts: ['Spartan', 'Comfortable', 'Decadent'], notes: ['You eat what they eat. Little opulence; they respect it.', 'Fine dining, a warm bath, a film. Some opulence.', 'Banquets, the cinema all night, a bath you could row across. Lots of opulence. They can smell it from their floor.'] },
+  life: { name: 'Your lifestyle', opts: ['Spartan', 'Comfortable', 'Decadent'], notes: ['You eat what they eat. Little opulence; they respect it, and envy you less.', 'Fine dining, a warm bath, a film. Some opulence.', 'Banquets, the cinema all night, a bath you could row across. Lots of opulence. They can smell it from their floor, and envy you more.'] },
   curfew: { name: 'Curfew and anthem', opts: ['Off', 'On'], notes: ['People wander about as they like.', 'Lights out at nine, your anthem at six. Fear creeps up every night. You sleep beautifully.'] },
 };
 
@@ -95,6 +95,7 @@ export const SABOTEUR = { chef: ['fridge'], engineer: ['generator', 'pump'], doc
 
 // What people say when you sit down and ask (see talk() in engine/sim.js). Keyed by what moved their loyalty.
 export const WHY_BAD = {
+  envy: 'Look at how you live. Then look at how we live.',
   life: 'We can smell your dinner from our floor. Every night.',
   overtime: 'We are building your hot tub. Or your radio station. Or your face, in gold. In our own time.',
   'or:review': 'That performance review. With the laser pointer.',

@@ -87,10 +87,10 @@ export const CARDS = {
     },
   },
   funday: {
-    name: 'Mandatory Fun', kind: 'spin', fx: '+calm +fearAll -likeAll', cost: { food: -2 }, gain: { opu: 2 },
-    text: 'The bunker calms right down. Everyone is a bit more afraid. Nobody enjoys it.',
+    name: 'Mandatory Fun', kind: 'spin', fx: '+calm -likeAll', cost: { food: -2 }, gain: { opu: 2 },
+    text: 'The bunker calms right down. Everyone resents it a little. Nobody enjoys it.',
     flavour: 'Attendance is compulsory. So is the conga.',
-    play: (g) => { g.unrest(-12); g.fear('all', 3); g.loy('all', -1); return 'Party hats, warm squash and a conga line that goes round the mess hall four times. You lead it. Nobody can leave until you say so, and you don’t say so for some time.'; },
+    play: (g) => { g.unrest(-12); g.fear('all', 1); g.loy('all', -1); return 'Party hats, warm squash and a conga line that goes round the mess hall four times. You lead it. Nobody can leave until you say so, and you don’t say so for some time.'; },
   },
   ted: {
     name: 'A TED Talk', kind: 'spin', fx: '+likeAll +calm',
@@ -137,27 +137,27 @@ export const CARDS = {
   // ------------------------------------------------------------------ ruthless: the slope (tier 0 is in every starting deck)
   review: {
     name: 'A Frank Performance Review', kind: 'cruel', fx: '+fear1 -like1', tier: 0, target: true, gain: { opu: 2 },
-    text: 'One person is more afraid of you, and likes you a little less. A slacker goes straight back to work.',
+    text: 'One person resents you, and is a little more afraid. A slacker goes straight back to work.',
     flavour: '“Meets expectations” was never one of the boxes.',
     play: (g, p, a, h) => {
-      g.loy(p, -3, 'punish'); g.fear(p, 9); g.fear('not:' + p.role, 2); h.friend(p, -1.5);
+      g.loy(p, -3, 'punish'); g.fear(p, 5); h.friend(p, -1.5);
       const back = p.stage === 2; if (back) p.stage = 1;
       return `You review ${p.first}’s performance in the mess hall, with a laser pointer. Every box is “Below expectations”, including “Punctuality”, which ${p.first} has never missed. ${back ? `${p.first} is back at work within the hour.` : `${p.first} says “thank you for the feedback” eleven times.`}`;
     },
   },
   search: {
-    name: 'Search the Bunks', kind: 'cruel', fx: '+fearAll -likeAll', tier: 0, gain: { opu: 2 },
+    name: 'Search the Bunks', kind: 'cruel', fx: '-likeAll', tier: 0, gain: { opu: 2 },
     text: 'Seize what they are hiding: food and luxury for you. Less each time. Everyone resents it.',
     flavour: 'Tinned peaches, a ham and, somehow, your own brandy.',
     play: (g, p, a, h) => {
       const f = fade(g.st.searches, 0.5); g.st.searches++;
-      g.res('food', Math.round(5 * f)); g.res('lux', Math.round(4 * f)); g.loy('all', -5 * h.shock); g.fear('all', 4);
+      g.res('food', Math.round(5 * f)); g.res('lux', Math.round(4 * f)); g.loy('all', -5 * h.shock); g.fear('all', 1);
       return f > 0.7 ? 'Every bunk is turned out at dawn. Tinned peaches, a ham, two bottles of your own brandy and an astonishing amount of chocolate. It all goes up in the lift to your floor.' : 'Every bunk is turned out again. They have learned to hide things better, or there is less to hide. A few tins. A great deal of silence.';
     },
   },
   interrogate: {
     name: 'A Little Chat at 2am', kind: 'cruel', fx: '+know +fear1 -like1', tier: 1, target: true, gain: { opu: 3 },
-    text: 'You learn exactly what one person is up to, and why. They will not forget it.',
+    text: 'You learn exactly what one person is up to, and why. If they are in a plot, you will know. They will not forget it.',
     flavour: 'A bright lamp, two chairs, and one of them is yours.',
     play: (g, p, a, h) => h.interrogate(p),
   },
@@ -170,7 +170,7 @@ export const CARDS = {
   },
   example: {
     name: 'Make an Example', kind: 'cruel', fx: '+fearAll -likeAll', tier: 2, target: true, gain: { opu: 4 },
-    text: 'Everyone is much more afraid of you. Everyone likes you less, that one most of all.',
+    text: 'Everyone likes you less, that one most of all, and is more afraid. Their friends will not forget.',
     flavour: 'The reactor floor. A toothbrush. An audience.',
     play: (g, p, a, h) => h.example(p),
   },
@@ -188,7 +188,7 @@ export const CARDS = {
   },
   cell: {
     name: 'A Few Nights in the Cell', kind: 'cruel', fx: '+fearAll -like1', tier: 3, target: true, gain: { opu: 3 },
-    text: 'Three nights in which they can plot nothing. Everyone is more afraid. Their job is done badly meanwhile.',
+    text: 'Three nights in which they can plot nothing. Everyone resents it. Their job is done badly meanwhile.',
     flavour: 'The door makes a very satisfying noise.',
     play: (g, p, a, h) => h.cell(p),
   },
@@ -207,9 +207,9 @@ export const CARDS = {
   },
   unveil: {
     name: 'Unveil a Portrait', kind: 'self', fx: '+fearAll -likeAll', gain: { opu: 7 },
-    text: 'Everyone is more afraid of you, and likes you a little less. Very satisfying.',
+    text: 'Everyone likes you less, and is a little more afraid. Very satisfying.',
     flavour: 'You, as a centaur, crossing the Rubicon.',
-    play: (g) => { g.fear('all', 5); g.loy('all', -2); return g.pick(['The new portrait is unveiled with a drumroll on a saucepan: you, as a centaur, crossing the Rubicon. The staff are made to applaud for the length of one lap of the mess hall.', 'The new portrait: you, in armour, wrestling a bear, which is also you. Attendance at the unveiling is compulsory, and so is weeping.']); },
+    play: (g) => { g.fear('all', 2); g.loy('all', -2); return g.pick(['The new portrait is unveiled with a drumroll on a saucepan: you, as a centaur, crossing the Rubicon. The staff are made to applaud for the length of one lap of the mess hall.', 'The new portrait: you, in armour, wrestling a bear, which is also you. Attendance at the unveiling is compulsory, and so is weeping.']); },
   },
   broadcast: {
     name: 'Broadcast Good News', kind: 'spin', fx: '+calm +likeAll',
@@ -223,10 +223,10 @@ export const CARDS = {
     },
   },
   poetry: {
-    name: 'Read Your Poetry on Air', kind: 'self', fx: '+fearAll -likeAll', gain: { opu: 6 },
-    text: 'Everyone is more afraid of you, and likes you a little less. Your art matters.',
+    name: 'Read Your Poetry on Air', kind: 'self', fx: '-likeAll', gain: { opu: 6 },
+    text: 'Everyone likes you a little less. Your art matters.',
     flavour: 'An epic in nine cantos. It rhymes “me” with “me”.',
-    play: (g) => { g.fear('all', 4); g.loy('all', -2); return 'You read the whole of “Ode to Me”, nine cantos, on Radio Me, during lunch, at full volume, on every floor. In canto six, you weep. So, for different reasons, does the chef.'; },
+    play: (g) => { g.fear('all', 1); g.loy('all', -2); return 'You read the whole of “Ode to Me”, nine cantos, on Radio Me, during lunch, at full volume, on every floor. In canto six, you weep. So, for different reasons, does the chef.'; },
   },
   billibucks: {
     name: 'Pay in BilliBucks', kind: 'spin', fx: '+likeAll',
@@ -252,10 +252,10 @@ export const CARDS = {
     play: () => 'Nine courses, each of them a truffle, the last of them a larger truffle. The farmer watches through the hatch, holding a shovel, saying nothing.',
   },
   yoga: {
-    name: 'Mandatory Sunrise Yoga', kind: 'spin', fx: '+calm +fearAll', gain: { opu: 1 },
-    text: 'The bunker calms down. Everyone is a little more afraid, and a little more supple.',
+    name: 'Mandatory Sunrise Yoga', kind: 'spin', fx: '+calm', gain: { opu: 1 },
+    text: 'The bunker calms down, and is more supple.',
     flavour: 'Downward dog, at gunpoint.',
-    play: (g) => { g.unrest(-10); g.fear('all', 2); g.loy('all', 1); return 'Sunrise yoga at 5am, by the grow lights, led by you, in white linen. Downward dog. Upward founder. Somebody pulls something and is too frightened to say so.'; },
+    play: (g) => { g.unrest(-10); return 'Sunrise yoga at 5am, by the grow lights, led by you, in white linen. Downward dog. Upward founder. Somebody pulls something and is too frightened to say so.'; },
   },
 };
 
@@ -297,5 +297,15 @@ export const PROJECTS = {
 
 // Titles by opulence: the score you are playing for.
 export const TITLES = [[0, 'Tenant'], [90, 'Landlord'], [180, 'Chairman of the Board'], [300, 'Supreme Leader'], [440, 'God-Emperor of Silo 7']];
+// Round 10: each title is a power you keep once you have reached it, and a bigger target: envy (RULES.ENVY) costs
+// everyone's loyalty every night, more for each title, more if you live decadently.
+export const TITLE_POWERS = [
+  '',
+  'A bigger hand: you draw 5 cards each morning.',
+  'People for that: one more play every day.',
+  'Bodyguards: an attempt on your life fails half the time.',
+  'Your face on every wall: the bunker calms a little every night.',
+];
+export const rankOf = (opu) => TITLES.filter(([t]) => opu >= t).length - 1;
 export const titleOf = (opu) => TITLES.filter(([t]) => opu >= t).pop()[1];
 export const nextTitle = (opu) => TITLES.find(([t]) => opu < t) || null;

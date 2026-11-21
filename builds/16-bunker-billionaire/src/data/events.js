@@ -32,6 +32,10 @@ function trap(g, ending, lived) {
     g.st.flags.panicUsed = true; g.fear('all', 6); g.st.stats.survivedAttempts++;
     return 'Something is badly wrong, and you know it a second before it happens. You are in the panic room inside the panic room before the door has finished closing. When you come out, everybody is very busy, and very polite.';
   }
+  if (g.st.rank >= 3 && g.chance(0.5)) {   // Supreme Leader: bodyguards
+    g.st.stats.survivedAttempts++; g.fear('all', 4);
+    return 'Your bodyguard steps between you and it without being asked, and without a word. That is what Supreme Leaders have. Somebody in this bunker is very disappointed tonight.';
+  }
   if (g.chance(0.72)) { g.end(ending); return ''; }
   g.res('med', -6); g.fear('all', -4); g.st.stats.survivedAttempts++;
   return lived;
@@ -710,6 +714,27 @@ const list = [
         }
         g.end(g.avgLoyalty() < 24 ? 'killed_mutiny' : g.deposed());
         return '';
+      } },
+      // round 10: two tyrant's answers, each a gamble
+      { t: 'Buy off the ringleader', c: { lux: -15 }, r: (g, c) => {
+        const lead = g.s(c.role);
+        if (lead) { lead.loyalty = Math.min(100, lead.loyalty + 30); lead.stage = 2; }
+        for (const p of g.faction()) if (p !== lead) { p.stage = 4; p.loyalty = Math.max(0, p.loyalty - 4); }
+        g.st.unrest = 50; g.st.flags.mutinyCool = g.st.day + 5;
+        return `A crate goes down in the lift: wine, cigars, a watch, and a deed to the second-best suite. Twenty minutes later ${g.n(c.role)} announces on the intercom that the demands have been “substantially met”. The others come out one at a time, not looking at each other.`;
+      } },
+      { t: 'Cut the air to their floor', r: (g, c) => {
+        const e = g.s('engineer');
+        if (e && e.stage < 5) {
+          const f = g.faction(), lead = g.s(c.role);
+          const weak = f.filter((p) => p !== lead && p.role !== 'engineer');
+          if (weak.length && g.chance(0.5)) dead(g, g.pick(weak));
+          for (const p of g.faction()) { p.stage = 3; p.fear = Math.min(100, p.fear + 25); p.loyalty = Math.max(0, p.loyalty - 8); }
+          g.loy('not:engineer', -3); g.res('med', -4); g.st.unrest = 45; g.st.flags.mutinyCool = g.st.day + 6;
+          return `${e.first} closes three valves and does not look at you while doing it. Forty minutes later the barricade comes down from the inside. They come out on their hands and knees.` + g.violate(['purges']);
+        }
+        if (g.chance(0.5)) { g.end('killed_mutiny'); return ''; }
+        g.end(g.deposed()); return '';
       } },
       { t: 'Step down', r: (g) => { g.end(g.deposed()); return ''; } },
     ],

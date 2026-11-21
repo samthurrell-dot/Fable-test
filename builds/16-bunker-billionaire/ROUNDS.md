@@ -292,6 +292,21 @@ Balance (80 runs a start): careful 60%, saint 75%, tyrant 57%. Runs that end wit
 
 Checked at 375 px: the warning line on the Tonight card opens the water sheet; cold showers took tonight's water from −1.7 to −0.3 and show "until day 12"; the mineral water shows why it cannot be bought (not enough luxury). No errors.
 
+## Round 10 (21 Nov 2026): titles that matter, and plots instead of flight
+
+Sam, after a tyrant run: the score and titles made no difference to play; people left rather than turning on him ("the fundamental question of the game was about trust and what if they turn on you, not away from you"); then: "My play was a tyrant and I didn't feel much pressure. I don't think fear suppressing plots is that good of a mechanic, nor is it that realistic. I also think a lot of what turned up fear actually would be more like anger or resentment."
+
+What changed:
+- **Titles have powers** (kept once reached): Landlord draws 5 cards; Chairman of the Board gets a third play; Supreme Leader has bodyguards (an attempt on your life fails half the time); God-Emperor calms the bunker every night. **Envy**: each title costs everyone a little loyalty every night, half as much living Spartan, half as much again living Decadent. A title-up line in the morning report; powers and envy on the You sheet.
+- **Fear no longer stops plotting.** How far someone goes is set by loyalty alone. Fear hides it (the fixed smile) and keeps people at their work (less petty sabotage and theft). Someone with a friend, or a plot to join, stays and plots instead of deserting.
+- **Cruelty breeds resentment, not fear**: ruthless and compulsory-fun cards raise fear far less.
+- **Plots are warned of, and can be hunted**: unnamed warnings as a plot grows (2, 3, more people). Questioning at 2am and the tapes expose any plotter, not only would-be killers, and an exposed plot falls apart for a while (the rest lie low).
+- **The mutiny has two tyrant answers**: buy off the ringleader (15 luxury), or cut the air to their floor (works if the engineer is not in the plot; if they are, it goes very wrong).
+- At the hatch, only a plot of more than half the bunker (or a bunker on the very brink) takes power from you.
+- Rebalanced without fear: plotting starts a little lower down the loyalty scale, attempts are less frequent, daily drift is a little gentler.
+
+Bench (40 runs a start): careful 69%, saint 83%, tyrant about 12% (score about 340 to 460, the highest). The code tyrant is cruel on purpose and hunts plots, but a person should do better. Not yet clicked through at phone width this round, and not played by a person: the tyrant may now be too hard.
+
 ## Not done, not checked
 
 - Round 9 has not been played by a person (Sam played round 8). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.

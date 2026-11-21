@@ -17,7 +17,7 @@ import { ROLES, ROLE_ORDER, TRAITS, STAGES, CANDIDATES } from '../data/staff.js'
 import { CARDS as STARTS, cardById } from '../data/cards.js';
 import { ENDINGS } from '../data/text.js';
 import { POLICY_INFO, DONE } from '../data/matters.js';
-import { CARDS as DECK, KINDS, PROJECTS, TIERS, TIER_NAMES, titleOf, nextTitle } from '../data/deck.js';
+import { CARDS as DECK, KINDS, PROJECTS, TIERS, TIER_NAMES, TITLES, TITLE_POWERS, titleOf, nextTitle } from '../data/deck.js';
 import { REQUESTS } from '../data/requests.js';
 import { faceSVG, MOOD_WORDS } from './faces.js';
 import { createSilo, ZONES } from './silo.js';
@@ -180,12 +180,12 @@ function stopAttract() { clearInterval(attract); attract = null; }
 
 function renderTitle() {
   const save = store.get('bb.save', null), found = store.get('bb.endings', []);
-  const ok = save && save.v === 6 && save.phase !== 'ended';
+  const ok = save && save.v === 7 && save.phase !== 'ended';
   desk.innerHTML = `<article class="card title-card deal">
     <p class="kicker">Act 2 · a management game for one bunker</p>
     <h1>Bunker Billionaire</h1>
     <p class="lede">You run a luxury doomsday bunker in an old missile silo. The surface will be safe in thirty days.</p>
-    <ul class="goal"><li><b>Live as lavishly as you can.</b> Your score is your opulence: hot tubs, banquets, portraits of yourself.</li><li><b>Still be in charge on day 30.</b> Eight staff, a closed silo, and none of them can be trusted.</li><li><b>Each day:</b> one piece of business, two cards from your hand, what you promised the staff, and the upgrade you are building.</li></ul>
+    <ul class="goal"><li><b>Live as lavishly as you can.</b> Opulence is your score, and each title it earns brings a power: a bigger hand, more plays, bodyguards. It also makes them envy you.</li><li><b>Still be in charge on day 30.</b> Eight staff, a closed silo, and none of them can be trusted.</li><li><b>Each day:</b> one piece of business, two cards from your hand, what you promised the staff, and the upgrade you are building.</li></ul>
     <p class="hintline">Being kind is expensive. Spin is cheap. Being a monster pays best, and costs most.</p>
     ${ok ? `<button type="button" class="go" data-act="resume">Carry on from day ${save.day}</button>` : ''}
     <h2>First: how did you get the bunker?</h2>
@@ -462,7 +462,9 @@ function youSheet() {
   const open = st.regime, kind = Math.round(kindness(st) * 100);
   openSheet(`<div class="dossier"><div class="who-head">${faceSVG('you', 'smug')}<div><h2>You</h2><p>${esc(titleOf(o))}</p></div></div>
     <dl><dt>The aim</dt><dd>Live as lavishly as you can and still be in charge on day ${RULES.DAYS}. Opulence is your score.</dd>
-    <dt>Opulence</dt><dd><b>${o}</b>. Living like this adds about ${Math.round(f)} a night. ${nx ? `${nx[0] - o} more makes you <b>${esc(nx[1])}</b>.` : 'There is no higher title.'}</dd>
+    <dt>Opulence</dt><dd><b>${o}</b>. Living like this adds about ${Math.round(f)} a night. ${nx ? `${nx[0] - o} more makes you <b>${esc(nx[1])}</b>: ${esc(TITLE_POWERS[TITLES.findIndex((t) => t[1] === nx[1])].toLowerCase())}` : 'There is no higher title.'}</dd>
+    <dt>Your powers</dt><dd>${st.rank ? TITLE_POWERS.slice(1, st.rank + 1).map((t) => esc(t)).join(' ') : 'None yet. Each title brings one.'}</dd>
+    <dt>Envy</dt><dd>${st.rank ? `Everyone below you loses a little loyalty every night, and more the higher you rise. ${st.policy.life === 2 ? 'Living decadently makes it half as bad again.' : st.policy.life === 0 ? 'Living plainly halves it.' : 'Living plainly would halve it.'}` : 'Nobody envies a tenant.'}</dd>
     <dt>The bunker</dt><dd><b>${MOOD_BANDS[moodBand()]}.</b> ${MOOD_SAYS[moodBand()]}</dd>
     <dt>Ruthlessness</dt><dd>${open > 1 ? `The worst you can now do: <b>${STEP_SAYS[open - 1]}</b>. Ruthless cards pay more the further you go, and your kindness counts for ${kind}% of what it did, because they know what you are.` : 'You have not been ruthless yet. Play a ruthless card and harsher ones join your deck the next morning.'}</dd>
     <dt>Reputation</dt><dd><b>${esc(epithet(st.infamy).replace(/^a /, '').replace(/^./, (c) => c.toUpperCase()))}.</b> The harsher your reputation, the longer their fear of you lasts.</dd>
