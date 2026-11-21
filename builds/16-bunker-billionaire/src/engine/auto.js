@@ -13,7 +13,7 @@
 
 import { CANDIDATES } from '../data/staff.js';
 import { REQUESTS } from '../data/requests.js';
-import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart } from './sim.js';
+import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart, storeLevers, useLever } from './sim.js';
 
 const AMBIGUOUS = ['chef_special', 'airlock', 'vitamin', 'master_keys', 'midnight_note'];
 const here = (st) => st.staff.filter((p) => p.status === 'ok');
@@ -69,7 +69,25 @@ function setLife(st, greed, kind) {
   setPolicy(st, 'rations', st.res.food < 12 ? 0 : kind && st.res.food > days * 1.8 + 25 ? 2 : 1);
 }
 
+// Stores that will not last to the hatch as things stand.
+const short = (st) => { const f = forecast(st), left = 31 - st.day; return ['food', 'water', 'power', 'med'].filter((k) => f[k] < 0 && st.res[k] + f[k] * left < 0); };
+// A sensible player facing a store that will run out: use less of it, and top it up when it is nearly empty.
+function rescue(st) {
+  let n = 0;
+  for (const k of short(st)) {
+    const v = storeLevers(st, k);
+    if (!v) continue;
+    for (const o of v.options) {
+      if (!o.ok) continue;
+      if (o.id === 'less' && useLever(st, k, 'less') !== null) n++;
+      if (o.id === 'more' && st.res[k] < 12 && useLever(st, k, 'more') !== null) n++;
+    }
+  }
+  return n;
+}
 function pickProject(st, prefs, reserve) {
+  const s0 = short(st);
+  prefs = [...(s0.includes('water') ? ['recycler'] : []), ...(s0.includes('power') ? ['generator'] : []), ...prefs];
   const list = projectList(st);
   for (const id of prefs) { const v = list.find((x) => x.id === id); if (v && v.ok && st.res.lux + v.cost.lux >= reserve) return id; }
   return null;
@@ -147,6 +165,7 @@ export const POLICIES = {
     },
   },
   careful: {
+    rescue,
     event: (st, view, r) => weighEvent(st, view, r, 0.6),
     orders: (st) => setLife(st, 1, here(st).filter(suspect).length >= 3),
     project: (st) => pickProject(st, ['wellness', 'hottub', 'truffles', 'butler', 'mint', 'panic'], 12),
@@ -170,6 +189,7 @@ export const POLICIES = {
     }, targetFor),
   },
   saint: {
+    rescue,
     event: (st, view, r) => weighEvent(st, view, r, 0.2),
     orders: (st) => setLife(st, 1, true),
     project: (st) => pickProject(st, ['wellness', 'truffles', 'hottub', 'mint', 'butler'], 8),
@@ -190,6 +210,7 @@ export const POLICIES = {
     }, (c, st) => targetFor(c, st) || (c.target && ['perk', 'talk', 'eotm', 'summit'].includes(c.id) ? here(st).sort((a, b) => (a.talked ?? -9) - (b.talked ?? -9))[0] : null)),
   },
   tyrant: {
+    rescue,
     event: (st, view, r) => (st.event.id === 'vote' ? first(view, 2, 1) : weighEvent(st, view, r, 1.5)),   // a tyrant cancels the vote
     orders: (st) => setLife(st, 2, false),
     project: (st) => pickProject(st, ['gallery', 'cameras', 'radio', 'panic', 'butler', 'hottub', 'pod'], 6),
@@ -223,6 +244,7 @@ export const POLICIES = {
     card: () => null,
   },
   seer: {
+    rescue,
     event: (st, view) => {
       let best = okIdx(view)[0], bestS = -Infinity;
       for (const i of okIdx(view)) {
@@ -288,6 +310,8 @@ export function playDay(st, policy, r = Math.random) {
   }
   const pj = policy.project(st, r);
   if (pj && commission(st, pj) !== null && L) L.decisions++;
+  // stores that will not last: the levers on each store's sheet
+  if (policy.rescue) { const k = policy.rescue(st); if (L) L.decisions += k; }
   // the project under way only moves when it is worked on
   const pv = projectView(st);
   if (pv && policy.build) for (const how of policy.build(st, pv, r)) if (buildPart(st, how) !== null && L) L.decisions++;

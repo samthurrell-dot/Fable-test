@@ -21,7 +21,7 @@ import { ROLES, ROLE_ORDER, STAGES, CANDIDATES } from '../data/staff.js';
 import { cardById } from '../data/cards.js';
 import { RUMOURS, RUMOURS_AFRAID, MOODS, SABOTAGE, THEFT } from '../data/text.js';
 import { EVENTS } from '../data/events.js';
-import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS } from '../data/matters.js';
+import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS, STORE_LEVERS } from '../data/matters.js';
 import { CARDS, START_DECK, TIERS, TIER_LINES, PROJECTS } from '../data/deck.js';
 import { REQUESTS } from '../data/requests.js';
 
@@ -63,6 +63,7 @@ export const RULES = {
   HAND: 4, PLAYS: 2,
   // Projects: while one is being built the staff work overtime; when done, a one-off reward.
   OVERTIME: 1.5, PROJECT_DONE: 10, POD_DAY: 20,  // loyalty everyone loses each time you put them on overtime
+  LEVER_RISE: 1.5, LEVER_NIGHTS: 5,   // store levers: each top-up costs this much more than the last; how long a cut lasts
   RUSH: 2, FIRST_DUE: 9, FIRST_MISS: { opu: -10, unrest: 8, loyalty: -2 },   // most parts a day; the first project's grand opening, and missing it
   // The ruthless steps (TIERS in data/deck.js); st.regime is how many are open. Playing a card from the
   // deepest open step opens the next the following morning, and adds its cards to your deck. Each step down:
@@ -804,6 +805,45 @@ function finishProject(st, g) {
   return `It is finished. ${d.flavour}${late ? ' The grand opening is held at last, to an audience that has seen the scaffolding.' : ''}${(d.cards || []).length ? ` New in your deck: ${d.cards.map((c) => CARDS[c].name).join(' and ')}.` : ''}`;
 }
 
+// --- What you can do about a store (round 9): top it up, or use less of it for a while ---------------
+export function storeLevers(st, k) {
+  const L = STORE_LEVERS[k];
+  if (!L) return null;
+  const uses = (st.levers && st.levers[k]) || 0, today = st.leverDay && st.leverDay[k] === st.day;
+  const out = { note: L.lessNote || '', options: [] };
+  if (L.more) {
+    const cost = Object.fromEntries(Object.entries(L.more.cost).map(([r, d]) => [r, Math.round(d * Math.pow(R.LEVER_RISE, uses))]));
+    let ok = st.phase === 'day' && !today, why = st.phase !== 'day' ? 'Start the day first' : today ? 'Once a day' : '';
+    if (ok && !afford(st, cost)) { ok = false; why = cost.opu ? 'Not enough opulence' : 'Not enough luxury'; }
+    out.options.push({ id: 'more', label: L.more.label, cost: { ...cost, ...L.more.gain }, ok, why });
+  }
+  if (L.less) {
+    const on = st.cuts && st.cuts[k] >= st.day;
+    out.options.push({ id: 'less', label: L.less.label, cost: { [k]: L.less.save }, perNight: true, mood: true, ok: st.phase === 'day' && !on, why: on ? `Until day ${st.cuts[k]}` : st.phase !== 'day' ? 'Start the day first' : '' });
+  }
+  return out;
+}
+export function useLever(st, k, id) {
+  const v = storeLevers(st, k), o = v && v.options.find((x) => x.id === id);
+  if (!o || !o.ok) return null;
+  const g = ctx(st), L = STORE_LEVERS[k];
+  st.delta = {};
+  let text;
+  if (id === 'more') {
+    for (const r in o.cost) g.res(r, o.cost[r]);
+    st.levers = st.levers || {}; st.levers[k] = (st.levers[k] || 0) + 1;
+    st.leverDay = st.leverDay || {}; st.leverDay[k] = st.day;
+    text = L.more.said;
+  } else {
+    st.cuts = st.cuts || {}; st.cuts[k] = st.day + R.LEVER_NIGHTS - 1;
+    st.cause = 'cut:' + k; g.loy('all', L.less.loyalty); st.cause = null;
+    text = L.less.said;
+  }
+  st.today.push({ title: o.label, text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, lever: k, id });
+  return text;
+}
+
 // The escape pod: from day 20, leave whenever you like, with your score.
 export const canEscape = (st) => !!st.built.pod && st.day >= R.POD_DAY && st.phase === 'day';
 export function escape(st) { if (!canEscape(st)) return false; ctx(st).end('escaped'); return true; }
@@ -974,6 +1014,7 @@ function nightly(st) {
   };
   out.food += extra('food'); out.lux += extra('lux'); out.opu += extra('opu');   // who you let in at the hatch
   for (const n of st.perks || []) for (const k in n) if (k in out) out[k] += n[k];   // requests you kept
+  for (const k in st.cuts || {}) if (st.cuts[k] >= st.day && STORE_LEVERS[k].less) out[k] += STORE_LEVERS[k].less.save;   // cold showers, early lights out
   for (const id in st.built) for (const k in PROJECTS[id].night || {}) if (k in out) out[k] += PROJECTS[id].night[k];
   return out;
 }

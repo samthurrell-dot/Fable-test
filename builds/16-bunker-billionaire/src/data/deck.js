@@ -290,6 +290,8 @@ export const PROJECTS = {
   wellness: { name: 'A Staff Wellness Centre', cost: { lux: -9 }, days: 4, mat: { lux: -2 }, night: { loyalty: 0.35 }, cards: ['yoga'], text: 'Everyone likes you a little more, every night.', flavour: 'A bench, a mat and a framed quote from you about rest.' },
   panic: { name: 'A Panic Room Inside the Panic Room', cost: { lux: -10 }, days: 4, mat: { power: -2 }, night: { opu: 1 }, panic: true, text: 'Survive one attempt on your life.', flavour: 'For when the bunker itself is the threat.' },
   butler: { name: 'Jeeves 9000, a Robot Butler', cost: { lux: -12 }, days: 4, mat: { power: -2 }, night: { opu: 2 }, plays: 1, text: 'Play one more card every day.', flavour: 'It irons your newspapers. There are no newspapers.' },
+  recycler: { name: 'A Gold-Plated Water Recycler', cost: { lux: -6 }, days: 3, mat: { power: -2 }, night: { water: 1.5, opu: 1 }, text: 'More water every night.', flavour: 'It turns everything back into water. Everything. Do not ask.' },
+  generator: { name: 'A Second Generator, Monogrammed', cost: { lux: -6 }, days: 3, mat: { lux: -2 }, night: { power: 1.5 }, text: 'More power every night.', flavour: 'Diesel, with your initials on the exhaust pipe.' },
   pod: { name: 'An Escape Pod (One Seat)', cost: { lux: -16 }, days: 6, mat: { power: -3 }, pod: true, text: 'From day 20 you can leave, with your score, whenever you like.', flavour: 'There is one seat. It is heated.' },
 };
 

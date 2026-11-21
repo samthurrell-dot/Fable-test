@@ -273,9 +273,28 @@ What changed:
 
 Balance unchanged (60 runs a start): careful 61%, saint 77%, tyrant 48%.
 
+## Round 9 (21 Nov 2026): something to do about every store
+
+Sam, playing round 8: "I'm now running low on water but haven't come across any way to reduce it sufficiently or to increase the water supplies."
+
+He was right: water had one way to use less (live Spartan, saving 0.6 a night) and no way to make more except mending a broken pump. Power was the same. A store you cannot act on is a timer, not a decision.
+
+What changed:
+- **Every store has levers, on its own sheet** (tap the store in the bar):
+  - Make more, once a day, dearer each time (×1.5): pour your mineral water into the tanks (6 luxury: +10 water), burn the antique furniture (6 opulence: +10 power), open your private larder (6 luxury: +10 food), hand over your private pharmacy (5 luxury: +8 medicine).
+  - Use less, for five nights: two-minute cold showers (water), lights out at eight (power), each saving 1.4 a night and costing everyone 2 loyalty. Food's dial is the staff rations on the Tonight card, and the sheet says so.
+  - The sheet also says how many nights the store has left at this rate.
+- **Two new projects:** a gold-plated water recycler (+1.5 water a night) and a second generator (+1.5 power a night).
+- **A warning on the Tonight card** for any store that will not last: "Water runs out in about 16 nights. See what you can do", which opens that store's sheet.
+- The code players use the levers when a store will not last, and build the recycler or generator first when water or power is short.
+
+Balance (80 runs a start): careful 60%, saint 75%, tyrant 57%. Runs that end with everyone dead from an empty store: 0 to 4 in 80 per start.
+
+Checked at 375 px: the warning line on the Tonight card opens the water sheet; cold showers took tonight's water from −1.7 to −0.3 and show "until day 12"; the mineral water shows why it cannot be bought (not enough luxury). No errors.
+
 ## Not done, not checked
 
-- Round 8 has not been played by a person (Sam played round 7). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
+- Round 9 has not been played by a person (Sam played round 8). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

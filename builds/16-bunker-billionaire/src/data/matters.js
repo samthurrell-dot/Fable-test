@@ -5,6 +5,28 @@
 //   FAULTS       machinery that breaks down (or is broken on purpose) and drains a store until mended
 // Pure data. The numbers behind the standing orders are in RULES.POLICY in engine/sim.js.
 
+// Round 9: what you can do about each store, from its sheet (tap the store in the bar).
+//   more: a one-off top-up, paid in luxury or opulence; dearer each time (RULES.LEVER_RISE), once a day.
+//   less: for LEVER_NIGHTS nights the store is used more slowly (save a night), and everyone minds (loyalty, once).
+// A store with no less here says where its dial is (food: staff rations).
+export const STORE_LEVERS = {
+  food: {
+    more: { label: 'Open your private larder', cost: { lux: -6 }, gain: { food: 10 }, said: 'Your private larder is opened. Tinned pheasant, quail eggs and forty jars of caviar go down to the kitchen. The chef handles them like unexploded bombs.' },
+    lessNote: 'To make food go further, cut the staff rations on the Tonight card.',
+  },
+  water: {
+    more: { label: 'Pour your mineral water into the tanks', cost: { lux: -6 }, gain: { water: 10 }, said: 'Two thousand bottles of Alpine spring water are emptied into the tanks, one at a time, by the farmer. It takes all afternoon.' },
+    less: { label: 'Two-minute cold showers, for five nights', save: 1.4, loyalty: -2, said: 'A timer goes up in every shower. The water is cold. The timer is loud. People come out of the showers looking at you.' },
+  },
+  power: {
+    more: { label: 'Burn the antique furniture', cost: { opu: -6 }, gain: { power: 10 }, said: 'A Louis XV chaise longue goes into the boiler, then a harpsichord. The generator purrs. Your suite echoes.' },
+    less: { label: 'Lights out at eight, for five nights', save: 1.4, loyalty: -2, said: 'At eight o’clock the lights go out on every floor but yours. People find their bunks by feel, and talk about you in the dark.' },
+  },
+  med: {
+    more: { label: 'Hand over your private pharmacy', cost: { lux: -5 }, gain: { med: 8 }, said: 'Your private pharmacy goes down to the medical bay: vitamins, sleeping pills, and an alarming amount of anti-ageing cream.' },
+  },
+};
+
 export const POLICY_INFO = {
   rations: { name: 'Staff rations', opts: ['Lean', 'Fair', 'Generous'], notes: ['Saves food. They are hungry, and they know why.', 'Enough, and no more.', 'Costs food every night. They notice, and like it.'] },
   life: { name: 'Your lifestyle', opts: ['Spartan', 'Comfortable', 'Decadent'], notes: ['You eat what they eat. Little opulence; they respect it.', 'Fine dining, a warm bath, a film. Some opulence.', 'Banquets, the cinema all night, a bath you could row across. Lots of opulence. They can smell it from their floor.'] },

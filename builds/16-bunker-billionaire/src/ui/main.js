@@ -11,7 +11,7 @@
 //   ?view=<day|done|night>   step that far into the day                   ?end=<ending id>  show an ending
 //   ?still=1      no ambient motion                                        ?flat=1  the flat picture, not the card model
 
-import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart } from '../engine/sim.js';
+import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape, requestView, answer, workOn, needsFirst, projectView, buildPart, storeLevers, useLever } from '../engine/sim.js';
 import { POLICIES, playOut } from '../engine/auto.js';
 import { ROLES, ROLE_ORDER, TRAITS, STAGES, CANDIDATES } from '../data/staff.js';
 import { CARDS as STARTS, cardById } from '../data/cards.js';
@@ -368,6 +368,7 @@ function tonight() {
     ${seg('life')}${seg('rations')}
     ${st.policy.curfew ? `<p class="fine curfew">Curfew and anthem: on, for good. ${chips({ opu: RULES.POLICY.curfew.opu[1] }, true)} a night.</p>` : ''}
     <div class="tonight"><span>Overnight</span>${chips(forecast(st), true)}</div>
+    ${['food', 'water', 'power', 'med'].map((k) => { const n = runsOut(k); return n === null ? '' : `<button type="button" class="short-line" data-act="res" data-k="${k}">${ICON[k]} <b>${RES_NAME[k]} runs out in about ${n} ${n === 1 ? 'night' : 'nights'}.</b> <span>See what you can do</span></button>`; }).join('')}
   </article>`;
 }
 
@@ -502,6 +503,24 @@ function pickPromise(i, role) {
 function pickPromiseWho(i, type) {
   openSheet(`<h2>Who gets the next bunk upgrade?</h2><p class="fine">Cost of keeping it: ${esc(PROMISES.bunk.cost)}</p><ul class="picker">${st.staff.filter((p) => p.status === 'ok').map((p) => `<li><button type="button" data-act="promise" data-i="${i}" data-type="${type}" data-role="${p.role}">${faceSVG(p.role, moodOf(p))}<span><b>${esc(p.name)}</b><small>${esc(p.title)}</small></span></button></li>`).join('')}</ul>`);
 }
+// How long a store lasts as things stand: nights until empty, or null if it lasts to the end.
+function runsOut(k) {
+  const f = forecast(st)[k], left = RULES.DAYS - st.day + 1;
+  if (f >= 0 || st.res[k] + f * left >= 0) return null;
+  return Math.max(0, Math.floor(st.res[k] / -f));
+}
+const RES_NAME = { food: 'Food', water: 'Water', power: 'Power', med: 'Medicine', lux: 'Luxury' };
+function storeSheet(k) {
+  const r = RES.find((x) => x[0] === k), f = forecast(st)[k], out = runsOut(k), L = st.phase === 'ended' ? null : storeLevers(st, k);
+  const last = out === null ? (f >= 0 ? 'It is going up, not down.' : 'At this rate it lasts until the hatch opens.') : out <= 0 ? '<b class="warn">It runs out tonight.</b>' : `<b class="warn">At this rate it runs out in about ${out} ${out === 1 ? 'night' : 'nights'}</b>, before the hatch opens.`;
+  const opt = (o) => `<button type="button" class="tool push" data-act="lever" data-k="${k}" data-id="${o.id}"${o.ok ? '' : ' disabled'}><span>${esc(o.label)}${o.ok ? '' : `<small>${esc(o.why)}</small>`}</span><span class="costs">${o.perNight ? chips(o.cost, true) + '<small>a night</small>' + '<span class="fx down">' + FX_ICON.like + '−all</span>' : chips(o.cost)}</span></button>`;
+  openSheet(`<h2 class="r-${k}">${ICON[k]} ${r[1]}: ${Math.round(st.res[k])}</h2><p class="body">${r[2]}</p>
+    <p class="body">Tonight: <b>${num1(f)}</b>. ${last}</p>
+    ${L && L.options.length ? `<h3>What you can do</h3><div class="pushes">${L.options.map(opt).join('')}</div>` : ''}
+    ${L && L.note ? `<p class="fine">${esc(L.note)}</p>` : ''}
+    ${k !== 'lux' ? `<p class="fine">Living more plainly (Tonight card) uses less of it. ${k === 'water' ? 'A water recycler project makes more.' : k === 'power' ? 'A second generator project makes more.' : ''}</p>` : ''}`);
+}
+
 function ledger() {
   const label = { owed: 'owed', kept: 'kept', broken: 'broken', forgotten: 'quietly forgotten', void: 'no longer matters' };
   const jobs = st.requests.filter((r) => r.state !== 'asked'), views = requestView(st);
@@ -617,7 +636,8 @@ document.addEventListener('click', (ev) => {
     case 'dossier': if (st) { sound.play('tap'); dossier(d.role); } break;
     case 'ledger': ledger(); break;
     case 'roster': roster(); break;
-    case 'res': { const r = RES.find((x) => x[0] === d.k), f = forecast(st)[r[0]]; openSheet(`<h2 class="r-${r[0]}">${ICON[r[0]]} ${r[1]}: ${Math.round(st.res[r[0]])}</h2><p class="body">${r[2]}</p><p class="body">As things stand, tonight takes <b>${num1(f)}</b>. ${st.res[r[0]] + f * (RULES.DAYS - st.day + 1) < 0 ? 'At this rate it runs out before the surface is safe: live a little less lavishly, or cut the rations.' : 'At this rate it lasts.'}</p>`); break; }
+    case 'res': storeSheet(d.k); break;
+    case 'lever': { const text = useLever(st, d.k, d.id); if (text === null) break; sound.play(d.id === 'more' ? 'coin' : 'stamp'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); storeSheet(d.k); break; }
     case 'menu': menu(); break;
     case 'help': help(); break;
     case 'close': closeSheet(); break;
