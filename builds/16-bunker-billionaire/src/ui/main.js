@@ -228,7 +228,7 @@ function facesLine(f) {
   const parts = [];
   if (f.worse.length) parts.push(`${names(f.worse)} ${f.worse.length > 1 ? 'look' : 'looks'} worse this morning.`);
   if (f.better.length) parts.push(`${names(f.better)} ${f.better.length > 1 ? 'look' : 'looks'} happier.`);
-  if (f.grin.length) parts.push(`${names(f.grin)} ${f.grin.length > 1 ? 'have' : 'has'} started smiling at everything.`);
+  if (f.grin.length) parts.push(`${names(f.grin)} ${f.grin.length > 1 ? 'have' : 'has'} started smiling at everything. Frightened people smile like that, whatever they really feel.`);
   return parts.length ? `<p class="faces-line">${rich(parts.join(' '))}</p>` : '';
 }
 
@@ -451,17 +451,22 @@ function closeSheet() { sheet.hidden = true; }
 const MOOD_BANDS = ['Calm', 'Grumbling', 'Muttering', 'Plotting', 'On the brink'];
 const moodBand = () => Math.min(4, Math.floor(st.unrest / 20));
 
+// What each step of the ruthless slope lets you do, in plain words (TIERS in data/deck.js).
+const STEP_SAYS = ['performance reviews and bunk searches', 'questioning people at 2am', 'making examples, and a curfew', 'scapegoats and the cell', 'sending people up to the surface'];
+const MOOD_SAYS = ['Nobody is organising anything.', 'Complaints, nothing more.', 'People are talking. Calm it down before it turns into plotting.', 'They are organising. A mutiny is close.', 'A mutiny could come any night.'];
 function youSheet() {
-  const word = st.word >= 1.15 ? 'good. They have seen you keep it.' : st.word >= 0.8 ? 'untested.' : st.word >= 0.4 ? 'worth less than it was.' : 'worth nothing.';
+  const w = st.word;
+  const word = w >= 1.15 ? '<b>Trusted.</b> You have kept your promises, so new ones count for more.' : w >= 0.8 ? '<b>Untested.</b> Your promises count for what they say.' : w >= 0.4 ? '<b>Doubted.</b> You have broken promises, so new ones calm people less.' : '<b>Worthless.</b> Nobody believes a promise from you any more.';
   const o = Math.round(st.res.opu), nx = nextTitle(o), f = forecast(st).opu;
-  openSheet(`<div class="dossier"><div class="who-head">${faceSVG('you', 'smug')}<div><h2>You</h2><p>${esc(titleOf(o))} of the bunker</p></div></div>
-    <dl><dt>The aim</dt><dd>Live as lavishly as you can, and still be in charge when the hatch opens on day ${RULES.DAYS}. Your score is your opulence.</dd>
-    <dt>Opulence</dt><dd><b>${o}</b>, ${num1(f)} a night as you live now. ${nx ? `${nx[0] - o} more to become <b>${esc(nx[1])}</b>.` : 'There is no higher title.'} It comes from your lifestyle, your projects, indulgent cards, and ruthless ones.</dd>
-    <dt>The bunker</dt><dd><b>${MOOD_BANDS[moodBand()]}</b>. ${moodBand() >= 3 ? 'They are close to acting together. A mutiny could come any night.' : 'Keep it below “Plotting”.'}</dd>
-    <dt>How far down</dt><dd>${st.regime > 1 ? `${st.regime} steps of ${TIERS.length}: <b>${esc(TIER_NAMES[st.regime - 1].toLowerCase())}</b>. Ruthless cards pay more now. Kindness from you is worth ${Math.round(kindness(st) * 100)}% of what it was: they know what you are.` : 'Not one step yet. Play a ruthless card and the next ones join your deck the morning after.'}</dd>
-    <dt>Known as</dt><dd><b>${epithet(st.infamy)}</b>. The worse your name, the more slowly their fear of you fades.</dd>
-    <dt>Your word is</dt><dd>${word}</dd>
-    <dt>Your deck</dt><dd>${st.deck.length + st.discard.length + st.hand.length} cards. Projects and ruthless steps add more.</dd></dl></div>`);
+  const open = st.regime, kind = Math.round(kindness(st) * 100);
+  openSheet(`<div class="dossier"><div class="who-head">${faceSVG('you', 'smug')}<div><h2>You</h2><p>${esc(titleOf(o))}</p></div></div>
+    <dl><dt>The aim</dt><dd>Live as lavishly as you can and still be in charge on day ${RULES.DAYS}. Opulence is your score.</dd>
+    <dt>Opulence</dt><dd><b>${o}</b>. Living like this adds about ${Math.round(f)} a night. ${nx ? `${nx[0] - o} more makes you <b>${esc(nx[1])}</b>.` : 'There is no higher title.'}</dd>
+    <dt>The bunker</dt><dd><b>${MOOD_BANDS[moodBand()]}.</b> ${MOOD_SAYS[moodBand()]}</dd>
+    <dt>Ruthlessness</dt><dd>${open > 1 ? `The worst you can now do: <b>${STEP_SAYS[open - 1]}</b>. Ruthless cards pay more the further you go, and your kindness counts for ${kind}% of what it did, because they know what you are.` : 'You have not been ruthless yet. Play a ruthless card and harsher ones join your deck the next morning.'}</dd>
+    <dt>Reputation</dt><dd><b>${esc(epithet(st.infamy).replace(/^a /, '').replace(/^./, (c) => c.toUpperCase()))}.</b> The harsher your reputation, the longer their fear of you lasts.</dd>
+    <dt>Your word</dt><dd>${word}</dd>
+    <dt>Your deck</dt><dd>${st.deck.length + st.discard.length + st.hand.length} cards.</dd></dl></div>`);
 }
 
 const record = (p) => Object.entries(p.done || {}).map(([k, n]) => `${DONE[k] || k}${n > 1 ? ' ×' + n : ''}`).join(', ');

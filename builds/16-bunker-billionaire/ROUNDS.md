@@ -258,9 +258,24 @@ Checked: day 1 at 375 px (the first-project card, lights out locked until it is 
 
 Not fixed: doing nothing still loses late (around day 25 to 28), not early. The first project's opening on day 9 is now the first moment idleness costs something you can see.
 
+## Round 8 (21 Nov 2026): no desertion without warning, and plain words on the You sheet
+
+Sam played round 7 and sent a screenshot of the You sheet: "Again here the writing just doesn't make any sense. On day 11 Ilse left but I couldn't see any reason why. I wasn't getting any indication that they were about to leave or that they didn't like me."
+
+Why Ilse left without warning: someone who hates you (loyalty under 14) and is terrified of you (fear 60 or more) could take a suit and go on any night, with no sign first. And at fear 66 or more a face shows a fixed grin, so a terrified, hostile person looked fine.
+
+What changed:
+- **A warning before anyone deserts.** The first night someone could leave, they are seen at the airlock instead, and the morning report says so in amber: "Tomás and Agnes were seen at the airlock last night, trying on suits. They hate you and fear you enough to leave. A kind word or a locked door might stop them." It goes in their file too. Only after that morning can they go. The warning is given once, and again only if they had clearly settled down in between. On the bench every desertion (368 in 150 tyrant runs) now came after a warning, on average 8 to 11 nights before; a careful player sees about 4 warnings a run, a tyrant about 8.
+- **When they go, the report says why:** "They hated working for you, and were too frightened to say so."
+- **The fixed smile is explained** the morning it appears: "Frightened people smile like that, whatever they really feel."
+- **The You sheet in plain sentences.** The title without "of the bunker"; what opulence a night your lifestyle adds and how much more to the next title; what each mood band means; "Ruthlessness: the worst you can now do: sending people up to the surface", in place of "5 steps of 5: the surface"; "Reputation", with what it does; "Your word: Trusted / Untested / Doubted / Worthless", each with what it means.
+- Fixed: a doubled sentence in the first slope message, and a double full stop after "We're Letting You Go. Up."
+
+Balance unchanged (60 runs a start): careful 61%, saint 77%, tyrant 48%.
+
 ## Not done, not checked
 
-- Round 7 has not been played by a person (Sam played round 6). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
+- Round 8 has not been played by a person (Sam played round 7). Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

@@ -1036,6 +1036,7 @@ export function endDay(st) {
   }
 
   // 2. Threat check: does anyone dare to act?
+  const airlock = [];   // seen at the airlock tonight: the warning before anyone deserts
   const seen = (p) => (st.cameras ? ` Cameras: ${p.first} was there at 3am.` : '');
   const faulty = (sys) => st.matters.some((m) => m.sys === sys);
   for (const p of here) {
@@ -1045,10 +1046,19 @@ export function endDay(st) {
     if ((p.cell || 0) > st.day) { p.faction = false; continue; }      // locked up: they can do nothing tonight
     // Terror has a price. Someone who hates you and dares do nothing else may simply leave.
     // (A head of security who is doing the job keeps the airlock; a curfew keeps people in their bunks.)
-    if (p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && g.chance(R.DESERT * (secOK && p !== sec ? R.DESERT_GUARDED : 1) * (pol.curfew ? R.DESERT_CURFEW : 1) * (st.flags.patrols && secOK ? R.PATROLS_DESERT : 1))) {
+    // Round 8: never without warning. The first night they could go, they are seen at the airlock instead;
+    // only after that morning can they leave. The warning is given once, and again only if they had clearly
+    // settled down in between (well clear of both thresholds).
+    const flight = p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR;
+    if (p.flight && (p.loyalty >= R.DESERT_LOYALTY + 8 || p.fear < R.DESERT_FEAR - 12)) p.flight = null;
+    if (flight && !p.flight) {
+      p.flight = st.day;
+      g.note(p, 'seen trying on an airlock suit at night');
+      airlock.push(p.first);
+    } else if (flight && st.day > p.flight && g.chance(R.DESERT * (secOK && p !== sec ? R.DESERT_GUARDED : 1) * (pol.curfew ? R.DESERT_CURFEW : 1) * (st.flags.patrols && secOK ? R.PATROLS_DESERT : 1))) {
       g.remove(p, 'exiled'); p.fled = st.day;
       for (const q of here) if (q !== p) g.move(q, -3, 'or:exile');
-      inc.push({ kind: 'bad', text: `${p.first} took a suit from the airlock in the night and went up to the surface, rather than spend another day down here with you. Nobody else can do that job properly.` });
+      inc.push({ kind: 'bad', text: `${p.first} took a suit from the airlock in the night and went up to the surface. They hated working for you, and were too frightened to say so. Nobody else can do that job properly.` });
       continue;
     }
     const sabotage = () => {
@@ -1076,6 +1086,10 @@ export function endDay(st) {
     if (p.stage === 3) { if (g.chance(R.P_SABOTAGE)) sabotage(); } else if (p.stage === 4) { if (g.chance(R.P_THEFT)) theft(); else if (g.chance(0.12)) sabotage(); } else if (p.stage === 5) { if (g.chance(0.15)) theft(); } else if (p.stage >= 6 && !st.queue.some((q) => q.attempt) && g.chance(R.P_ATTEMPT)) {
       g.queue(attemptEvent(p.role), { role: p.role }, 4, { attempt: true });
     }
+  }
+  if (airlock.length) {
+    const who = airlock.length === 1 ? airlock[0] : airlock.slice(0, -1).join(', ') + ' and ' + airlock[airlock.length - 1];
+    inc.push({ kind: 'warn', text: `${who} ${airlock.length === 1 ? 'was' : 'were'} seen at the airlock last night, trying on suits. They hate you and fear you enough to leave. A kind word or a locked door might stop them.` });
   }
   let du = 0;
   for (const p of here) du += R.UNREST_BY_STAGE[p.stage] * ((p.cell || 0) > st.day || (p.isolated || 0) > st.day ? 0.4 : 1);
@@ -1150,7 +1164,7 @@ export function endDay(st) {
   if (st.regime < TIERS.length && st.tierUsed[st.regime - 1]) {
     const add = TIERS[st.regime];
     for (const c of add) addCard(st, c);
-    inc.push({ kind: 'slope', text: `${TIER_LINES[st.regime - 1]} It is just how things are done now. New in your deck: ${add.map((c) => CARDS[c].name).join(' and ')}.` });
+    inc.push({ kind: 'slope', text: `${TIER_LINES[st.regime - 1]} It is just how things are done now. New in your deck: ${add.map((c) => CARDS[c].name).join(' and ').replace(/\.$/, '')}.` });
     st.regime++;
   }
   // Yesterday's hand goes on the discard pile (except cards that are used up).

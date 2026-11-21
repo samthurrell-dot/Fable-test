@@ -265,7 +265,7 @@ export const START_DECK = ['perk', 'talk', 'promise', 'trickle', 'eotm', 'poster
 export const TIERS = [['review', 'search'], ['interrogate', 'divide'], ['example', 'curfew'], ['scapegoat', 'cell'], ['exile']];
 export const TIER_NAMES = ['A firm hand', 'Questions at night', 'Examples', 'Enemies within', 'The surface'];
 export const TIER_LINES = [
-  'Nobody mentions the performance reviews any more. It is just how things are done now.',
+  'Nobody mentions the performance reviews any more.',
   'Nobody mentions the knock on the door at two in the morning any more.',
   'Nobody mentions the toothbrush any more.',
   'Nobody mentions the cell door any more.',
