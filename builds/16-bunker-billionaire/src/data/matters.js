@@ -6,14 +6,9 @@
 // Pure data. The numbers behind the standing orders are in RULES.POLICY in engine/sim.js.
 
 export const POLICY_INFO = {
-  rations: { name: 'Staff rations', mine: false, opts: ['Lean', 'Fair', 'Generous'], notes: ['Saves food. They are hungry, and they know why.', 'Enough, and no more.', 'Costs food every night. They notice.'] },
-  shifts: { name: 'Work rota', mine: false, opts: ['Easy', 'Normal', 'Double'], notes: ['Less gets grown, pumped and mended. People like it.', 'The usual hours.', 'More from the farm and the plant. Tired people, and accidents.'] },
-  heating: { name: 'Heating on the staff levels', mine: false, opts: ['Off', 'On'], notes: ['Saves power. Nine degrees in the bunks, and colds.', 'Costs power every night.'] },
-  cameras: { name: 'Cameras', mine: false, opts: ['Off', 'On'], notes: ['You see people at their posts, and nothing at night.', 'You see where people really are. Costs power, and nobody likes it.'] },
-  table: { name: 'Your table', mine: true, opts: ['Staff food', 'Fine dining', 'Banquets'], notes: ['You eat what they eat. It costs your comfort; they respect it.', 'A little extra food, a little comfort.', 'A lot of food, a lot of comfort. They can smell it from their floor.'] },
-  tub: { name: 'Your hot tub', mine: true, opts: ['Drained', 'Full'], notes: ['Saves water.', 'Water every night, for your comfort. The farmer watches it go.'] },
-  curfew: { name: 'Curfew and the morning anthem', mine: false, evil: true, opts: ['Off', 'On'], notes: ['People wander about as they like.', 'Lights out at nine, your anthem at six. Fear stops fading and creeps back up. You sleep beautifully.'] },
-  cinema: { name: 'Your cinema and heated floors', mine: true, opts: ['Off', 'On'], notes: ['Saves power. Socks in bed.', 'Power every night, for your comfort.'] },
+  rations: { name: 'Staff rations', opts: ['Lean', 'Fair', 'Generous'], notes: ['Saves food. They are hungry, and they know why.', 'Enough, and no more.', 'Costs food every night. They notice, and like it.'] },
+  life: { name: 'Your lifestyle', opts: ['Spartan', 'Comfortable', 'Decadent'], notes: ['You eat what they eat. Little opulence; they respect it.', 'Fine dining, a warm bath, a film. Some opulence.', 'Banquets, the cinema all night, a bath you could row across. Lots of opulence. They can smell it from their floor.'] },
+  curfew: { name: 'Curfew and anthem', opts: ['Off', 'On'], notes: ['People wander about as they like.', 'Lights out at nine, your anthem at six. Fear creeps up every night. You sleep beautifully.'] },
 };
 
 // The slope: harsh measures, in the order the bunker gets used to them. A rung opens the morning
@@ -26,7 +21,7 @@ export const RUNGS = [
   { name: 'The surface', acts: ['exile'], used: 'the lift', opens: 'There is one step left. The lift goes all the way up.' },
 ];
 // What was done to a person, for their file and for the end of the run.
-export const DONE = { reprimand: 'shouted at', interrogate: 'questioned at 2am', divide: 'turned against a friend', example: 'made an example of', scapegoat: 'blamed for everything', cell: 'locked in the cell', exile: 'sent to the surface' };
+export const DONE = { review: 'given a frank performance review', reprimand: 'shouted at', interrogate: 'questioned at 2am', divide: 'turned against a friend', example: 'made an example of', scapegoat: 'blamed for everything', cell: 'locked in the cell', exile: 'sent to the surface' };
 
 // Each ask: { key, text(n), t: what saying yes is called, c: open cost, act: true if it costs one of
 // your actions, r(g, p): what happens (returns the words), no(n): what a refusal looks like }.
@@ -40,7 +35,7 @@ export const ASKS = {
     { key: 'dayoff', text: (n) => `${n} would like one day off. Everyone would eat cold tins.`, t: 'Give the day off', c: { food: -2 }, r: (g, p) => { g.loy(p, 8); p.noticed = g.st.day; return `${p.first} sleeps until noon and comes back humming. The tins were not a success.`; }, no: (n) => `${n} cooks. Every dish tastes faintly of resentment.` },
   ],
   engineer: [
-    { key: 'motor', text: (n) => `${n} wants the motor out of your cinema projector to rebuild a pump.`, t: 'Give up the motor', c: { comfort: -6, water: 4 }, r: (g, p) => { g.loy(p, 8); return 'The pump runs sweetly. Your films are now a series of very good still pictures.'; }, no: (n) => `${n} nods slowly, looking at the projector the whole time.` },
+    { key: 'motor', text: (n) => `${n} wants the motor out of your cinema projector to rebuild a pump.`, t: 'Give up the motor', c: { opu: -6, water: 4 }, r: (g, p) => { g.loy(p, 8); return 'The pump runs sweetly. Your films are now a series of very good still pictures.'; }, no: (n) => `${n} nods slowly, looking at the projector the whole time.` },
     { key: 'visit', text: (n) => `${n} asks you to come down and see the plant room for yourself. “Just once. So you know what it is.”`, t: 'Go down and look', c: {}, act: true, r: (g, p) => { g.loy(p, 9); p.noticed = g.st.day; return `An hour among the pipes. ${p.first} explains every valve. You understand none of it, and say so, and that seems to be the right answer.`; }, no: (n) => `${n} says it was only an idea.` },
   ],
   doctor: [
@@ -49,11 +44,11 @@ export const ASKS = {
   ],
   farmer: [
     { key: 'seedlings', text: (n) => `${n} asks for extra water for the seedlings this week.`, t: 'Water the seedlings', c: { water: -5, food: 3 }, r: (g, p) => { g.loy(p, 8); return 'The seedlings stand up straight. So, for a day or two, does the farmer.'; }, no: (n) => `${n} waters them with a pipette, where you can see.` },
-    { key: 'lamp', text: (n) => `${n} wants one of the lamps from your suite as a grow light.`, t: 'Send down a lamp', c: { comfort: -5, food: 3 }, r: (g, p) => { g.loy(p, 8); return 'Your reading lamp now shines on a bed of lettuces. They are doing very well. You read by the fridge.'; }, no: (n) => `${n} looks at your chandelier for some time before leaving.` },
+    { key: 'lamp', text: (n) => `${n} wants one of the lamps from your suite as a grow light.`, t: 'Send down a lamp', c: { opu: -5, food: 3 }, r: (g, p) => { g.loy(p, 8); return 'Your reading lamp now shines on a bed of lettuces. They are doing very well. You read by the fridge.'; }, no: (n) => `${n} looks at your chandelier for some time before leaving.` },
   ],
   pa: [
     { key: 'door', text: (n) => `${n} would like a door on the office.`, t: 'Fit a door', c: { lux: -2 }, r: (g, p) => { g.loy(p, 7); return 'A door from your wardrobe is hung on the office. It has a mirror on the inside. Morale in the office is high.'; }, no: (n) => `${n} carries on working in full view of the corridor.` },
-    { key: 'evening', text: (n) => `${n} asks for one evening without your diary in it.`, t: 'Give the evening', c: { comfort: -5 }, r: (g, p) => { g.loy(p, 8); return 'You find your own slippers and pour your own drink. It takes forty minutes and you are proud of it.'; }, no: (n) => `${n} reads you tomorrow’s diary in a very level voice.` },
+    { key: 'evening', text: (n) => `${n} asks for one evening without your diary in it.`, t: 'Give the evening', c: { opu: -5 }, r: (g, p) => { g.loy(p, 8); return 'You find your own slippers and pour your own drink. It takes forty minutes and you are proud of it.'; }, no: (n) => `${n} reads you tomorrow’s diary in a very level voice.` },
   ],
   cleaner: [
     { key: 'mops', text: (n) => `${n} needs new mop heads. There are some in your stores, still wrapped.`, t: 'Hand them over', c: { lux: -2 }, r: (g, p) => { g.loy(p, 8); p.noticed = g.st.day; return `${p.first} unwraps them like presents.`; }, no: (n) => `${n} goes on mopping with something that was once a mop.` },
@@ -61,7 +56,7 @@ export const ASKS = {
   ],
   heir: [
     { key: 'allowance', text: (n) => `${n} wants an allowance. “It’s the principle.”`, t: 'Pay the allowance', c: { lux: -5 }, r: (g, p) => { g.loy(p, 9); return `${p.first} counts it, complains about it, and takes it.`; }, no: (n) => `${n} tells everyone that you are mean. Everyone already had a view.` },
-    { key: 'bedroom', text: (n) => `${n} wants the good bedroom. Yours.`, t: 'Give up the bedroom', c: { comfort: -10 }, r: (g, p) => { g.loy(p, 11); return `You move into the second-best bedroom. It has a pipe in it. ${p.first} is, for now, content.`; }, no: (n) => `${n} slams a door that was built to survive a missile.` },
+    { key: 'bedroom', text: (n) => `${n} wants the good bedroom. Yours.`, t: 'Give up the bedroom', c: { opu: -10 }, r: (g, p) => { g.loy(p, 11); return `You move into the second-best bedroom. It has a pipe in it. ${p.first} is, for now, content.`; }, no: (n) => `${n} slams a door that was built to survive a missile.` },
   ],
 };
 
@@ -78,6 +73,13 @@ export const SABOTEUR = { chef: ['fridge'], engineer: ['generator', 'pump'], doc
 
 // What people say when you sit down and ask (see talk() in engine/sim.js). Keyed by what moved their loyalty.
 export const WHY_BAD = {
+  life: 'We can smell your dinner from our floor. Every night.',
+  overtime: 'We are building your hot tub. Or your radio station. Or your face, in gold. In our own time.',
+  'or:review': 'That performance review. With the laser pointer.',
+  'or:search': 'You went through our bunks. You took the chocolate.',
+  'or:nda': 'I signed forty pages. In crayon.',
+  'or:funday': 'The conga. Four times round the mess hall.',
+  'or:trust': 'Nobody caught me.',
   cameras: 'The cameras. I can’t scratch my nose without a little red light watching.',
   grudge: 'You know what it is. It is the same thing it was on the first day.',
   trust: 'You said things. You promised things. I was there.',
@@ -106,6 +108,11 @@ export const WHY_BAD = {
   'ask:late': 'I asked you for one small thing, and you never even answered.',
 };
 export const WHY_GOOD = {
+  life: 'You eat what we eat. People notice that.',
+  wellness: 'The wellness centre. It is a bench, but it is our bench.',
+  'or:eotm': 'Employee of the Month. It’s on the wall.',
+  'or:summit': 'The hot tub. I have never been so warm.',
+  'or:trickle': 'The lobster. I still think about the lobster.',
   rations: 'The food has been good lately. Thank you for that.',
   shifts: 'The lighter rota helps. More than you’d think.',
   table: 'You eat what we eat. People notice that.',

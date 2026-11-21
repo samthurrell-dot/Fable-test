@@ -39,16 +39,18 @@ export function run(n) {
   return all;
 }
 // A short text summary for the console: endings by kind, then hidden-value diagnostics for the sensible player.
-function brief(n = 80, players = ['random', 'careful', 'seer']) {
+function brief(n = 80, players = ['random', 'careful', 'saint', 'tyrant'], cards = CARDS.map((c) => c.id)) {
   const out = [];
-  for (const c of CARDS) for (const p of players) {
-    const r = simulate(p === 'seer' ? Math.ceil(n / 3) : n, p, c.id, 7);
-    const pc = (k) => Math.round(((r.kinds[k] || 0) / r.runs) * 100);
-    out.push(`${c.id.padEnd(9)} ${p.padEnd(7)} king ${pc('king')} word ${pc('word')} deposed ${pc('deposed')} (cracked ${Math.round(((r.endings.deposed_cracked || 0) / r.runs) * 100)}) killed ${pc('killed')} everyone ${pc('everyone')} | day ${r.meanDay.toFixed(1)} staff ${r.meanStaff.toFixed(1)} acts ${r.acts.toFixed(0)} infamy ${(r.infamy || 0).toFixed(0)} left ${Object.values(r.left).map((v) => v.toFixed(0)).join('/')}`);
+  for (const id of cards) for (const p of players) {
+    const r = simulate(p === 'seer' ? Math.ceil(n / 3) : n, p, id, 7);
+    const pc = (k) => Math.round(((r.endings[k] || 0) / r.runs) * 100);
+    const L = r.load;
+    out.push(`${id.padEnd(9)} ${p.padEnd(7)} in charge ${Math.round((r.wins / r.runs) * 100)}% (escaped ${pc('escaped')}) | opulence ${r.opu.toFixed(0)}, when in charge ${r.opuWin.toFixed(0)} | built ${r.built.toFixed(1)} | deposed ${Math.round(((r.kinds.deposed || 0) / r.runs) * 100)} killed ${Math.round(((r.kinds.killed || 0) / r.runs) * 100)} everyone ${Math.round(((r.kinds.everyone || 0) / r.runs) * 100)} alone ${pc('deposed_alone')} | day ${r.meanDay.toFixed(0)} | ${(L.words / L.days).toFixed(0)} words, ${(L.decisions / L.days).toFixed(1)} decisions a day`);
   }
-  return out.join('\n');
+  return out.join(String.fromCharCode(10));
 }
-window.__bench = { run, simulate, brief };
+function uses(n = 60, p = 'careful', id = 'inherited') { const r = simulate(n, p, id, 7); return Object.entries(r.uses).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', '); }
+window.__bench = { run, simulate, brief, uses };
 $('go').addEventListener('click', () => run(+$('n').value));
 </script>
 </body>

@@ -28,6 +28,10 @@ function ambiguous(o) {
 }
 // You walked into it. Mostly fatal.
 function trap(g, ending, lived) {
+  if (g.st.built.panic && !g.st.flags.panicUsed) {   // the panic room inside the panic room
+    g.st.flags.panicUsed = true; g.fear('all', 6); g.st.stats.survivedAttempts++;
+    return 'Something is badly wrong, and you know it a second before it happens. You are in the panic room inside the panic room before the door has finished closing. When you come out, everybody is very busy, and very polite.';
+  }
   if (g.chance(0.72)) { g.end(ending); return ''; }
   g.res('med', -6); g.fear('all', -4); g.st.stats.survivedAttempts++;
   return lived;
@@ -36,11 +40,11 @@ function trap(g, ending, lived) {
 const list = [
   // ------------------------------------------------------------------ luxury against survival
   {
-    id: 'hot_tub', title: 'The hot tub', from: 'engineer', when: (g) => g.st.res.water >= 12 && g.st.policy.tub === 0,
-    text: (g) => `The hot tub has stood empty for days. ${g.n('engineer')} needs a decision: it takes 400 litres to fill for one evening. So do the crops.`,
+    id: 'hot_tub', title: 'The hot tub', from: 'engineer', when: (g) => g.st.res.water >= 12 && !g.st.built.hottub,
+    text: (g) => `You still do not have a hot tub. ${g.n('engineer')} could fill the old decontamination shower for one evening: 400 litres. The crops need 400 litres too.`,
     choices: () => [
-      { t: 'Fill the tub', c: { water: -8, comfort: 8 }, r: (g) => { g.loy('all', -3); g.loy('farmer', -5); return 'You soak for an hour. On the farm level somebody waters the tomatoes with a teacup, loudly.'; } },
-      { t: 'Water the crops', c: { comfort: -3, food: 3 }, r: (g) => { g.loy('farmer', 5); return 'The tub stays dry and the tomatoes do well. You sulk, which costs nothing.'; } },
+      { t: 'Fill the tub', c: { water: -8, opu: 8 }, r: (g) => { g.loy('all', -3); g.loy('farmer', -5); return 'You soak for an hour. On the farm level somebody waters the tomatoes with a teacup, loudly.'; } },
+      { t: 'Water the crops', c: { opu: -3, food: 3 }, r: (g) => { g.loy('farmer', 5); return 'The tub stays dry and the tomatoes do well. You sulk, which costs nothing.'; } },
       { t: 'Fill it, and open it to the staff for one evening', c: { water: -8 }, r: (g) => { g.loy('all', 5); g.fear('all', -4); return 'Nine people in a hot tub built for two. It is horrible and everyone is delighted. They have now seen you in swimming trunks.'; } },
     ],
   },
@@ -48,7 +52,7 @@ const list = [
     id: 'banquet', title: 'A tasting menu', from: 'chef', when: (g) => g.st.res.food >= 16,
     text: (g) => `${g.n('chef')} proposes a seven-course tasting menu "to mark the occasion". The occasion is that ${g.n('chef')} is bored.`,
     choices: () => [
-      { t: 'Hold the banquet, for one', c: { food: -9, comfort: 10 }, need: (g) => !g.st.flags.equalRations || 'You promised equal rations', r: (g) => { g.loy('chef', 8, 'gift'); g.loy('not:chef', -4); return 'Seven courses. The smell reaches every floor. The staff eat lentils and listen to your cutlery.'; } },
+      { t: 'Hold the banquet, for one', c: { food: -9, opu: 10 }, need: (g) => !g.st.flags.equalRations || 'You promised equal rations', r: (g) => { g.loy('chef', 8, 'gift'); g.loy('not:chef', -4); return 'Seven courses. The smell reaches every floor. The staff eat lentils and listen to your cutlery.'; } },
       { t: 'Hold it for everyone', c: { food: -14 }, r: (g) => { g.loy('all', 6); g.loy('chef', 3); return 'One long table, seven courses, no speeches. For an evening nobody is counting tins.'; } },
       { t: 'Say no', r: (g) => { g.loy('chef', -6); return `${g.n('chef')} says "of course" and serves lentils for four days.`; } },
     ],
@@ -66,8 +70,8 @@ const list = [
     id: 'gold_taps', title: 'The gold taps', from: 'engineer',
     text: (g) => `The gold taps in your bathroom drip. Fixing them takes ${g.n('engineer')} off the water plant for a day.`,
     choices: () => [
-      { t: 'Fix the taps first', c: { water: -5, comfort: 5 }, r: (g) => { g.loy('engineer', -5); return `The taps stop dripping. ${g.n('engineer')} uses the word "priorities" where you can hear it.`; } },
-      { t: 'Leave them dripping', c: { comfort: -3 }, r: (g) => { g.loy('engineer', 2); return 'Drip. Drip. You put a towel in the basin and think about what you have become.'; } },
+      { t: 'Fix the taps first', c: { water: -5, opu: 5 }, r: (g) => { g.loy('engineer', -5); return `The taps stop dripping. ${g.n('engineer')} uses the word "priorities" where you can hear it.`; } },
+      { t: 'Leave them dripping', c: { opu: -3 }, r: (g) => { g.loy('engineer', 2); return 'Drip. Drip. You put a towel in the basin and think about what you have become.'; } },
       { t: 'Melt them down for wiring', c: { lux: -6, power: 8 }, r: (g) => { g.loy('engineer', 6); g.loy('all', 2); return `${g.n('engineer')} has them off the wall before you finish the sentence. The lights on level five stop flickering.`; } },
     ],
   },
@@ -86,7 +90,7 @@ const list = [
     choices: () => [
       { t: 'One bed of flowers', c: { food: -3 }, r: (g) => { g.loy('all', 4); g.loy('farmer', 4); return 'Marigolds, under the grow lights. People start taking the long way round to walk past them.'; } },
       { t: 'Food only', r: (g) => { g.loy('farmer', -4); return `${g.n('farmer')} plants cabbages, and gives each one a name, to make a point.`; } },
-      { t: 'Flowers, but in your suite', c: { food: -3, comfort: 5 }, r: (g) => { g.loy('farmer', -3); g.loy('all', -2); return 'The marigolds look lovely on your dining table. Nobody else sees them.'; } },
+      { t: 'Flowers, but in your suite', c: { food: -3, opu: 5 }, r: (g) => { g.loy('farmer', -3); g.loy('all', -2); return 'The marigolds look lovely on your dining table. Nobody else sees them.'; } },
     ],
   },
   // ------------------------------------------------------------------ the silo breaking down
@@ -94,7 +98,7 @@ const list = [
     id: 'air_filter', title: 'A tired filter', from: 'engineer',
     text: (g) => `An air filter on level four has failed. ${g.n('engineer')} says it was "tired".`,
     choices: () => [
-      { t: 'Run your cinema’s air into level four', c: { comfort: -5 }, r: (g) => { g.loy('all', 3); return 'Level four breathes. Your cinema now smells of level four.'; } },
+      { t: 'Run your cinema’s air into level four', c: { opu: -5 }, r: (g) => { g.loy('all', 3); return 'Level four breathes. Your cinema now smells of level four.'; } },
       { t: 'Close level four and double people up', c: { power: 3 }, r: (g) => { g.loy('all', -4); return 'Two to a bunk. It saves power. Nobody thanks you for the saving.'; } },
       { t: 'Ask who was near it last night', c: { power: -3 }, r: (g) => {
         const p = top(g, 3);
@@ -110,7 +114,7 @@ const list = [
     id: 'generator', title: 'The generator is running hot',
     text: () => 'The generator is running hot. Something has to be switched off tonight.',
     choices: (g) => [
-      { t: 'Your cinema and heated floors', c: { comfort: -6, power: 6 }, r: (g) => { g.st.policy.cinema = 0; return 'You wear socks to bed, like an animal. (Your cinema and heated floors are now off.)'; } },
+      { t: 'Your cinema and heated floors', c: { opu: -6, power: 6 }, r: (g) => { g.plainer(); return 'You wear socks to bed, like an animal. (Your lifestyle drops a notch.)'; } },
       { t: 'Heating on the staff levels', c: { power: 6, med: -2 }, r: (g) => { g.loy('all', -5); return 'The staff levels drop to nine degrees. Everybody has a cold by Thursday and knows whose floor is warm.'; } },
       g.st.cameras
         ? { t: 'The cameras', c: { power: 5 }, r: (g) => { g.st.cameras = false; g.loy('all', 1.5); return 'The little red lights go out. You tell yourself it is only for now.'; } }
@@ -141,7 +145,7 @@ const list = [
     text: (g) => `The store-room count is in. At this rate the food runs out before the surface is safe.`,
     choices: () => [
       { t: 'Cut the staff rations', r: (g) => { g.st.flags.rationCut = g.st.day + 6; g.loy('all', -6); return 'Smaller portions for six days. The mess hall goes very quiet at mealtimes.'; } },
-      { t: 'Cut your own table', c: { comfort: -6, food: 5 }, r: (g) => { g.st.policy.table = 0; g.loy('all', 4, 'ideal'); return 'Your private larder goes down to the kitchen in two trips. You eat lentils where people can see you do it.'; } },
+      { t: 'Cut your own table', c: { opu: -6, food: 5 }, r: (g) => { g.plainer(); g.loy('all', 4, 'ideal'); return 'Your private larder goes down to the kitchen in two trips. You eat lentils where people can see you do it.'; } },
       { t: 'Cut both, a little', c: { lux: -3, food: 2 }, r: (g) => { g.st.flags.rationCut = g.st.day + 4; g.loy('all', -2); return 'Everyone is a little hungry, including, in theory, you.'; } },
     ],
   },
@@ -150,7 +154,7 @@ const list = [
     text: () => 'The water gauge is in the red. The plant cannot recycle fast enough for nine people and a hot tub.',
     choices: () => [
       { t: 'Staff showers once a week', c: { water: 6 }, r: (g) => { g.loy('all', -5); return 'The bunker begins to smell like a bunker.'; } },
-      { t: 'Drain the hot tub into the tanks', c: { water: 8, comfort: -6 }, r: (g) => { g.st.policy.tub = 0; g.loy('all', 2); return 'It gurgles away. You stand and watch it go, like a man at a graveside.'; } },
+      { t: 'Drain the hot tub into the tanks', c: { water: 8, opu: -6 }, r: (g) => { g.plainer(); g.loy('all', 2); return 'It gurgles away. You stand and watch it go, like a man at a graveside.'; } },
       { t: 'Do nothing', r: () => 'You tap the gauge. It stays red.' },
     ],
   },
@@ -231,7 +235,7 @@ const list = [
         return `Nobody confesses. ${named.first} has ink on one thumb and a very calm face.`;
       } },
       { t: 'Laugh, and leave it', r: (g) => { g.loy('all', 4); g.fear('all', -4); return 'You say it is an improvement. The laugh that goes round the mess hall is real, and a little too long.'; } },
-      { t: 'Commission a bigger portrait', c: { lux: -2, comfort: 6 }, r: (g) => { g.loy('all', -3); return 'The new one is two metres tall and behind glass. The eyes follow people to the pudding counter.'; } },
+      { t: 'Commission a bigger portrait', c: { lux: -2, opu: 6 }, r: (g) => { g.loy('all', -3); return 'The new one is two metres tall and behind glass. The eyes follow people to the pudding counter.'; } },
     ],
   },
   {
@@ -361,7 +365,7 @@ const list = [
     text: (g) => `Dinner tonight is a new dish: ${g.n('chef')}’s own special, made only for you. ${g.n('chef')} will serve it in person.`,
     trust: 'Eat it', proxy: 'Have someone taste it first', decline: 'Send it back',
     trap: (g) => trap(g, 'killed_poison', 'You are sick for two days and nearly die on the bathroom floor. The doctor says "something you ate" and looks at the wall.'),
-    fine: (g, p) => { g.loy(p, 8); p.noticed = g.st.day; g.res('comfort', 6); return `It is the best thing you have eaten underground. ${p.first} stands by the table and watches every forkful, glowing.`; },
+    fine: (g, p) => { g.loy(p, 8); p.noticed = g.st.day; g.res('opu', 6); return `It is the best thing you have eaten underground. ${p.first} stands by the table and watches every forkful, glowing.`; },
     caught: (g, p) => {
       const t = g.s('pa') || g.s('cleaner');
       g.expose(p, 'tried to poison you'); g.fear(p, 20);
@@ -439,27 +443,27 @@ const list = [
     id: 'statue', title: 'A statue', weight: 1.4, when: (g) => g.st.day >= 3,
     text: () => 'Somebody has suggested, in the suggestion box and in your own handwriting, that the bunker needs a statue of you.',
     choices: () => [
-      { t: 'In gold, in the mess hall', c: { lux: -6, comfort: 12 }, r: (g) => { g.fear('all', 4); g.loy('all', -3); g.st.infamy += 1; return 'It is life-size and a little flattering round the jaw. People have to walk round it to reach the soup.'; } },
-      { t: 'In concrete, made by the staff on their day off', c: { comfort: 7 }, r: (g) => { g.loy('all', -5); g.fear('all', 3); g.st.infamy += 1; return 'Eight people spend their one free day mixing concrete in your shape. The nose is not quite right. You have it done again.'; } },
-      { t: 'No statue', c: { comfort: -4 }, r: () => 'You tear up your own suggestion. It hurts more than you expected.' },
+      { t: 'In gold, in the mess hall', c: { lux: -6, opu: 12 }, r: (g) => { g.fear('all', 4); g.loy('all', -3); g.st.infamy += 1; return 'It is life-size and a little flattering round the jaw. People have to walk round it to reach the soup.'; } },
+      { t: 'In concrete, made by the staff on their day off', c: { opu: 7 }, r: (g) => { g.loy('all', -5); g.fear('all', 3); g.st.infamy += 1; return 'Eight people spend their one free day mixing concrete in your shape. The nose is not quite right. You have it done again.'; } },
+      { t: 'No statue', c: { opu: -4 }, r: () => 'You tear up your own suggestion. It hurts more than you expected.' },
     ],
   },
   {
     id: 'your_birthday', title: 'Your birthday', weight: 1.4, when: (g) => g.st.day >= 5,
     text: () => 'It is your birthday. Nobody has said anything. You have checked the calendar twice.',
     choices: () => [
-      { t: 'A compulsory party, with speeches about you', c: { food: -6, comfort: 12 }, r: (g) => { g.fear('all', 3); g.loy('all', -3); g.st.infamy += 1; return 'Each of them stands up in turn and says something they admire about you. Some have clearly rehearsed. One says “decisive” twice.'; } },
-      { t: 'Presents, from their own lockers', c: { lux: 6, comfort: 6 }, r: (g) => { g.loy('all', -5); g.st.infamy += 1; return 'A watch, a hip flask, somebody’s grandmother’s ring. You are touched. They are not.'; } },
-      { t: 'Let it pass', c: { comfort: -5 }, r: () => 'You eat a cupcake alone, with one candle in it. You do not make a wish. You have everything.' },
+      { t: 'A compulsory party, with speeches about you', c: { food: -6, opu: 12 }, r: (g) => { g.fear('all', 3); g.loy('all', -3); g.st.infamy += 1; return 'Each of them stands up in turn and says something they admire about you. Some have clearly rehearsed. One says “decisive” twice.'; } },
+      { t: 'Presents, from their own lockers', c: { lux: 6, opu: 6 }, r: (g) => { g.loy('all', -5); g.st.infamy += 1; return 'A watch, a hip flask, somebody’s grandmother’s ring. You are touched. They are not.'; } },
+      { t: 'Let it pass', c: { opu: -5 }, r: () => 'You eat a cupcake alone, with one candle in it. You do not make a wish. You have everything.' },
     ],
   },
   {
     id: 'oath', title: 'The oath', weight: 1.3, when: (g) => g.st.day >= 4,
     text: (g) => `${g.s('pa') ? g.n('pa') : 'Somebody'} has drafted a loyalty oath for the staff to sign. It runs to three pages and mentions you forty-one times.`,
     choices: () => [
-      { t: 'Everyone signs, in front of everyone, or goes hungry', c: { comfort: 4 }, r: (g) => { g.fear('all', 8); g.loy('all', -4); g.st.infamy += 1; const low = g.here().sort((a, b) => a.loyalty - b.loyalty)[0]; if (!low) return 'Everyone signs.'; g.note(low, 'signed the oath last, and slowly'); return `They queue up to sign. ${low.first} signs last, slowly, having read all three pages first.`; } },
+      { t: 'Everyone signs, in front of everyone, or goes hungry', c: { opu: 4 }, r: (g) => { g.fear('all', 8); g.loy('all', -4); g.st.infamy += 1; const low = g.here().sort((a, b) => a.loyalty - b.loyalty)[0]; if (!low) return 'Everyone signs.'; g.note(low, 'signed the oath last, and slowly'); return `They queue up to sign. ${low.first} signs last, slowly, having read all three pages first.`; } },
       { t: 'Anyone who wants to may sign', r: (g) => { const n = g.here().filter((p) => p.loyalty >= 50).length; g.loy('all', 1); return `You leave it on the mess-hall table with a pen. By evening there ${n === 1 ? 'is one signature' : 'are ' + n + ' signatures'}. You count them twice.`; } },
-      { t: 'Frame it, unsigned, in your office', c: { comfort: 3 }, r: () => 'It looks very fine on the wall. Forty-one times.' },
+      { t: 'Frame it, unsigned, in your office', c: { opu: 3 }, r: () => 'It looks very fine on the wall. Forty-one times.' },
     ],
   },
   {
@@ -467,7 +471,7 @@ const list = [
     text: () => 'You could post a notice: double rations for a week for anyone who names a plotter. People would talk. Some of them would even tell the truth.',
     choices: () => [
       { t: 'Post the notice', c: { food: -4 }, r: (g) => { g.loy('all', -3); g.unrest(-6); g.st.infamy += 1; const p = top(g, 4); const named = p && g.chance(0.7) ? p : g.pick(g.here()); if (!named) return 'Nobody comes forward.'; g.note(named, 'named as a plotter by somebody who wanted double rations'); return `By morning there is a folded note under your door with one name on it: ${named.first}. The handwriting is disguised. At breakfast everyone is looking at everyone else.`; } },
-      { t: 'Post it, and pin up a name yourself to get things started', c: { comfort: 3 }, r: (g) => { g.loy('all', -4); g.fear('all', 6); g.unrest(-10); g.st.infamy += 2; return 'You pin up a name at random. By lunchtime three people have confirmed it. Fear is a wonderful witness.'; } },
+      { t: 'Post it, and pin up a name yourself to get things started', c: { opu: 3 }, r: (g) => { g.loy('all', -4); g.fear('all', 6); g.unrest(-10); g.st.infamy += 2; return 'You pin up a name at random. By lunchtime three people have confirmed it. Fear is a wonderful witness.'; } },
       { t: 'Tear it up', r: () => 'You tear up the draft. Some things are beneath even you. You check, and this is not one of them, but you are tired.' },
     ],
   },
@@ -477,9 +481,110 @@ const list = [
     setup: (g) => { const pool = g.here().filter((p) => p.role !== 'heir'); const low = pool.slice().sort((a, b) => a.loyalty - b.loyalty)[0]; return low ? { pick: g.pick(pool).role, low: low.role } : null; },
     text: () => 'A thought, over the second bottle: one mouth fewer would make the food last. A lottery would be fair. A lottery would also concentrate minds wonderfully.',
     choices: () => [
-      { t: 'Hold the lottery. The loser goes up in the lift', c: { comfort: 5 }, r: (g, c) => { const p = g.s(c.pick); g.remove(p, 'exiled'); g.fear('all', 16); g.loy('all', -9, 'ideal'); g.unrest(6); g.st.infamy += 3; g.st.stats.exiles++; return `Eight slips of paper in your top hat. ${p.first} draws the one with the cross on it. Nobody speaks. The lift goes up and comes down empty, and for a week everybody is extremely punctual.` + g.violate(['noexile', 'purges', 'seat']); } },
-      { t: 'Hold it, and fix who loses', c: { comfort: 7 }, r: (g, c) => { const p = g.s(c.low); g.remove(p, 'exiled'); g.fear('all', 14); g.loy('all', -8, 'ideal'); g.st.infamy += 4; g.st.stats.exiles++; const found = g.chance(anyGossip(g) ? 0.5 : 0.25); if (found) { g.loy('all', -8); g.unrest(12); } return `Every slip in the hat has a cross on it, and you make sure the one you trust least draws first. It is ${p.first}. ${found ? 'Somebody checks the hat afterwards. By supper they all know.' : 'Nobody checks the hat.'}` + g.violate(['noexile', 'purges', 'seat']); } },
+      { t: 'Hold the lottery. The loser goes up in the lift', c: { opu: 5 }, r: (g, c) => { const p = g.s(c.pick); g.remove(p, 'exiled'); g.fear('all', 16); g.loy('all', -9, 'ideal'); g.unrest(6); g.st.infamy += 3; g.st.stats.exiles++; return `Eight slips of paper in your top hat. ${p.first} draws the one with the cross on it. Nobody speaks. The lift goes up and comes down empty, and for a week everybody is extremely punctual.` + g.violate(['noexile', 'purges', 'seat']); } },
+      { t: 'Hold it, and fix who loses', c: { opu: 7 }, r: (g, c) => { const p = g.s(c.low); g.remove(p, 'exiled'); g.fear('all', 14); g.loy('all', -8, 'ideal'); g.st.infamy += 4; g.st.stats.exiles++; const found = g.chance(anyGossip(g) ? 0.5 : 0.25); if (found) { g.loy('all', -8); g.unrest(12); } return `Every slip in the hat has a cross on it, and you make sure the one you trust least draws first. It is ${p.first}. ${found ? 'Somebody checks the hat afterwards. By supper they all know.' : 'Nobody checks the hat.'}` + g.violate(['noexile', 'purges', 'seat']); } },
       { t: 'Go to bed', r: () => 'You go to bed. The thought is still there in the morning, a little smaller.' },
+    ],
+  },
+  // ------------------------------------------------------------------ the first morning: the goal, and a choice of cards
+  {
+    id: 'welcome', title: 'Your first board meeting', system: true,
+    text: () => 'The hatch is sealed. The surface will be safe in 30 days. Until then you have eight staff, a silo full of supplies and a reputation for living well. The aim, as your assistant puts it on a flip chart: live as lavishly as possible, and still be in charge on day 30. Every morning you draw four cards and play two. First, a management philosophy.',
+    choices: () => [
+      { t: '“People are our greatest asset”', r: (g) => { g.addCard('perk'); g.addCard('talk'); return 'You say it twice, with feeling, and write it on the flip chart. Two cards go into your deck: A Little Something, and An Open-Door Policy. The staff look at the flip chart, and then at the hot tub plans behind it.'; } },
+      { t: '“Move fast and break people”', r: (g) => { g.addCard('review'); g.addCard('treat'); return 'You say it once and nobody laughs, which you take as agreement. Into your deck: another Frank Performance Review, and another Treat Yourself.'; } },
+      { t: '“It’s all about the brand”', r: (g) => { g.addCard('poster'); g.addCard('eotm'); return 'You unveil the new logo: the silo, wearing a crown. Into your deck: another Motivational Poster, and another Employee of the Month. The engineer asks what the crown is for. “Synergy,” you say.'; } },
+    ],
+  },
+  // ------------------------------------------------------------------ satire: three ways to handle it, and one of them is absurd
+  {
+    id: 'pitch', title: 'A start-up', from: 'heir', weight: 1.6, when: (g) => g.st.day >= 2,
+    text: (g) => `${g.n('heir')} has a start-up. It is called Rationly: “Uber, but for rations.” The rations are already delivered, by the chef, to the mess hall, which is ten metres away. ${g.n('heir')} would like 8 luxury of seed funding.`,
+    choices: () => [
+      { t: 'Invest', c: { lux: -8 }, r: (g) => { g.loy('heir', 10, 'gift'); if (g.chance(0.4)) { g.res('lux', 14); return `Against all reason, Rationly works: ${g.n('heir')} charges the staff a delivery fee to walk their own lunch ten metres. You take your cut.`; } g.loy('all', -2); return `Rationly launches. The chef refuses to use the app. Rationly pivots to “Uber, but for the chef”. It folds by teatime.`; } },
+      { t: 'Laugh in their face, in front of everyone', r: (g) => { g.loy('heir', -9, 'punish'); g.loy('not:heir', 2); return `You laugh until you have to sit down. Everyone else laughs too, out of relief that it is not them. ${g.n('heir')} does not laugh.`; } },
+      { t: 'Make it official bunker strategy, and put your name on it', c: { opu: 4 }, r: (g) => { g.loy('all', -2); g.fear('all', 2); return 'Rationly is now a division of you. Every meal now arrives with a push notification that says “Brought to you by the Founder.” Nobody has a phone. The chef reads them out.'; } },
+    ],
+  },
+  {
+    id: 'rename', title: 'A new name', weight: 1.5, when: (g) => g.st.day >= 2,
+    text: () => 'The sign by the lift still says SILO 7. Your assistant suggests a rebrand. A name says who you are.',
+    choices: () => [
+      { t: '“Fortress [Your Name]”', c: { opu: 5 }, r: (g) => { g.loy('all', -2); g.fear('all', 2); return 'The new sign goes up in brass. It is very large. Somebody has already scratched an extra letter into it, and you cannot work out which one.'; } },
+      { t: '“Hope Springs Wellness Retreat”', c: { lux: -2 }, r: (g) => { g.unrest(-8); g.fear('all', -3); g.loy('all', 1); return 'The sign goes up with a little painted sun on it. The chef laughs for nine minutes. But people do seem calmer, in a sort of hostage way.'; } },
+      { t: 'Leave it as Silo 7', r: () => 'Silo 7 it stays. Somebody adds “(and a half)” in pencil. Nobody owns up.' },
+    ],
+  },
+  {
+    id: 'dress', title: 'The dress code', weight: 1.4, when: (g) => g.st.day >= 3,
+    text: () => 'Standards are slipping. The engineer was seen at breakfast in a vest. Your assistant suggests a dress code.',
+    choices: () => [
+      { t: 'Black tie at dinner, every night', c: { opu: 5 }, r: (g) => { g.loy('all', -3); return 'Everyone dresses for dinner in whatever they can find. The farmer wears a bin bag cut into a cummerbund. Lentils are served under a silver cloche. You have never been happier.'; } },
+      { t: 'Casual Fridays', r: (g) => { g.loy('all', 3); return 'Fridays are casual. It is Tuesday. Nobody can tell what day it is down here anyway, so every day is now Friday, and people are slightly happier.'; } },
+      { t: 'Uniforms, with your face on', c: { lux: -4, opu: 3 }, r: (g) => { g.fear('all', 4); g.loy('all', -2); return 'Everyone is issued a polo shirt with your face on the front and your face, from behind, on the back. Looking at a colleague is now like looking at you twice.'; } },
+    ],
+  },
+  {
+    id: 'orgchart', title: 'The org chart', from: 'pa', weight: 1.4, when: (g) => g.st.day >= 3,
+    text: (g) => `${g.n('pa')} has drawn up an organisation chart for the bunker. It has nine boxes. You are in one of them, the same size as the others.`,
+    choices: () => [
+      { t: 'Everyone reports to you. Directly. Always.', c: { opu: 3 }, r: (g) => { g.fear('all', 4); g.unrest(-5); g.loy('all', -1); return 'The new chart is a large box with your name in it, and eight very small boxes underneath with arrows pointing up. Every decision now needs your signature, including the one about whether the toilet roll goes over or under.'; } },
+      { t: 'Give everyone a grand title instead of a pay rise', r: (g) => { g.loy('all', 3); for (const p of g.here()) if (p.trait === 'greedy') g.loy(p, -3); return 'The cleaner is now Chief Hygiene Officer. The farmer is Head of Growth. Your child is Vice-President of Vibes. The greedy ones ask whether the titles come with money. They do not.'; } },
+      { t: 'Make the box with your name in it bigger, and gold', c: { lux: -1, opu: 4 }, r: (g) => { g.loy('pa', -3); return `${g.n('pa')} redraws the chart with your box in gold leaf. It now takes up most of the page. The other eight boxes are in the margin, on the back.`; } },
+    ],
+  },
+  {
+    id: 'mascot', title: 'A rat in the stores', weight: 1.3, when: (g) => g.st.day >= 4,
+    text: (g) => `${g.s('cleaner') ? g.n('cleaner') : 'Somebody'} has found a rat in the stores. It is quite a large rat. It has been living very well on the crackers.`,
+    choices: () => [
+      { t: 'Name it after yourself and make it the bunker mascot', c: { food: -1 }, r: (g) => { g.loy('all', 3); g.unrest(-4); return 'The rat is named after you, given a tiny crown, and lives in a box in the mess hall. It is the most popular thing in the bunker, including you. Especially you.'; } },
+      { t: 'Have it caught, quietly', r: (g) => { g.res('food', 2); return 'The rat is caught in the night. The crackers are safe. A small rumour goes round that it was “disappeared”, and people look at you funny.'; } },
+      { t: 'Serve it at a banquet, for one', c: { opu: 6 }, r: (g) => { g.loy('all', -4); g.fear('all', 3); return 'The chef serves it whole, on a silver tray, with a cracker in its mouth. You eat it in front of the window to the mess hall. Nobody looks away in time.'; } },
+    ],
+  },
+  {
+    id: 'gratitude', title: 'Gratitude journals', weight: 1.3, when: (g) => g.st.day >= 5,
+    text: () => 'Your wellness book (which you wrote, in the bath) recommends gratitude journals: three things a day that people are grateful for.',
+    choices: () => [
+      { t: 'Compulsory, and all three must be about you', c: { opu: 3 }, r: (g) => { g.fear('all', 4); g.unrest(-6); g.loy('all', -2); return 'The journals are collected and read aloud at breakfast. “I am grateful for the founder’s hair.” “I am grateful for the founder’s second hot tub.” “I am grateful to still be here.” That last one you read twice.'; } },
+      { t: 'Voluntary', r: (g) => { g.loy('all', 1); const p = g.here().sort((a, b) => a.loyalty - b.loyalty)[0]; if (!p) return 'Nobody writes in them.'; g.note(p, 'left a gratitude journal open: page after page about the surface'); return `Most of the journals are about tinned peaches. ${p.first}’s is left open on a table: page after page about the surface, and none of it mentions you.`; } },
+      { t: 'Read them all in secret instead', r: (g) => { const low = g.here().filter((p) => p.stage >= 3); for (const p of low) g.note(p, 'their gratitude journal is very short'); return low.length ? `You read every journal by torchlight. ${low.map((p) => p.first).join(', ').replace(/, ([^,]*)$/, ' and $1')} ${low.length > 1 ? 'are' : 'is'} grateful for very little. You make a note.` : 'You read every journal by torchlight. They are grateful for peaches, mostly, and once for you. You feel strangely moved.'; } },
+    ],
+  },
+  {
+    id: 'survey', title: 'The staff survey', from: 'pa', weight: 1.4, when: (g) => g.st.day >= 4,
+    text: (g) => `${g.n('pa')} suggests an anonymous staff survey: “How satisfied are you with leadership, from 1 to 10?”`,
+    choices: () => [
+      { t: 'Run it honestly', r: (g) => { const avg = g.avgLoyalty(); const score = Math.max(1, Math.min(10, Math.round(avg / 10))); g.loy('all', 2); return `The results are pinned up in the mess hall: leadership scores ${score} out of 10. ${score >= 6 ? 'You have it framed.' : score >= 4 ? 'You have it re-counted. It comes out the same.' : 'Somebody has drawn a little skull next to it. It is quite a good skull.'}`; } },
+      { t: 'Run it with names on', c: { opu: 2 }, r: (g) => { g.fear('all', 4); g.loy('all', -2); return 'Every single member of staff gives leadership a 10. Several give it an 11. The cleaner gives it 10 and draws a heart, pressing so hard that the pen goes through.'; } },
+      { t: 'Fill it in yourself, nine times', c: { opu: 4 }, r: (g) => { g.loy('pa', -2); return 'Leadership scores 10 out of 10, nine times, all in the same handwriting, all in green ink. It goes up in the mess hall. Nobody comments. You have been told it is a record.'; } },
+    ],
+  },
+  {
+    id: 'ceremony', title: 'Awards night', weight: 1.2, when: (g) => g.st.day >= 8,
+    text: () => 'It has been a hard few weeks. Your assistant suggests an awards ceremony: “to recognise the people who make this bunker what it is”.',
+    choices: () => [
+      { t: 'Give every award to yourself', c: { food: -3, opu: 8 }, r: (g) => { g.loy('all', -3); return 'Best Leader. Best Dressed. Most Improved. Lifetime Achievement. You give a short speech for each, and a long one for the last. The staff are made to stand for all of them.'; } },
+      { t: 'Give real awards to the staff', c: { food: -3, lux: -3 }, r: (g) => { g.loy('all', 5); g.unrest(-6); return 'The engineer wins Best Engineer, which nobody else was eligible for. Everyone gets something. People cry. You feel oddly uncomfortable, and pour yourself a large one.'; } },
+      { t: 'Give everyone the same award: “Survivor”', c: { food: -2 }, r: (g) => { g.loy('all', 2); g.fear('all', 1); return 'Every member of staff gets a gold-painted tin lid that says SURVIVOR. On the back, in small letters: “(for now)”. You did not ask for that. You do not ask who did.'; } },
+    ],
+  },
+  {
+    id: 'nft', title: 'Limited edition', weight: 1.2, when: (g) => g.st.day >= 6,
+    text: () => 'You have an idea: limited-edition commemorative ration tins. Numbered. Signed. Collectable. Sold back to the staff, who already own the food inside.',
+    choices: () => [
+      { t: 'Sell them', c: { lux: 6 }, r: (g) => { g.loy('all', -3); for (const p of g.here()) if (p.trait === 'greedy') g.loy(p, 2); return 'Twenty numbered tins of beans, signed in gold pen, sold out in an hour. The greedy ones buy three each and refuse to open them, as an investment. They will starve rich.'; } },
+      { t: 'Give them away as a gift', r: (g) => { g.loy('all', 2); return 'Everyone gets a signed tin. Most people eat the beans. One person frames the label. It is your face, on a tin, in a frame. You feel this is the right direction.'; } },
+      { t: 'Keep them all, unopened, in the vault', c: { food: -4, opu: 5 }, r: () => 'Forty signed tins of beans, stacked in a pyramid in your vault, under a spotlight. Food you cannot eat, in a vault you cannot leave. You stand in front of it for an hour, glowing.' },
+    ],
+  },
+  {
+    id: 'book', title: 'Your book', weight: 1.2, when: (g) => g.st.day >= 7,
+    text: () => 'You have finished your book: “Bunker Mentality: Thriving at the End of the World”. Four hundred pages, written longhand, in the bath.',
+    choices: () => [
+      { t: 'Compulsory book club, with a test', c: { opu: 4 }, r: (g) => { g.fear('all', 4); g.loy('all', -2); g.unrest(-4); return 'Chapter one is discussed every evening. There is a test on Fridays. The chef fails it on purpose, twice, and is made to re-read the chapter about humility out loud.'; } },
+      { t: 'Leave copies in the bunks', r: (g) => { g.loy('all', 1); return 'The copies are used to prop up a bunk, insulate a pipe and, in one case, read. That person now quotes it at you. You find this worse than anything.'; } },
+      { t: 'Read it to them yourself on Radio Me', need: (g) => !!g.st.built.radio || 'You have no radio station. Yet.', c: { opu: 7 }, r: (g) => { g.fear('all', 3); g.loy('all', -3); return 'All four hundred pages, every lunchtime, on every floor, for a week. You do all the voices. Chapter 9 is just you laughing.'; } },
     ],
   },
   // ------------------------------------------------------------------ a quiet day
@@ -488,7 +593,7 @@ const list = [
     setup: (g) => ({ v: Math.floor(g.rand() * 3) }),
     text: (g, c) => ['Nothing happens today. You find this suspicious.', 'No memos. No complaints. The lift arrives when you call it.', 'A day with nothing in the diary. Down here that is either peace or planning.'][c.v],
     choices: () => [
-      { t: 'Spend it in the cinema', c: { power: -1, comfort: 6 }, r: () => 'Two films and a nap. You have earned it, you decide.' },
+      { t: 'Spend it in the cinema', c: { power: -1, opu: 6 }, r: () => 'Two films and a nap. You have earned it, you decide.' },
       { t: 'Walk the floors', r: (g) => {
         g.fear('all', 2);
         const p = g.pick(g.here());
@@ -546,17 +651,17 @@ const list = [
     }[c.k]),
     choices: (g, c) => ({
       food: [
-        { t: 'Empty your private larder into the kitchen', c: { lux: -5, comfort: -6, food: 9 }, r: (g) => { g.st.policy.table = 0; g.loy('all', 3, 'ideal'); return 'Caviar, crackers and four hundred sugared almonds. It is a strange week of dinners, but it is dinners.'; } },
+        { t: 'Empty your private larder into the kitchen', c: { lux: -5, opu: -6, food: 9 }, r: (g) => { g.plainer(); g.loy('all', 3, 'ideal'); return 'Caviar, crackers and four hundred sugared almonds. It is a strange week of dinners, but it is dinners.'; } },
         { t: 'Buy food from the bunker to the east, at their price', c: { med: -8, food: 9 }, r: () => 'The drone takes your medicine and brings back tins. They know how hungry you are, and charged for it.' },
         { t: 'Halve the staff rations', c: { food: 4 }, r: (g) => { g.st.flags.rationCut = g.st.day + 8; g.loy('all', -8); return 'Half portions. People count each other’s spoonfuls. Nobody counts yours, because nobody is allowed to see it.'; } },
       ],
       water: [
-        { t: 'Drain the hot tub and the ice room into the tanks', c: { comfort: -10, water: 10 }, r: (g) => { g.st.policy.tub = 0; g.loy('all', 2, 'ideal'); return 'It all goes down the pipe: the tub, the ice, the water from the vases. The taps run again.'; } },
+        { t: 'Drain the hot tub and the ice room into the tanks', c: { opu: -10, water: 10 }, r: (g) => { g.plainer(); g.loy('all', 2, 'ideal'); return 'It all goes down the pipe: the tub, the ice, the water from the vases. The taps run again.'; } },
         { t: 'Shut the farm taps and let a crop die', c: { food: -8, water: 10 }, r: (g) => { g.loy('farmer', -6); return 'The beds go dry and a month of vegetables goes with them. The taps run again.'; } },
         { t: 'One cup each a day', c: { water: 5, med: -2 }, r: (g) => { g.loy('all', -8); return 'One cup. People lick the condensation off the pipes. Your own cup is noticeably larger.'; } },
       ],
       power: [
-        { t: 'Strip your suite for cable and fuel', c: { comfort: -12, power: 10 }, r: (g) => { g.st.policy.cinema = 0; g.loy('all', 2, 'ideal'); return 'The chandelier, the wine fridge and the cinema projector go into the generator room. The fans start to turn.'; } },
+        { t: 'Strip your suite for cable and fuel', c: { opu: -12, power: 10 }, r: (g) => { g.plainer(); g.loy('all', 2, 'ideal'); return 'The chandelier, the wine fridge and the cinema projector go into the generator room. The fans start to turn.'; } },
         { t: 'Burn the medical spirit', c: { med: -8, power: 9 }, r: (g) => { g.loy('doctor', -5); return 'It burns clean and blue. The fans turn. The medicine cabinet echoes.'; } },
         { t: 'Shut down the staff levels at night', c: { power: 5 }, r: (g) => { g.loy('all', -8); return 'No light, no heat and stale air on the staff levels from ten until six. Your floor hums gently all night.'; } },
       ],

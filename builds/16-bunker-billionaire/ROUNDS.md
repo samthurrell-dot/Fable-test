@@ -161,9 +161,45 @@ Checked: a whole run clicked through the real buttons at 375 px, leaning on hars
 
 Also added: `DESIGN.md` in the build folder, with the spine, the resource table and the decision audit that `skills/choice-and-systems-design` asks for.
 
+## Round 5 (21 Nov 2026): a goal, a hand of cards, projects, and the funny middle
+
+Sam played round 4 and stopped on day 3. His words: "the feel isn't quite right. One part is that the different mechanics or levels just aren't clear so I'm not sure what the objective is, and there aren't any upgrade paths or anything like that. the other part is that the actions I can take are either placid obvious good decisions or cruel decisions, there isn't that funny factor I was thinking about. I only got to day 3 and was already quite disengaged."
+
+The three weakest things, in his terms, and what the code showed behind each:
+1. **No objective.** Surviving 30 days was the only goal: no score, nothing to build, so a run had no shape (principles 1.1, 4.6).
+2. **Too many systems, none of them explained by the screen.** Comfort set the number of actions; seven standing orders behind a button; requests; faults; the slope; promises; informants (principles 3.3, 3.4).
+3. **No funny middle.** Every action was either kind or cruel. The outline says "dark comedy on the surface ... Most choices are funny" (principle 1.3; choice-and-systems-design, section 4).
+
+What changed (rules in `src/engine/sim.js`, cards and projects in `src/data/deck.js`):
+- **A goal and a score.** Live as lavishly as you can and still be in charge on day 30. Opulence (`st.res.opu`) is the score; titles from Tenant (0) through Landlord (90), Chairman of the Board (180), Supreme Leader (300) to God-Emperor of Silo 7 (440). Shown under the silo all the time, on the title screen, on the first morning, and as the headline of the end screen with your best per start.
+- **A hand of cards instead of a menu.** Draw four each morning, play two. 15 starting cards in four kinds: generous (cost you, please them), spin (cheap, absurd, double-edged: Employee of the Month, Rebrand the Rations as the Founder's Fast, Mandatory Fun, A TED Talk, Hire a Consultant, a Non-Disclosure Agreement, a Team-Building Trust Fall, Motivational Poster), ruthless (pay opulence, stir unrest, and playing one adds the next step's cards to the deck the morning after), indulgent (opulence for luxury). The first morning's business is a choice of management philosophy that adds two cards.
+- **Upgrade paths.** Ten projects (a gold hot tub, a gallery of portraits of you, Radio Me, the BilliBuck Mint, a surveillance suite, a truffle farm, a staff wellness centre, a panic room inside the panic room, Jeeves 9000 the robot butler, a one-seat escape pod). One at a time, built on staff overtime. Each adds opulence or new cards or a power (the butler gives a third play; the panic room survives one attempt; the pod lets you leave from day 20 with your score).
+- **Cut.** Comfort and its 1 to 3 actions; five of the seven standing orders (the two left, your lifestyle and the staff's rations, sit on the day screen); staff requests; informants. Patching and inspecting faults went in round 4.
+- **Visible threat.** The bunker's mood (unrest) is now a five-step meter under the silo: Calm, Grumbling, Muttering, Plotting, On the brink. Individual loyalty and fear stay hidden.
+- **Eleven new satire events**, each with a sensible, a selfish and an absurd answer: the heir's start-up ("Uber, but for rations"), renaming the bunker, the dress code, the org chart, the rat mascot, gratitude journals, the staff survey, awards night, limited-edition ration tins, your book, and the welcome meeting.
+
+Mistakes made and fixed during the round:
+- **Too easy at first.** Two free spin cards a day kept everyone sweet: the careful and saint players kept power in 95 to 100% of runs. Fixed with stronger drift (loyalty lost to time underground 0.035 to 0.06 a day per day; unmet wants -1.2 to -1.5), a cost for living well (Comfortable -0.3, Decadent -1.0 loyalty a night), overtime 0.5 to 0.8, and weaker spin cards.
+- **Then the tyrant was safest and richest.** In charge 72 to 85% with 2.5 times the opulence. Ruthless cards now stir unrest (+3 each) and pay a little less (relish 0.15 to 0.1).
+- **The code tyrant counted a promised vote honestly**, and lost it 98% of the time. The rules were fine; the code player now cancels the vote, as a tyrant would.
+
+Balance at the end of the round (`demo/balance.html`, 100 runs each, 60 for the seer; who comes in at the hatch is random every run). Share of runs still in charge on day 30, and mean opulence when in charge:
+
+| Card | Careless | Careful | Saint | Tyrant | Sees the numbers |
+|---|---|---|---|---|---|
+| Inherited it | 7% | 71% (180) | 76% (153) | 57% (426) | 100% (121) |
+| Bought your way in | 12% | 73% (194) | 81% (156) | 83% (456) | |
+| Promised them a vote | 10% | 69% (191) | 88% (154) | 50% (426) | |
+| Took it by force | 16% | 69% (195) | 53% (147) | 60% (450) | 95% (111) |
+| Founder of the bunker | 8% | 55% (253) | 66% (183) | 60% (463) | 100% (202) |
+
+The tyrant scores two to three times what the kind styles score, and loses power more often: evil is the tempting path and the risky one. A day puts about 210 to 240 words and 3 decisions in front of the player (more words than round 4, because the four cards carry their jokes).
+
+Checked: a whole run clicked through the real buttons at 375 px (founder, 22 days, every kind of card, three projects built, all five ruthless steps opened, deposed with 345 opulence): no errors. The day screen, the hand and tonight's settings read at 375 px.
+
 ## Not done, not checked
 
-- Still not played by a person from start to finish since round 2. The balance numbers come from players made of code. A day has not been timed on a phone.
+- Round 5 has not been played by a person. Sam played round 4 to day 3. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

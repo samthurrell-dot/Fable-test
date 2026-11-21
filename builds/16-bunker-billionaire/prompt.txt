@@ -38,3 +38,8 @@ Round 4 (16 to 17 Nov 2026), Sam's words: "have another run at the game, using t
 been added to the folder/repo". The skills: skills/game-design-principles, skills/choice-and-systems-design,
 skills/game-design-review (added 16 Nov 2026 with a review of this build in ROUNDS.md). Round 4 took the
 review's three weakest things as its brief. Started on Fable 5.2, finished on Opus 5.5.
+
+Round 5 (21 Nov 2026), after Sam played round 4 to day 3: "the different mechanics or levels just aren't
+clear so I'm not sure what the objective is, and there aren't any upgrade paths ... the actions I can take
+are either placid obvious good decisions or cruel decisions, there isn't that funny factor I was thinking
+about. I only got to day 3 and was already quite disengaged." Run on Opus 5.5.

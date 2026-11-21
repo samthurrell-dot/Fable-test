@@ -2,11 +2,14 @@
 // The rules of Bunker Billionaire. Pure: no DOM, no timers, and the only randomness is a seeded
 // generator kept inside the state, so a run can be saved, reloaded and replayed from its seed.
 //
+// The goal: live as lavishly as you can (opulence, st.res.opu, is the score) and still be in charge
+// when the hatch opens on day 30.
 // One day is: report -> day -> (lights out) -> night -> next report. During the day you may, in any order:
 //   answer today's event           eventView(st), choose(st, i)            (must be done before lights out)
-//   change your standing orders    setPolicy(st, key, value), indulge(st)  (free; they bite at night)
-//   deal with what is waiting      matterView(st), decide(st, i, id)       (requests and faults)
-//   spend your actions             actionList(st), promiseList(st), act(st, id, arg)
+//   play cards from your hand      handView(st), playCard(st, i, arg)      (RULES.PLAYS a day)
+//   set rations and lifestyle      setPolicy(st, key, value)               (free; they bite at night)
+//   commission a project           projectList(st), commission(st, id)     (the upgrade path)
+//   mend what is broken            matterView(st), decide(st, i, id)
 // then endDay(st): staff react, threat check, the night's supplies.
 // newRun(cardId, seed) gives a fresh state at the first morning report; openDay(st) moves report -> day.
 //
@@ -17,17 +20,18 @@ import { ROLES, ROLE_ORDER, STAGES, CANDIDATES } from '../data/staff.js';
 import { cardById } from '../data/cards.js';
 import { RUMOURS, RUMOURS_AFRAID, MOODS, SABOTAGE, THEFT } from '../data/text.js';
 import { EVENTS } from '../data/events.js';
-import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS, RUNGS } from '../data/matters.js';
+import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS } from '../data/matters.js';
+import { CARDS, START_DECK, TIERS, TIER_LINES, PROJECTS } from '../data/deck.js';
 
 export const RULES = {
   DAYS: 30,                      // nights until the surface is safe
-  START: { food: 60, water: 52, power: 55, med: 30, lux: 45, comfort: 70 },
-  CAP: 120,                      // most of anything the stores can hold (comfort stops at 100)
+  START: { food: 60, water: 52, power: 55, med: 30, lux: 45, opu: 0 },
+  CAP: 120,                      // most of anything the stores can hold (opulence has no cap: it is the score)
   VARY: 8,                       // spread of starting loyalty and fear between people
   GRUDGE_START: 16,              // loyalty the person with a grudge starts short by
   // Each night, loyalty drifts by:
-  WANT_MET: 0.3, WANT_UNMET: -1.2,   // whether the person's want is met
-  CABIN: 0.035,                  // lost a night per day spent underground so far: it wears on everyone
+  WANT_MET: 0.3, WANT_UNMET: -1.5,   // whether the person's want is met
+  CABIN: 0.06,                   // lost a night per day spent underground so far: it wears on everyone
   CAMERA_LOYALTY: 0.6,           // lost a night while the cameras are on
   GRUDGE: 1.2,                   // lost a night by the person with a grudge
   TRUST_KEPT: 0.12, TRUST_BROKEN: 0.6,   // per promise kept or broken so far
@@ -50,35 +54,26 @@ export const RULES = {
   // Standing orders. Each list is indexed by the setting (see POLICY_INFO in data/matters.js).
   POLICY: {
     rations: { eat: [0.7, 1, 1.3], loyalty: [-1.0, 0, 0.5] },             // staff portions; what they think of them
-    shifts: { eff: [0.85, 1, 1.2], loyalty: [0.4, 0, -0.9], accident: 0.08 },   // farm and plant output; chance a night of an accident on double shifts
-    heating: { power: [0, 1.0], loyalty: [-0.7, 0], med: [0.3, 0] },
-    table: { food: [0, 0.8, 2.2], comfort: [0, 2.5, 5], loyalty: [0.3, 0, -0.5] },
-    tub: { water: [0, 2.0], comfort: [0, 3], loyalty: [0, -0.25] },
-    cinema: { power: [0, 1.3], comfort: [0, 3] },
-    curfew: { fear: [0, 1.0], cap: 70, loyalty: [0, -0.5], comfort: [0, 1.5] },   // fear added a night, up to cap; what they think of it; how well you sleep
+    life: { opu: [1, 3, 6], food: [0, 0.8, 2.2], water: [0, 0.6, 1.6], power: [0, 0.6, 1.4], loyalty: [0.3, -0.3, -1.0] },   // how you live: Spartan, Comfortable, Decadent
+    curfew: { fear: [0, 1.0], cap: 70, loyalty: [0, -0.5], opu: [0, 1.5] },   // set by a card: fear added a night, up to cap; what they think of it; how well you sleep
   },
-  // Cruelty. Being a tyrant is restful: each cruel act gives you comfort, and adds to your infamy,
-  // which slows the fading of everyone's fear. Listening to people costs comfort.
-  CRUEL: { reprimand: 2, confiscate: 3, interrogate: 3, divide: 2, example: 5, scapegoat: 5, cell: 4, exile: 6 },
-  INFAMY: { reprimand: 1, confiscate: 1, interrogate: 1, divide: 1, example: 2, scapegoat: 2, cell: 1, exile: 3 },
-  // The slope. Measures sit on rungs (RUNGS in data/matters.js); st.regime is how many rungs are open.
-  // Using the lowest open rung opens the next one the following morning. Each rung further down:
-  RELISH: 0.15,                  // cruelty gives this much more comfort (it gets easier)
+  // Your hand. Each morning you draw HAND cards and may play PLAYS of them.
+  HAND: 4, PLAYS: 2,
+  // Projects: while one is being built the staff work overtime; when done, a one-off reward.
+  OVERTIME: 0.8, PROJECT_DONE: 10, POD_DAY: 20,
+  // The ruthless steps (TIERS in data/deck.js); st.regime is how many are open. Playing a card from the
+  // deepest open step opens the next the following morning, and adds its cards to your deck. Each step down:
+  RELISH: 0.1,                   // ruthless cards pay this much more opulence (it gets easier)
+  CRUEL_UNREST: 3,               // every ruthless card stirs the bunker up this much: they talk about it
   NUMB: 0.18, NUMB_FLOOR: 0.45,  // measures from higher up shock bystanders this much less (they have seen worse)
   SOUR: 0.12, SOUR_FLOOR: 0.4,   // perks, quiet words, speeches and promises are worth this much less (they know what you are)
   FRIEND_LOSS: 7, FRIEND_LOSS_JUST: 2,   // loyalty a friend loses when someone is exiled, deserts or dies; and when they had it coming
   INFAMY_FEAR: 0.06,             // each point of infamy slows the fading of fear by this share
-  TALK_COMFORT: 3,               // what a quiet word costs you
   DESERT_LOYALTY: 14, DESERT_FEAR: 60, DESERT: 0.06, DESERT_GUARDED: 0.25, DESERT_CURFEW: 0.6,
   ALONE: 3,                      // with fewer staff than this the silo cannot be run at all, and you have nobody to rule   // hated and terrified: chance a night that they take a suit and go
   CELL_NIGHTS: 3, ISOLATE_DAYS: 6, SCAPEGOAT_UNREST: 14, SCAPEGOAT_FADE: 0.6, SEARCH_FADE: 0.5,
-  // You. Comfort falls every night and is held up by how you live. It sets how much you get done.
-  COMFORT_DECAY: 5,
-  ACTIONS: [[60, 3], [30, 2], [0, 1]],   // comfort at or above -> actions a day
-  INDULGE_COST: 4, INDULGE: 12,          // once a day: luxury spent on yourself, comfort gained
-  CRACK_NIGHTS: 3,                       // nights at no comfort at all before you give the bunker up
-  // Requests and faults.
-  ASK_CHANCE: 0.33, ASK_DAYS: 3, ASK_REFUSED: 5, ASK_LATE: 4,
+  // Requests (switched off in round 5) and faults.
+  ASK_CHANCE: 0, ASK_DAYS: 3, ASK_REFUSED: 5, ASK_LATE: 4,
   FAULT_CHANCE: 0.09, PATCH: 0.4, PATCH_FAILS: 0.35, REPAIR: 3, REPAIR_NO_ENGINEER: 5, REPAIR_GRUDGE: 3,
   // Actions.
   TEST_OFFENCE: 5,               // loyalty a loyal person loses for being tested (twice that if proud)
@@ -99,7 +94,6 @@ const R = RULES;
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 export const stageOfLoyalty = (l) => { const i = R.LOYALTY_STEPS.findIndex((t) => l >= t); return i < 0 ? 6 : i; };
 export const capOfFear = (f) => { const i = R.FEAR_CAPS.findIndex((t) => f >= t); return i < 0 ? 6 : i + 1; };
-export const actionsFor = (comfort) => R.ACTIONS.find(([c]) => comfort >= c)[1];
 
 // How well a job is being done: the person's step on the ladder times their skill; badly if they are gone or locked up.
 function effOf(st, role) {
@@ -159,7 +153,7 @@ function ctx(st) {
     n: (role) => st.staff.find((x) => x.role === role).first,
     res(k, d) {
       const was = st.res[k];
-      st.res[k] = clamp(was + d, 0, k === 'comfort' ? 100 : R.CAP);
+      st.res[k] = clamp(was + d, 0, k === 'opu' ? 1e6 : R.CAP);
       st.delta[k] = (st.delta[k] || 0) + (st.res[k] - was);
     },
     loy(who, d, tag) {
@@ -190,6 +184,8 @@ function ctx(st) {
       st.matters = st.matters.filter((m) => m.role !== p.role);
     },
     queue(id, c = {}, pri = 1, extra = {}) { st.queue.push({ id, ctx: c, pri, ...extra }); },
+    addCard(id) { addCard(st, id); },
+    plainer() { st.policy.life = Math.max(0, st.policy.life - 1); },   // your lifestyle drops a notch
     end(id) { st.ending = { id, day: st.day }; st.phase = 'ended'; },
     avgLoyalty() { const h = g.here(); return h.length ? h.reduce((a, p) => a + p.loyalty, 0) / h.length : 0; },
     faction() { return g.here().filter((p) => p.stage >= 5); },
@@ -210,7 +206,7 @@ function ctx(st) {
       pr.state = 'kept'; st.stats.kept++;
       st.word = Math.min(1.6, st.word + (late ? 0.05 : 0.15));
       g.loy('all', late ? R.KEEP_LOYALTY / 2 : R.KEEP_LOYALTY, 'promise');
-      if (pr.type === 'rations') { st.flags.equalRations = true; st.policy.table = 0; if (st.policy.rations < 1) st.policy.rations = 1; }
+      if (pr.type === 'rations') { st.flags.equalRations = true; st.policy.life = 0; if (st.policy.rations < 1) st.policy.rations = 1; }
       if (pr.type === 'cameras') { st.cameras = false; st.flags.noCameras = true; }
       if (pr.type === 'vote') g.queue('vote', {}, 3);
       // (what a bunk or a week's wages costs in luxury is charged by the choice that keeps it)
@@ -256,10 +252,11 @@ function shuffle(st, arr) {
 export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {}) {
   const card = cardById(cardId);
   const st = {
-    v: 3, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report',
-    res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, crack: 0, delta: {},
-    policy: { rations: 1, shifts: 1, heating: 1, table: 1, tub: 1, cinema: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, rungUsed: {}, path: [],
-    acts: 3, actsMax: 3, indulged: 0, eventDone: false, today: [], matters: [],
+    v: 4, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report',
+    res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, delta: {},
+    policy: { rations: 1, life: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, tierUsed: {}, path: [],
+    deck: [], discard: [], hand: [], played: [], gone: [], plays: R.PLAYS, built: {}, project: null,
+    eventDone: false, today: [], matters: [],
     staff: [], unrest: 0, word: 1, speeches: 0, informant: null,
     promises: [], flags: {}, queue: [], seen: {}, log: [],
     report: null, event: null, result: null, ending: null, cause: null,
@@ -288,6 +285,9 @@ export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {})
   for (const type of card.promises) {
     st.promises.push({ type, role: null, made: 0, due: type === 'vote' ? 20 : PROMISES[type].due || null, state: 'owed' });
   }
+  // the deck: the starting cards, plus every ruthless step this start has already gone down
+  st.deck = shuffle(st, [...START_DECK, ...TIERS.slice(1, st.regime).flat()]);
+  st.queue.push({ id: 'welcome', ctx: {}, pri: 9 });
   beginDay(st, []);
   return st;
 }
@@ -367,8 +367,7 @@ function beginDay(st, inc) {
       st.matters.push({ kind: 'ask', role: p.role, key: def.key, born: st.day, due: st.day + R.ASK_DAYS });
     }
   }
-  st.actsMax = actionsFor(st.res.comfort);
-  st.acts = st.actsMax;
+  st.hand = draw(st, R.HAND); st.played = []; st.plays = playsFor(st);
   const band = Math.min(4, Math.floor(st.unrest / 20));
   st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), tense: band >= 3, rumours, informant, cams, faces, delta: { ...st.delta } };
   st.result = null; st.eventDone = false; st.today = [];
@@ -407,7 +406,7 @@ export function eventView(st) {
   const choices = def.choices(g, c).map((ch) => {
     const cost = ch.c || {};
     let ok = true, why = '';
-    for (const k in cost) if (cost[k] < 0 && st.res[k] + cost[k] < 0) { ok = false; why = k === 'comfort' ? 'You could not bear it' : 'Not enough in the stores'; }
+    for (const k in cost) if (cost[k] < 0 && st.res[k] + cost[k] < 0) { ok = false; why = k === 'opu' ? 'You have no face left to lose' : 'Not enough in the stores'; }
     if (ok && ch.need) { const n = ch.need(g, c); if (n !== true) { ok = false; why = n || 'Not possible'; } }
     return { label: ch.t, cost, ok, why };
   });
@@ -433,52 +432,31 @@ export function choose(st, i) {
   st.log.push({ day: st.day, event: def.id, choice: i });
 }
 
-// --- Standing orders ----------------------------------------------------------------------------------
+// --- Rations and lifestyle -----------------------------------------------------------------------------
 
 export function setPolicy(st, key, v) {
-  if (st.phase !== 'day') return false;
+  if (st.phase !== 'day' || key === 'curfew') return false;
   if (policyBlock(st, key, v)) return false;
-  if (key === 'cameras') { if (st.flags.noCameras && v) return false; st.cameras = !!v; return true; }
   const def = R.POLICY[key];
   if (!def || v < 0 || v >= Object.values(def).find(Array.isArray).length) return false;
-  if (st.flags.equalRations && ((key === 'table' && v > 0) || (key === 'rations' && v < 1))) return false;
   st.policy[key] = v;
   return true;
 }
-export const policyValue = (st, key) => (key === 'cameras' ? +st.cameras : st.policy[key]);
+export const policyValue = (st, key) => st.policy[key];
 // Why a setting cannot be chosen, or ''.
 export function policyBlock(st, key, v) {
-  if (key === 'cameras' && v && st.flags.noCameras) return 'You took them out, as promised';
-  if (key === 'curfew' && v && st.regime < 3) return 'Not yet. The bunker would not stand for it';
-  if (st.flags.equalRations && ((key === 'table' && v > 0) || (key === 'rations' && v < 1))) return 'You promised equal rations';
+  if (st.flags.equalRations && ((key === 'life' && v > 0) || (key === 'rations' && v < 1))) return 'You promised equal rations';
   return '';
 }
-// What a setting costs or saves each night, set against the plainest setting (for the screen).
+// What a setting costs or gives each night, set against the plainest setting (for the screen).
 export function policyCost(st, key, v) {
   const P = R.POLICY, n = st.staff.filter((p) => p.status === 'ok').length;
-  const eff = (role) => effOf(st, role);
   switch (key) {
     case 'rations': return { food: -R.EAT * n * (P.rations.eat[v] - 1) };
-    case 'shifts': return { food: R.FARM * eff('farmer') * (P.shifts.eff[v] - 1), water: R.RECYCLE * eff('engineer') * (P.shifts.eff[v] - 1) };
-    case 'heating': return { power: -P.heating.power[v] };
-    case 'cameras': return { power: v ? -R.CAMERA_POWER : 0 };
-    case 'table': return { food: -P.table.food[v], comfort: P.table.comfort[v] };
-    case 'tub': return { water: -P.tub.water[v], comfort: P.tub.comfort[v] };
-    case 'cinema': return { power: -P.cinema.power[v], comfort: P.cinema.comfort[v] };
-    case 'curfew': return { comfort: P.curfew.comfort[v] };
+    case 'life': return { opu: P.life.opu[v], food: -P.life.food[v], water: -P.life.water[v], power: -P.life.power[v] };
+    case 'curfew': return { opu: P.curfew.opu[v] };
     default: return {};
   }
-}
-// Once a day: something old and expensive, opened for yourself.
-export function indulge(st) {
-  if (st.phase !== 'day' || st.indulged === st.day || st.res.lux < R.INDULGE_COST) return null;
-  const g = ctx(st);
-  st.delta = {};
-  g.res('lux', -R.INDULGE_COST); g.res('comfort', R.INDULGE);
-  st.indulged = st.day;
-  const text = g.pick(['You open a bottle older than the engineer and drink it alone, slowly.', 'An hour with the good cigars and the door locked.', 'You have the silver polished, and then you look at it.', 'Caviar, on the last of the proper crackers.']);
-  st.today.push({ title: 'For yourself', text, delta: { ...st.delta } });
-  return text;
 }
 
 // --- Matters: requests and faults ---------------------------------------------------------------------
@@ -489,10 +467,10 @@ export function matterView(st) {
   return st.matters.map((m, i) => {
     if (m.kind === 'ask') {
       const p = g.who(m.role), def = ASKS[m.role].find((a) => a.key === m.key);
-      const ok = afford(def.c) && (!def.act || st.acts > 0);
+      const ok = afford(def.c) && (!def.act || st.plays > 0);
       return {
         i, kind: 'ask', role: m.role, zone: ROLES[m.role].post, title: `${p.first} asks`, text: def.text(p.first), left: m.due - st.day,
-        choices: [{ id: 'yes', label: def.t, cost: def.c, act: !!def.act, ok, why: ok ? '' : def.act && st.acts <= 0 ? 'No actions left today' : 'You can’t spare it' }, { id: 'no', label: 'Say no', cost: {}, ok: true, why: '' }],
+        choices: [{ id: 'yes', label: def.t, cost: def.c, act: !!def.act, ok, why: ok ? '' : def.act && st.plays <= 0 ? 'No actions left today' : 'You can’t spare it' }, { id: 'no', label: 'Say no', cost: {}, ok: true, why: '' }],
       };
     }
     // A broken machine: your luxury, or their goodwill. (Leaving it is the third choice, and costs a store every night.)
@@ -516,7 +494,7 @@ export function decide(st, i, id) {
   const g = ctx(st);
   st.delta = {};
   for (const k in ch.cost) g.res(k, ch.cost[k]);
-  if (ch.act) st.acts--;
+  if (ch.act) st.plays--;
   let text = '';
   if (m.kind === 'ask') {
     const p = g.s(m.role), def = ASKS[m.role].find((a) => a.key === m.key);
@@ -540,54 +518,151 @@ export function decide(st, i, id) {
   return text;
 }
 
-// --- Actions: as many a day as your comfort allows ------------------------------------------------------
-// The harsh ones are measures on a slope (RUNGS in data/matters.js): rung is which step each sits on.
+// --- Your hand: cards drawn each morning, some of them played ---------------------------------------
+// Cards are in data/deck.js. The deck is st.deck (face down), st.discard, and st.hand (today's draw).
 
-const ACTION_DEFS = [
-  { id: 'talk', group: 'People', name: 'A quiet word', short: 'Quiet word', hint: 'Ask one person what is wrong. They may tell you. It is tiresome.', cost: { comfort: -R.TALK_COMFORT }, target: true },
-  { id: 'perk', group: 'People', name: 'Give a perk', short: 'Give a perk', hint: 'Loyalty up quickly, for one person. Works less each time.', cost: { lux: -R.PERK_COST }, target: true },
-  { id: 'informant', group: 'Watch', name: 'Pay an informant', short: 'Informant', hint: 'A report on one person every morning. Paid in luxury. Might lie, might be found out.', cost: { lux: -R.INFORMANT_COST }, target: true },
-  { id: 'test', group: 'Watch', name: 'Loyalty test', short: 'Loyalty test', hint: 'Find out exactly where one person stands. Offends the loyal ones.', target: true },
-  { id: 'speech', group: 'Say', name: 'Give a speech', short: 'Speech', hint: 'A small loyalty boost. Each speech works less than the last.' },
-  { id: 'promise', group: 'Say', name: 'Make a promise', short: 'Promise', hint: 'Loyalty now, for nothing. A debt later. Nobody says you have to mean it.', sub: true },
-  { id: 'reprimand', rung: 0, name: 'A dressing-down', short: 'Dressing-down', hint: 'Tell one person exactly what you think of them, where the others can hear. A slacker goes back to work.', target: true },
-  { id: 'confiscate', rung: 0, name: 'Search the bunks', short: 'Search the bunks', hint: 'Seize what they have been hiding: food and valuables for you. Everyone resents it.' },
-  { id: 'interrogate', rung: 1, name: 'Interrogate', short: 'Interrogate', hint: 'Two in the morning, a bright light. You learn exactly what they are up to. They do not forget it.', target: true },
-  { id: 'divide', rung: 1, name: 'Divide and rule', short: 'Divide and rule', hint: 'Tell one person their closest friend is informing on them. The friendship ends, and for a week they can organise nothing.', target: true },
-  { id: 'example', rung: 2, name: 'Make an example', short: 'Make an example', hint: 'Fear up for everyone. Loyalty down for everyone. They may want revenge.', target: true },
-  { id: 'scapegoat', rung: 3, name: 'Find a scapegoat', short: 'Scapegoat', hint: 'Blame one person, in public, for everything that is wrong. The bunker calms down. That person never forgives you.', target: true },
-  { id: 'cell', rung: 3, name: 'Lock in the cell', short: 'The cell', hint: 'Three nights behind bars. They can plot nothing in there. Their job is done badly meanwhile.', target: true },
-  { id: 'exile', rung: 4, name: 'Exile to the surface', short: 'Exile', hint: 'Removes a problem for good. You lose their skills and the others are horrified.', target: true },
-];
-const RUNG_OF = Object.fromEntries(ACTION_DEFS.filter((o) => o.rung !== undefined).map((o) => [o.id, o.rung]));
-
-// How much a measure still shocks the people watching: less, once they have seen worse.
-const shock = (st, id) => Math.max(R.NUMB_FLOOR, 1 - R.NUMB * (st.regime - 1 - RUNG_OF[id]));
-// How much kindness is still worth from you: less, the further down the slope you are.
+// What kindness from you is still worth: less, the further down the ruthless steps you are.
 export const kindness = (st) => Math.max(R.SOUR_FLOOR, 1 - R.SOUR * (st.regime - 1));
-// What a measure gives you in comfort: more, the further down you are. It gets easier.
-export const relish = (st, id) => Math.round(R.CRUEL[id] * (1 + R.RELISH * (st.regime - 1)));
+// How much a ruthless card from step `tier` still upsets the others: less, once they have seen worse.
+const shockOf = (st, tier) => Math.max(R.NUMB_FLOOR, 1 - R.NUMB * (st.regime - 1 - (tier || 0)));
+// The opulence a card pays you. Ruthless cards pay more the further down you are: it gets easier.
+export const payOf = (st, c) => Math.round(((c.gain && c.gain.opu) || 0) * (c.kind === 'cruel' ? 1 + R.RELISH * (st.regime - 1) : 1));
+export const playsFor = (st) => R.PLAYS + (st.built.butler ? 1 : 0);
 
-// Every action, with whether it can be afforded (ok) and, for a measure, whether its rung is still shut (locked).
-// A locked exile or cell may still be used on someone who has been caught trying to remove you.
-export function actionList(st) {
-  return ACTION_DEFS.map((o) => {
-    const d = { ...o, ok: true, why: '', evil: o.rung !== undefined, locked: o.rung !== undefined && o.rung >= st.regime };
-    if (d.evil) d.gain = { comfort: relish(st, o.id) };
-    if (o.id === 'informant' && st.informant) d.hint = `Move your informant from ${st.staff.find((p) => p.role === st.informant).first} to someone else.`;
-    for (const k in o.cost || {}) if (st.res[k] + o.cost[k] < 0) { d.ok = false; d.why = k === 'comfort' ? 'You have not the patience today' : 'Not enough luxury'; }
-    if (o.id === 'promise' && !promiseList(st).some((p) => p.ok)) { d.ok = false; d.why = 'Nothing left to promise'; }
-    if (o.id === 'divide' && !st.staff.some((p) => p.status === 'ok' && p.friend)) { d.ok = false; d.why = 'Nobody down here is close to anybody any more'; }
-    if (st.acts <= 0) { d.ok = false; d.why = 'No actions left today'; }
-    return d;
+function draw(st, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    if (!st.deck.length) { st.deck = shuffle(st, st.discard); st.discard = []; }
+    if (!st.deck.length) break;
+    out.push(st.deck.pop());
+  }
+  return out;
+}
+// A new card goes somewhere random in the face-down deck, so it turns up soon but not at once.
+export function addCard(st, id) { st.deck.splice(Math.floor(rnd(st) * (st.deck.length + 1)), 0, id); st.owned = (st.owned || 0) + 1; }
+
+// Today's hand, ready to show. Each card: its data, plus i, played, ok and why, and pay (opulence it will give).
+export function handView(st) {
+  return st.hand.map((id, i) => {
+    const c = CARDS[id];
+    const v = { ...c, id, i, played: st.played.includes(i), ok: true, why: '', pay: payOf(st, c) };
+    for (const k in c.cost || {}) if (c.cost[k] < 0 && st.res[k] + c.cost[k] < 0) { v.ok = false; v.why = k === 'opu' ? 'You have no face left to lose' : `Not enough ${k === 'lux' ? 'luxury' : k === 'med' ? 'medicine' : k}`; }
+    if (c.promise && !promiseList(st).some((o) => o.ok)) { v.ok = false; v.why = 'Nothing left to promise'; }
+    if (c.target && !st.staff.some((p) => mayPlay(st, i, p))) { v.ok = false; v.why = 'There is nobody to do it to'; }
+    if (v.played) { v.ok = false; v.why = 'Played'; } else if (st.plays <= 0) { v.ok = false; v.why = 'No plays left today'; }
+    return v;
   });
 }
-// May this measure be used on this person today?
-export function mayUse(st, o, p) {
-  if (!o.ok) return false;
-  if (o.id === 'divide' && !(p && p.friend)) return false;
-  if (!o.locked) return true;
-  return !!(p && p.exposed && (o.id === 'exile' || o.id === 'cell'));
+// May card i be played on this person?
+export function mayPlay(st, i, p) {
+  const c = CARDS[st.hand[i]];
+  if (!c || !p || p.status !== 'ok') return false;
+  if ((p.cell || 0) > st.day && c.id !== 'tapes' && c.kind !== 'cruel') return false;
+  if (c.need) { const g = ctx(st); if (c.need(g, p) !== true) return false; }
+  return true;
+}
+
+const INFAMY = { review: 1, search: 1, interrogate: 1, divide: 1, example: 2, curfew: 2, scapegoat: 2, cell: 1, exile: 3 };
+
+// The ruthless and watchful effects, shared by several cards.
+function helpers(st, g, card) {
+  const friend = (p, d) => { const f = p && p.friend ? g.s(p.friend) : null; if (f) g.move(f, d, 'friend:' + p.role); };
+  return {
+    kind: kindness(st), shock: shockOf(st, card.tier), friend,
+    talk: (p) => talk(st, g, p),
+    test: (p, hired) => {
+      const band = p.loyalty >= 66 ? 'devoted' : p.loyalty >= 50 ? 'loyal' : p.loyalty >= 33 ? 'wavering' : 'hostile';
+      p.tested = { day: st.day, band };
+      g.note(p, `assessed: ${band}`);
+      return `${hired ? 'The cleaner, in a borrowed blazer, follows' : 'You follow'} ${p.first} about for a day with a clipboard, nodding. The report is one word long: <${band}>.`.replace(/<(\w+)>/, '“$1”');
+    },
+    interrogate: (p) => {
+      const worst = Object.entries(p.why).filter(([k, v]) => v <= -1.5 && k !== 'or:interrogate').sort((x, y) => x[1] - y[1])[0];
+      g.loy(p, -6, 'punish'); g.fear(p, 12); g.fear('not:' + p.role, 3); friend(p, -3);
+      const said = worst ? whyLine(st, worst[0], false, p) : 'There is nothing. I swear there is nothing.';
+      p.rumour = { text: `Under questioning: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
+      p.said = { day: st.day, text: said };
+      g.note(p, `questioned at 2am; was ${STAGES[p.stage]}`);
+      if (p.stage >= 6) g.expose(p, 'admitted under questioning to planning to remove you');
+      return `${p.first} is woken at two in the morning and sat under a lamp. You ask the same questions until dawn. ${p.first} is ${STAGES[p.stage]}. “${said}”`;
+    },
+    divide: (p) => {
+      const f = p.friend ? g.s(p.friend) : null;
+      p.isolated = st.day + R.ISOLATE_DAYS; g.loy(p, -4); g.unrest(-8);
+      if (f) { g.move(f, -4, 'or:divide'); f.isolated = Math.max(f.isolated || 0, st.day + 3); f.friend = null; }
+      p.friend = null;
+      return f ? `You tell ${p.first}, in confidence, that ${f.first} has been informing on them. Then you tell ${f.first} the same about ${p.first}. They stop sitting together. They stop sitting with anyone.` : `You tell ${p.first} that everyone is informing on them. They stop sitting with anyone.`;
+    },
+    example: (p) => {
+      const proud = p.trait === 'proud';
+      g.fear('not:' + p.role, R.EXAMPLE_FEAR); g.loy('not:' + p.role, -R.EXAMPLE_LOYALTY * shockOf(st, card.tier));
+      g.fear(p, proud ? 10 : R.EXAMPLE_FEAR_TARGET); g.loy(p, -R.EXAMPLE_LOYALTY_TARGET, 'punish'); friend(p, -5);
+      if (proud) p.grudge = true;
+      const avgFear = g.here().reduce((a, x) => a + x.fear, 0) / g.here().length;
+      g.unrest(avgFear >= 50 ? -6 : 6);
+      st.stats.examples++; p.noticed = st.day;
+      return `${p.first} scrubs the reactor floor with a toothbrush while the others are made to watch. You provide a commentary.${proud ? ` ${p.first} looks at you the whole time.` : ''}` + g.violate(['purges']);
+    },
+    scapegoat: (p) => {
+      const f = Math.pow(R.SCAPEGOAT_FADE, st.scapegoats); st.scapegoats++;
+      g.loy(p, -22, 'punish'); g.fear(p, 10); g.loy('not:' + p.role, 3 * f); g.unrest(-R.SCAPEGOAT_UNREST * f); friend(p, -6);
+      if (p.trait === 'proud') p.grudge = true;
+      return `You call everyone to the mess hall and explain, with slides, that every shortage, breakdown and bad smell in this bunker is the fault of ${p.first}. Slide nine is just ${p.first}’s face with a red circle round it. ${f > 0.7 ? 'It is astonishing how much better everyone feels.' : 'It works less well than last time. People are starting to notice the pattern.'}`;
+    },
+    cell: (p) => {
+      p.cell = st.day + R.CELL_NIGHTS;
+      g.loy(p, -10, 'punish'); g.fear(p, 14); g.fear('not:' + p.role, 8); g.loy('not:' + p.role, -3 * shockOf(st, card.tier)); friend(p, -5);
+      return `${p.first} is marched down to the cell on the security level. The door makes a very satisfying noise. Somebody else will have to do the job for three nights.` + g.violate(['purges']);
+    },
+    exile: (p) => {
+      const just = !!p.exposed;
+      g.remove(p, 'exiled');
+      g.fear('all', R.EXILE_FEAR + (just ? 5 : 0)); g.loy('all', just ? -2 : -R.EXILE_LOYALTY * shockOf(st, card.tier), 'ideal');
+      g.unrest(just ? 0 : R.EXILE_UNREST); st.stats.exiles++;
+      return `${p.first} is given a suit, a mask, a leaving card signed by nobody and an exit interview conducted through the lift doors. ${just ? `Nobody argues. They know what ${p.first} tried to do.` : 'The others watch the lift go up and come back empty.'} Somebody untrained will have to do the job now.` + g.violate(['noexile', 'purges', 'seat']);
+    },
+    tapes: (p) => {
+      p.rumour = { text: `On the tapes: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
+      g.note(p, `on the tapes: ${STAGES[p.stage]}`);
+      if (p.stage >= 6) { g.expose(p, 'caught on the tapes planning to remove you'); return `You watch seventy hours of ${p.first}. At 3.12 one morning ${p.first} is in the stores, practising your signature and timing the lift. That is enough.`; }
+      return `You watch seventy hours of ${p.first}. ${p.first} is ${STAGES[p.stage]}. Also, ${p.first} talks to the grow lights, which you did not need to know.`;
+    },
+  };
+}
+
+export function playCard(st, i, arg = {}) {
+  if (st.phase !== 'day') return null;
+  const v = handView(st)[i];
+  if (!v || !v.ok) return null;
+  const card = CARDS[v.id], g = ctx(st);
+  const p = arg.role ? g.s(arg.role) : null;
+  if (card.target && !mayPlay(st, i, p)) return null;
+  let opt = null;
+  if (card.promise) { opt = promiseList(st).find((o) => o.type === arg.type && o.ok); if (!opt || (opt.target && !p)) return null; }
+  st.delta = {}; st.cause = 'or:' + v.id;
+  for (const k in card.cost || {}) g.res(k, card.cost[k]);
+  let text;
+  if (card.promise) {
+    const word = st.word, soft = kindness(st);
+    st.word = word * soft;                        // a promise from you is worth what your name is worth
+    g.makePromise(arg.type, opt.target ? p.role : null);
+    st.word = word;
+    const pr = st.promises[st.promises.length - 1];
+    text = `You promise, with your hand on your heart and then on a copy of your own book: “${promiseText(st, pr)}.” ${word * soft < 0.8 ? 'A few people remember what else you have said and done, and say nothing.' : 'The mood lifts at once. It cost you nothing, today.'}${pr.due ? ` It falls due on day ${pr.due}.` : ''}`;
+  } else text = card.play(g, p, arg, helpers(st, g, card));
+  st.cause = null;
+  if (v.pay) g.res('opu', v.pay);
+  if (card.kind === 'cruel') {
+    st.infamy += INFAMY[v.id] || 1; st.stats.cruel++; g.unrest(R.CRUEL_UNREST);
+    st.tierUsed[card.tier] = true;
+    st.path.push({ day: st.day, id: v.id, role: p ? p.role : null, tier: card.tier });
+    if (p) { p.done = p.done || {}; p.done[v.id] = (p.done[v.id] || 0) + 1; }
+  }
+  st.plays--; st.played.push(i);
+  if (card.once) st.gone.push(v.id);
+  st.today.push({ title: card.name, text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, card: v.id, role: arg.role, type: arg.type });
+  return text;
 }
 
 export function promiseList(st) {
@@ -603,12 +678,11 @@ export function promiseList(st) {
   ];
 }
 
-const PERKS = ['a case of your second-best wine', 'a real coffee, with real coffee in it', 'an hour in the hot tub, alone', 'the good blanket', 'a tin of peaches and a silver spoon to eat it with', 'your spare dressing gown'];
-
 // What someone says when asked what is wrong. Frightened people say nothing true; plotters say something small.
 function whyLine(st, key, good, p) {
   if (key === 'want') return good ? 'I have what I asked for. That counts.' : `What do I want? ${p.wantText} I am not getting it.`;
   if (key.startsWith('ev:')) return good ? `That business with “${key.slice(3).toLowerCase()}”: you did right by us.` : `It was that business with “${key.slice(3).toLowerCase()}”. You know what you did.`;
+  if (key.startsWith('or:') && CARDS[key.slice(3)]) return good ? `The ${CARDS[key.slice(3)].name.toLowerCase()}. I haven’t forgotten.` : (WHY_BAD[key] || `The ${CARDS[key.slice(3)].name.toLowerCase()}. You know what I mean.`);
   if (key.startsWith('friend:')) { const f = st.staff.find((x) => x.role === key.slice(7)); return good ? `You were good to ${f.first}. I noticed that.` : `It is what you did to ${f.first}. ${f.first} is my friend.`; }
   return (good ? WHY_GOOD : WHY_BAD)[key] || (good ? 'Things have been a little better.' : 'A lot of small things.');
 }
@@ -625,179 +699,57 @@ function talk(st, g, p) {
     said = (bad ? whyLine(st, bad[0], false, p) : g.pick(SAYS.none)) + (good ? ' ' + whyLine(st, good[0], true, p) : '');
   }
   p.said = { day: st.day, text: said };
-  return `You sit down with ${p.first}. “${said}”${p.fear >= 66 ? ` ${p.first} keeps smiling until you leave.` : ''}`;
+  return `Your door is open for twenty minutes, and ${p.first} comes through it. “${said}”${p.fear >= 66 ? ` ${p.first} keeps smiling until the door shuts.` : ''}`;
 }
 
-export function act(st, id, arg = {}) {
+// --- Projects: the upgrade path -------------------------------------------------------------------------
+
+export function projectList(st) {
+  return Object.entries(PROJECTS).map(([id, d]) => {
+    const v = { id, ...d, built: !!st.built[id], building: st.project && st.project.id === id, ok: true, why: '' };
+    if (v.built) { v.ok = false; v.why = 'Built'; } else if (v.building) { v.ok = false; v.why = `${st.project.left} ${st.project.left === 1 ? 'night' : 'nights'} to go`; } else if (st.project) { v.ok = false; v.why = 'One project at a time'; } else if (st.day + d.days > R.DAYS) { v.ok = false; v.why = 'Not enough days left to finish it'; }
+    else for (const k in d.cost) if (st.res[k] + d.cost[k] < 0) { v.ok = false; v.why = 'Not enough luxury'; }
+    return v;
+  });
+}
+export function commission(st, id) {
   if (st.phase !== 'day') return null;
-  const g = ctx(st), def = actionList(st).find((o) => o.id === id);
-  if (!def) return null;
-  const p = arg.role ? g.s(arg.role) : null;
-  if (def.target && !p) return null;
-  if (!mayUse(st, def, p)) return null;
-  if (id === 'promise') { const opt = promiseList(st).find((o) => o.type === arg.type); if (!opt || !opt.ok || (opt.target && !p)) return null; }
-  st.delta = {}; st.cause = 'or:' + id;
-  for (const k in def.cost || {}) g.res(k, def.cost[k]);
-  const soft = kindness(st), jolt = def.evil ? shock(st, id) : 1;
-  const friend = p && p.friend ? g.s(p.friend) : null;
-  const grieve = (k) => { if (friend) g.move(friend, -k, 'friend:' + p.role); };     // what you do to one, their friend feels
-  let text = '', title = def.name;
-  switch (id) {
-    case 'talk': text = talk(st, g, p); title = `A talk with ${p.first}`; break;
-    case 'perk': {
-      g.loy(p, R.PERK * Math.pow(R.PERK_FADE, p.perks) * soft, 'gift');
-      p.perks++; p.noticed = st.day; st.stats.perks++;
-      g.loy('not:' + p.role, p.trait === 'gossip' ? -2 : -1);
-      if (friend) g.move(friend, 2.5, 'friend:' + p.role);
-      const react = soft < 0.7 ? 'They take it, and look at it twice, and at you once.' : p.trait === 'greedy' ? 'They check it twice and smile with all their teeth.' : p.trait === 'proud' ? 'They accept it as no more than their due.' : p.trait === 'gossip' ? 'By supper everyone has heard about it, in detail.' : 'They seem pleased.';
-      text = `${p.first} gets ${g.pick(PERKS)}. ${react}`;
-      break;
-    }
-    case 'reprimand': {
-      g.loy(p, -3, 'punish'); g.fear(p, 9); g.fear('not:' + p.role, 2);
-      grieve(1.5);
-      const back = p.stage === 2;
-      if (back) p.stage = 1;
-      text = `You tell ${p.first} exactly what you think of them, in the mess hall, at some length. ${back ? `${p.first} is back at work within the hour.` : `${p.first} says “yes” eleven times.`} You feel a good deal better.`;
-      break;
-    }
-    case 'interrogate': {
-      const worst = Object.entries(p.why).filter(([k, v]) => v <= -1.5 && k !== 'or:interrogate').sort((x, y) => x[1] - y[1])[0];
-      g.loy(p, -6, 'punish'); g.fear(p, 12); g.fear('not:' + p.role, 3);
-      grieve(3);
-      const said = worst ? whyLine(st, worst[0], false, p) : 'There is nothing. I swear there is nothing.';
-      p.rumour = { text: `Under questioning: ${p.first} is ${STAGES[p.stage]}.`, day: st.day, sig: p.stage, informant: true };
-      p.said = { day: st.day, text: said };
-      g.note(p, `interrogated; was ${STAGES[p.stage]}`);
-      if (p.stage >= 6) g.expose(p, 'admitted under questioning to planning to remove you');
-      text = `You have ${p.first} woken at two in the morning and ask the same questions until dawn. ${p.first} is ${STAGES[p.stage]}. “${said}”`;
-      title = `${p.first}, at 2am`;
-      break;
-    }
-    case 'cell': {
-      p.cell = st.day + R.CELL_NIGHTS;
-      g.loy(p, -10, 'punish'); g.fear(p, 14); g.fear('not:' + p.role, 8); g.loy('not:' + p.role, -3 * jolt);
-      grieve(5);
-      g.note(p, 'locked in the cell for three nights');
-      text = `${p.first} is marched down to the cell on the security level. The door makes a very satisfying noise. Somebody else will have to do the job for three nights.` + g.violate(['purges']);
-      break;
-    }
-    case 'scapegoat': {
-      const f = Math.pow(R.SCAPEGOAT_FADE, st.scapegoats);
-      st.scapegoats++;
-      g.loy(p, -22, 'punish'); g.fear(p, 10);
-      g.loy('not:' + p.role, 3 * f); g.unrest(-R.SCAPEGOAT_UNREST * f);
-      grieve(6);
-      if (p.trait === 'proud') p.grudge = true;
-      g.note(p, 'blamed in public for everything');
-      text = `You call everyone to the mess hall and explain, with slides, that every shortage, breakdown and bad smell in this bunker is the fault of ${p.first}. ${f > 0.7 ? 'It is astonishing how much better everyone feels.' : 'It works less well than last time. People are starting to notice the pattern.'} ${p.first} says nothing.`;
-      break;
-    }
-    case 'divide': {
-      p.isolated = st.day + R.ISOLATE_DAYS;
-      g.loy(p, -4); g.unrest(-8);
-      if (friend) { g.move(friend, -4, 'or:divide'); friend.isolated = Math.max(friend.isolated || 0, st.day + 3); friend.friend = null; }
-      p.friend = null;
-      text = friend ? `You tell ${p.first}, in confidence, that ${friend.first} has been reporting on them. Then you tell ${friend.first} the same about ${p.first}. They stop sitting together. They stop sitting with anyone.` : `You tell ${p.first} that everyone is reporting on them. They stop sitting with anyone.`;
-      break;
-    }
-    case 'confiscate': {
-      const f = Math.pow(R.SEARCH_FADE, st.searches);
-      st.searches++;
-      g.res('food', Math.round(5 * f)); g.res('lux', Math.round(4 * f));
-      g.loy('all', -5 * jolt); g.fear('all', 4);
-      text = f > 0.7 ? 'Every bunk is turned out at dawn. Tinned peaches, a ham, two bottles of your own brandy and a surprising amount of chocolate. It all goes up in the lift to your floor.' : 'Every bunk is turned out again. They have learned to hide things better, or there is less to hide. A few tins. A great deal of silence.';
-      break;
-    }
-    case 'informant':
-      st.informant = p.role;
-      text = `Somebody will keep an eye on ${p.first} and report to you each morning. They want paying every day.`;
-      break;
-    case 'test': {
-      // the one reading you can rely on: exactly where they stand, today
-      const band = p.loyalty >= 66 ? 'devoted' : p.loyalty >= 50 ? 'loyal' : p.loyalty >= 33 ? 'wavering' : 'hostile';
-      p.tested = { day: st.day, band };
-      const how = { devoted: `It is back on your desk within ten minutes, polished. ${p.first} is devoted, and a little hurt.`, loyal: `It is back on your desk within the hour, with a note. ${p.first} is loyal, and now knows you had to check.`, wavering: `It comes back two days later, after ${p.first} has had a good think. ${p.first} is wavering.`, hostile: `It is not handed in. ${p.first} is hostile, and now knows that you know.` }[band];
-      if (p.loyalty >= 50) g.loy(p, p.trait === 'proud' ? -R.TEST_OFFENCE * 2 : -R.TEST_OFFENCE); else g.fear(p, 8);
-      text = `You leave a “lost” master key where ${p.first} will find it. ${how}`;
-      g.note(p, `loyalty test: ${band}`);
-      break;
-    }
-    case 'example': {
-      const proud = p.trait === 'proud';
-      g.fear('not:' + p.role, R.EXAMPLE_FEAR); g.loy('not:' + p.role, -R.EXAMPLE_LOYALTY * jolt);
-      g.fear(p, proud ? 10 : R.EXAMPLE_FEAR_TARGET); g.loy(p, -R.EXAMPLE_LOYALTY_TARGET, 'punish');
-      grieve(5);
-      if (proud) p.grudge = true;
-      const avgFear = g.here().reduce((a, x) => a + x.fear, 0) / g.here().length;
-      g.unrest(avgFear >= 50 ? -6 : 6);
-      st.stats.examples++; p.noticed = st.day;
-      g.note(p, 'made an example of');
-      text = `${p.first} scrubs the reactor floor with a toothbrush while the others are made to watch. Nobody says anything.${proud ? ` ${p.first} looks at you the whole time.` : ''}` + g.violate(['purges']);
-      break;
-    }
-    case 'exile': {
-      const just = !!p.exposed;
-      g.remove(p, 'exiled');
-      g.fear('all', R.EXILE_FEAR + (just ? 5 : 0)); g.loy('all', just ? -2 : -R.EXILE_LOYALTY * jolt, 'ideal');
-      g.unrest(just ? 0 : R.EXILE_UNREST);
-      st.stats.exiles++;
-      text = `${p.first} is given a suit, a mask and a short walk to the hatch. ${just ? 'Nobody argues. They know what ' + p.first + ' tried to do.' : 'The others watch the lift go up and come back empty.'} Somebody untrained will have to do the job now.` + g.violate(['noexile', 'purges', 'seat']);
-      break;
-    }
-    case 'speech': {
-      const f = Math.pow(R.SPEECH_FADE, st.speeches) * soft;
-      g.loy('all', R.SPEECH * f); g.unrest(-R.SPEECH_UNREST * f);
-      text = soft < 0.7 ? 'You speak in the mess hall about sacrifice, family and the future. They listen with their hands flat on the table. Nobody is going to be the first to stop clapping.' : ['You speak in the mess hall about sacrifice, family and the future. There is real applause.', 'You speak again about sacrifice. The applause is polite. Somebody checks the clock.', 'You speak about sacrifice a third time, from behind a glass of wine. People clap the way they queue.', 'You give a speech. They have heard it. Someone mouths along.'][Math.min(3, st.speeches)];
-      st.speeches++;
-      break;
-    }
-    case 'promise': {
-      const opt = promiseList(st).find((o) => o.type === arg.type);
-      const word = st.word;
-      st.word = word * soft;                       // a promise from you is worth what your name is worth
-      g.makePromise(arg.type, opt.target ? p.role : null);
-      st.word = word;
-      const pr = st.promises[st.promises.length - 1];
-      text = `You promise: “${promiseText(st, pr)}.” ${word * soft < 0.8 ? 'A few people remember what else you have said and done, and say nothing.' : 'The mood lifts at once. It cost you nothing, today.'}${pr.due ? ` It falls due on day ${pr.due}.` : ''}`;
-      break;
-    }
-    default: st.cause = null; return null;
-  }
-  st.cause = null;
-  st.acts--;
-  if (def.evil) {               // it felt good; and it is on the record
-    g.res('comfort', relish(st, id));
-    st.infamy += R.INFAMY[id]; st.stats.cruel++;
-    if (!def.locked) st.rungUsed[def.rung] = true;
-    st.path.push({ day: st.day, id, role: p ? p.role : null, rung: def.rung });
-    if (p) { p.done = p.done || {}; p.done[id] = (p.done[id] || 0) + 1; }
-  }
-  st.today.push({ title, text, delta: { ...st.delta } });
-  st.log.push({ day: st.day, order: id, role: arg.role, type: arg.type });
+  const v = projectList(st).find((x) => x.id === id);
+  if (!v || !v.ok) return null;
+  const g = ctx(st);
+  st.delta = {};
+  for (const k in v.cost) g.res(k, v.cost[k]);
+  st.project = { id, left: v.days };
+  const text = `Work begins on ${v.name.replace(/^A /, 'a ').replace(/^An /, 'an ').replace(/^The /, 'the ')}. The staff will do it in their own time, over ${v.days} nights, for nothing. They have been told it is good for team spirit.`;
+  st.today.push({ title: 'A new project', text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, project: id });
   return text;
 }
+// The escape pod: from day 20, leave whenever you like, with your score.
+export const canEscape = (st) => !!st.built.pod && st.day >= R.POD_DAY && st.phase === 'day';
+export function escape(st) { if (!canEscape(st)) return false; ctx(st).end('escaped'); return true; }
 
 // --- Night ------------------------------------------------------------------------------------------
 
-// What one night takes from each store and from your comfort, as things stand (no dice).
+// What one night takes from each store, and adds to your opulence, as things stand (no dice).
 function nightly(st) {
   const P = R.POLICY, pol = st.policy;
   const eff = (role) => effOf(st, role);
   const live = st.staff.filter((p) => p.status === 'ok');
-  const n = live.length, work = P.shifts.eff[pol.shifts];
+  const n = live.length, work = 1;
   const heir = st.staff.find((x) => x.role === 'heir');
   const extra = (k) => live.reduce((a, p) => a + ((p.nightly && p.nightly[k]) || 0), 0);   // what the people you chose bring or cost each night
   const out = {
-    food: -(R.EAT * n * P.rations.eat[pol.rations] * (st.flags.equalRations ? R.EQUAL_RATIONS : 1) * ((st.flags.rationCut || 0) > st.day ? R.RATION_CUT : 1) + R.EAT_YOU + P.table.food[pol.table]) * (1 + R.CHEF_WASTE * (1 - eff('chef')))
+    food: -(R.EAT * n * P.rations.eat[pol.rations] * (st.flags.equalRations ? R.EQUAL_RATIONS : 1) * ((st.flags.rationCut || 0) > st.day ? R.RATION_CUT : 1) + R.EAT_YOU + P.life.food[pol.life]) * (1 + R.CHEF_WASTE * (1 - eff('chef')))
       + R.FARM * eff('farmer') * work * (st.res.water > 0 ? 1 : 0.3),
-    water: -(R.DRINK * n + R.DRINK_YOU + R.CROPS + P.tub.water[pol.tub]) + R.RECYCLE * eff('engineer') * work,
-    power: -(R.POWER_BASE - R.POWER_ENG * eff('engineer')) - P.heating.power[pol.heating] - P.cinema.power[pol.cinema] - (st.cameras ? R.CAMERA_POWER : 0),
-    med: -(R.MED_BASE + R.MED_DOC * (1 - eff('doctor')) + P.heating.med[pol.heating]),
+    water: -(R.DRINK * n + R.DRINK_YOU + R.CROPS + P.life.water[pol.life]) + R.RECYCLE * eff('engineer') * work,
+    power: -(R.POWER_BASE - R.POWER_ENG * eff('engineer')) - P.life.power[pol.life] - (st.cameras && !st.built.cameras ? R.CAMERA_POWER : 0),
+    med: -(R.MED_BASE + R.MED_DOC * (1 - eff('doctor'))),
     lux: -(R.LUX_YOU + (heir && heir.status === 'ok' ? R.LUX_HEIR : 0) + (st.informant ? R.INFORMANT_DAILY : 0)),
-    comfort: -R.COMFORT_DECAY + P.table.comfort[pol.table] + (st.res.water > 0 ? P.tub.comfort[pol.tub] : 0) + (st.res.power > 0 ? P.cinema.comfort[pol.cinema] : 0) + P.curfew.comfort[pol.curfew],
+    opu: (st.res.power > 0 && st.res.water > 0 ? P.life.opu[pol.life] : 0) + P.curfew.opu[pol.curfew],
   };
-  for (const k of ['food', 'lux', 'comfort']) out[k] += extra(k);
+  out.food += extra('food'); out.lux += extra('lux'); out.opu += extra('opu');   // who you let in at the hatch
+  for (const id in st.built) for (const k in PROJECTS[id].night || {}) if (k in out) out[k] += PROJECTS[id].night[k];
   return out;
 }
 // The same, with what the broken machines are losing: what the bar shows as tonight's change.
@@ -830,8 +782,11 @@ export function endDay(st) {
   // 1. Staff react: hidden loyalty and fear shift.
   const contagion = Math.max(0, (st.unrest - 40) / 40);
   const hungry = st.res.food < 12 || (st.flags.rationCut || 0) > st.day;
+  const wellness = st.built.wellness ? PROJECTS.wellness.night.loyalty : 0;
   for (const p of here) {
     for (const k in p.why) { p.why[k] *= 0.8; if (Math.abs(p.why[k]) < 0.3) delete p.why[k]; }   // old reasons fade
+    if (st.project) g.move(p, -R.OVERTIME, 'overtime');
+    if (wellness) g.move(p, wellness, 'wellness');
     g.move(p, ROLES[p.role].wantMet(st, p) ? R.WANT_MET : R.WANT_UNMET, 'want');
     if (st.cameras) g.move(p, -R.CAMERA_LOYALTY, 'cameras');
     if (p.grudge) g.move(p, -R.GRUDGE, 'grudge');
@@ -840,11 +795,8 @@ export function endDay(st) {
     if (trust) g.move(p, trust, 'trust');
     if (contagion) g.move(p, -contagion, 'unrest');
     if (hungry) g.move(p, -R.HUNGER, 'hunger');
-    if (P.rations.loyalty[pol.rations]) g.move(p, P.rations.loyalty[pol.rations], 'rations');
-    if (P.shifts.loyalty[pol.shifts]) g.move(p, P.shifts.loyalty[pol.shifts], 'shifts');
-    if (P.heating.loyalty[pol.heating]) g.move(p, P.heating.loyalty[pol.heating], 'heating');
-    if (P.table.loyalty[pol.table]) g.move(p, P.table.loyalty[pol.table], 'table');
-    if (pol.tub) g.move(p, P.tub.loyalty[1] * (p.role === 'farmer' ? 3 : 1), 'tub');
+    if (P.rations.loyalty[pol.rations] && !(pol.rations === 0 && (st.flags.fast || 0) > st.day)) g.move(p, P.rations.loyalty[pol.rations], 'rations');
+    if (P.life.loyalty[pol.life]) g.move(p, P.life.loyalty[pol.life], 'life');
     if (pol.curfew) g.move(p, P.curfew.loyalty[1], 'curfew');
     p.fear = clamp(p.fear + (R.FEAR_REST - p.fear) * R.FEAR_DECAY * (secOK ? 0.5 / sec.skill : 1.5) * (st.res.lux <= 0 ? 1.5 : 1) / (1 + st.infamy * R.INFAMY_FEAR));
     if (pol.curfew && p.fear < P.curfew.cap) p.fear = Math.min(P.curfew.cap, p.fear + P.curfew.fear[1] * (secOK ? 1 : 0.4));
@@ -927,18 +879,21 @@ export function endDay(st) {
     if (m.patched && g.chance(R.PATCH_FAILS)) { m.patched = false; inc.push({ kind: 'bad', text: `The patch on ${FAULTS[m.sys].name.toLowerCase()} has given way.` }); }
     g.res(FAULTS[m.sys].res, -FAULTS[m.sys].drain * (m.patched ? R.PATCH : 1));
   }
-  if (st.matters.filter((m) => m.kind === 'fault').length < 2 && g.chance(R.FAULT_CHANCE * (pol.shifts === 2 ? 1.6 : 1) * (g.s('engineer') ? 1 : 2.5))) {
+  if (st.matters.filter((m) => m.kind === 'fault').length < 2 && g.chance(R.FAULT_CHANCE * (g.s('engineer') ? 1 : 2.5))) {
     const free = Object.keys(FAULTS).filter((s) => !faulty(s));
     if (free.length) { const s = g.pick(free); st.matters.push({ kind: 'fault', sys: s, born: st.day, by: null }); inc.push({ kind: 'bad', text: FAULTS[s].text }); }
   }
-  if (pol.shifts === 2 && g.chance(P.shifts.accident)) {
-    g.res('med', -3);
-    for (const q of here) g.move(q, -1.5, 'shifts');
-    inc.push({ kind: 'bad', text: 'Somebody fell asleep at a machine on the double shift. Stitches, and a lot of muttering.' });
+  // The project under way: one night nearer. When it is done: the reward, and its cards go in your deck.
+  if (st.project && --st.project.left <= 0) {
+    const id = st.project.id, d = PROJECTS[id];
+    st.built[id] = true; st.project = null;
+    if (d.cameras) st.cameras = true;
+    for (const c of d.cards || []) addCard(st, c);
+    g.res('opu', R.PROJECT_DONE);
+    inc.push({ kind: 'built', text: `${d.name} is finished. ${d.flavour}${(d.cards || []).length ? ` New in your deck: ${d.cards.map((c) => CARDS[c].name).join(' and ')}.` : ''}` });
   }
 
-  // 3. Night: the silo uses up supplies, and so do you.
-  const before = st.res.comfort;
+  // 3. Night: the silo uses up supplies, and you live as you have chosen to.
   const night = nightly(st);
   for (const k in night) g.res(k, night[k]);
 
@@ -958,17 +913,17 @@ export function endDay(st) {
     }
   }
   if (g.here().length < R.ALONE) { g.end('deposed_alone'); return; }
-  st.crack = st.res.comfort <= 0 ? st.crack + 1 : 0;
-  if (st.crack >= R.CRACK_NIGHTS) { g.end('deposed_cracked'); return; }
   if (st.day >= R.DAYS) { g.end(finalEnding(st, g)); return; }
-  const now = actionsFor(st.res.comfort);
-  if (st.crack >= 1) inc.push({ kind: 'crit', text: 'You have not slept, eaten properly or been warm for days. You cannot go on like this much longer.' });
-  else if (now < actionsFor(before)) inc.push({ kind: 'you', text: now === 2 ? 'You slept badly and woke up cross. You will get less done today.' : 'You are cold, tired and living like the staff. You can manage one thing today.' });
-  // The slope: what was done yesterday is, by morning, just how things are. The next rung opens.
-  if (st.regime < RUNGS.length && st.rungUsed[st.regime - 1]) {
-    inc.push({ kind: 'slope', text: `Nobody mentions ${RUNGS[st.regime - 1].used} any more. It is just how things are done now. ${RUNGS[st.regime].opens}` });
+  // The slope: what was done yesterday is, by morning, just how things are. The next step's cards join the deck.
+  if (st.regime < TIERS.length && st.tierUsed[st.regime - 1]) {
+    const add = TIERS[st.regime];
+    for (const c of add) addCard(st, c);
+    inc.push({ kind: 'slope', text: `${TIER_LINES[st.regime - 1]} It is just how things are done now. New in your deck: ${add.map((c) => CARDS[c].name).join(' and ')}.` });
     st.regime++;
   }
+  // Yesterday's hand goes on the discard pile (except cards that are used up).
+  st.hand.forEach((id, i) => { if (!(st.played.includes(i) && st.gone.includes(id))) st.discard.push(id); });
+  st.gone = [];
   st.day++;
   beginDay(st, inc);
 }
@@ -980,7 +935,7 @@ function finalEnding(st, g) {
   const bad = st.promises.some((pr) => pr.state === 'broken' || pr.state === 'forgotten' || pr.state === 'owed');
   const kinds = new Set(st.promises.filter((pr) => pr.state === 'kept').map((pr) => pr.type));
   if (!bad && kinds.size >= 3 && st.stats.kept >= 4) return 'word';
-  return st.res.lux >= 10 && st.res.comfort >= 40 ? 'king' : 'king_poor';
+  return st.res.lux >= 10 ? 'king' : 'king_poor';
 }
 
 export { ctx as _ctx };

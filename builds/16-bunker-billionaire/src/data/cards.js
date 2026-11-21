@@ -20,7 +20,7 @@ export const CARDS = [
   {
     id: 'force', name: 'Took it by force',
     line: 'There was a list. Some people were on it. You have promised there is no second list.',
-    blurb: 'High fear, low loyalty. They have already seen what you will do, so you start well down the slope.',
+    blurb: 'High fear, low loyalty. They have already seen what you will do: your deck starts with ruthless cards two steps down.',
     level: 'Brutal', loyalty: 40, fear: 72, promises: ['purges'], grudge: 'doctor', regime: 3,
     grudgeLine: 'The doctor, who treated the people on your list.',
   },

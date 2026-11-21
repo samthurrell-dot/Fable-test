@@ -74,6 +74,10 @@ export const ENDINGS = {
     kind: 'Abandoned', title: 'Nobody left to rule',
     text: 'The last of them went up in the lift, or out through the airlock, or into the ground. The pumps are stopping one by one, because nobody is left who knows which lever does what. You have the whole bunker to yourself: every floor, every bottle, every chair. You give a short speech. The applause does not come.',
   },
+  escaped: {
+    kind: 'Escaped', title: 'One seat',
+    text: 'You wait until the night shift is at the far end of the farm, then climb into the pod in your dressing gown with a bottle under each arm. It rises through the dark with a noise like a lift full of champagne. You land in a field, at dawn, alone. Nobody out here is in charge of anything. You can work with that.',
+  },
   deposed_hatch: {
     kind: 'Survived, but deposed', title: 'Left behind',
     text: 'The surface is safe. The staff walk out together, in a group you were never part of. Nobody tells you to stay and nobody waits. By evening you are the absolute ruler of one silo, six empty floors and a hot tub. The echo is excellent.',

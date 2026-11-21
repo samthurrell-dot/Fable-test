@@ -1,14 +1,15 @@
 # Bunker Billionaire: design notes
 
-The working design for the prototype, kept as `skills/choice-and-systems-design` asks: the spine, the resources and an audit of every decision in a day. Sam's own outline ("Bunker Billionaire: Act 2", a Word file outside the repo) is the source; this records what the build does with it. Updated 17 Nov 2026, round 4.
+The working design for the prototype, kept as `skills/choice-and-systems-design` asks: the spine, the resources and an audit of every decision in a day. Sam's own outline ("Bunker Billionaire: Act 2", a Word file outside the repo) is the source; this records what the build does with it. Updated 21 Nov 2026, round 5. (The decision audit below is from round 4; actions are now cards, see ROUNDS.md.)
 
 ## Spine
 
-1. **Feeling:** the guilty pleasure of getting away with it, and the creeping unease of not knowing who is about to stop you.
-2. **Question:** what will you do to stay in charge, and to stay comfortable?
-3. **Loop:** read the morning, settle one piece of business, set your standing orders, spend up to three actions, lights out.
-4. **Run shape:** 30 days. Starts with how you got the bunker and who you let in at the hatch; tightens as stores run down and grudges build; ends with the hatch opening or with you removed, and a reckoning of who paid.
-5. **Cut line:** no building or research, no combat screen, no exact loyalty numbers, no factions with names, no bugged rooms or planted spies (parked, not cut for good), no world beyond the radio and the hatch.
+1. **Feeling:** the guilty, funny pleasure of living absurdly well at everyone else's expense, and the creeping unease of not knowing who is about to stop you.
+2. **Question:** how lavishly can you live, and what will you do to the people below you to keep it up?
+3. **Loop:** read the morning, settle one piece of business, play two of four cards, set your lifestyle and their rations, lights out.
+4. **Run shape:** 30 days. Starts with how you got the bunker, who you let in at the hatch and a management philosophy; builds through projects and a growing deck; ends with your score and title, or with you removed, and a reckoning of who paid.
+5. **Goal and score:** opulence, with five titles. Still being in charge on day 30 is what makes the score count.
+6. **Cut line:** no research tree, no combat screen, no exact loyalty numbers, no factions with names, no bugged rooms or planted spies, no world beyond the radio and the hatch. (Round 5 cut comfort, five standing orders, requests and informants.)
 
 ## Resources
 
@@ -19,7 +20,7 @@ The working design for the prototype, kept as `skills/choice-and-systems-design`
 | Power | the generator, as well as the engineer runs it | heating, your cinema, cameras, a broken generator | as food |
 | Medicine | a few cards | accidents, cold staff levels, a broken medicine fridge | the doctor cannot treat anyone; cards get worse |
 | Luxury | a few cards; searching the bunks | perks, informants, repairs, treats for yourself, wages | nothing left to bribe with or to mend with; fear fades faster |
-| Comfort (yours) | your table, tub and cinema; harsh measures; treats | 5 a night; quiet words | one action a day; three nights at zero and you give the bunker up |
+| Opulence (your score) | lifestyle each night, projects, indulgent and ruthless cards, some event choices | open-door talks, some event choices | nothing: it is the score, and cannot go below zero |
 
 Hidden: each person's loyalty, fear and step on the threat ladder; the bunker's unrest; the slope (shown, not hidden: how far down you are).
 
