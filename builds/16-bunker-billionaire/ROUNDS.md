@@ -197,9 +197,40 @@ The tyrant scores two to three times what the kind styles score, and loses power
 
 Checked: a whole run clicked through the real buttons at 375 px (founder, 22 days, every kind of card, three projects built, all five ruthless steps opened, deposed with 345 opulence): no errors. The day screen, the hand and tonight's settings read at 375 px.
 
+## Round 6 (21 Nov 2026): requests and promises that take days
+
+Sam liked the milestone deck for round 5 and asked: "alongside the projects there needs to be a push and pull with requests or promises, these need to cost resources or need attention over a series of days and have a meaningful consequence for completing it or not".
+
+What changed (rules in `src/engine/sim.js`, the 18 requests in `src/data/requests.js`):
+- **Requests.** From day 2, on about a third of mornings (more while a project is being built), one of the staff asks for something: night patrols, a Sunday roast, a proper workshop, a study of your snoring, a podcast, overtime pay. The unhappy ask more often. A request waits two days for an answer, then lapses (the asker minds).
+- **Three answers.** Promise it; give the third answer (selfish or absurd, settled at once, often paying opulence); or refuse (the asker takes it badly).
+- **A promise is a job.** It has 1 to 4 parts, at most one a day, all due within 2 to 6 days. Each part costs stores (food, water, power, medicine, luxury, even opulence) or your own time, which uses up one of the day's card plays. Up to three promises can be under way. The request card shows the cost of each part and, before you promise, what keeping it gives and what breaking it costs.
+- **Kept:** the asker and their friend think better of you, and you get something for good: more food or power or medicine every night, fewer breakdowns, fewer desertions, a card (Broadcast Good News), opulence, a calmer bunker, a satisfied want.
+- **Broken** (the days run out): the asker loses a lot of loyalty and takes a step towards removing you; their friend minds; the bunker stirs; your word is worth less; and the request's own fallout happens. Some fallouts: two nights eating staff rations, security off duty for five days, the crop fails, your diary is lost (one fewer play tomorrow), the snoring tapes are played at dinner.
+- **Push and pull with projects.** Overtime pay and a day off are only asked for while a project is under way. Breaking overtime, the workshop or the check-ups brings a strike: the project stops for two nights. Keeping the workshop makes every later project a night quicker; keeping the filing system makes them 3 luxury cheaper; keeping overtime pay halves what overtime costs in loyalty; a day off delays the project a night.
+- **On screen:** a Requests card under today's business, a speech bubble over the asker in the silo, a line in the morning report, the promises ledger (top right), the end screen, and How to play.
+
+Mistakes made and fixed during the round:
+- **Too generous at first.** Keeping requests gave the asker, their friend and everyone a lot of loyalty, as well as the perk. The careful and saint players kept power in 96 to 100% of runs (the same seeds without requests: 63% and 89%). With every reward switched off they fell back to 61%, so the rewards were the cause. Making requests weak enough to fix that would have made them pointless. Instead requests come less often (30% of mornings, not 50%), parts cost 1.5 times as much, a kept request pleases only the asker and their friend (the perk does the rest), the loyalty perks are smaller, and cabin fever is a little stronger (0.06 to 0.07 a night per day underground), so ignoring the staff costs more.
+- **The code tyrant ignored every request**, which is not how a tyrant would play. It now keeps the ones that keep security sweet or feed the score, promises anything else when the bunker is restless and never delivers, and otherwise takes the selfish answer.
+
+Balance at the end of the round (`demo/balance.html`, seed 7, 100 runs each, 40 for the seer). Share of runs still in charge on day 30, and mean opulence when in charge:
+
+| Card | Careless | Careful | Saint | Tyrant | Sees the numbers |
+|---|---|---|---|---|---|
+| Inherited it | 5% | 75% (171) | 89% (140) | 58% (444) | 100% (112) |
+| Bought your way in | 11% | 73% (193) | 82% (135) | 71% (451) | |
+| Promised them a vote | 10% | 73% (178) | 88% (144) | 40% (435) | |
+| Took it by force | 8% | 71% (187) | 49% (128) | 53% (446) | 100% (97) |
+| Founder of the bunker | 9% | 65% (214) | 83% (165) | 53% (469) | 100% (188) |
+
+Against round 5: careful players keep power a little more often (71% on average, was 67%), saints too (78%, was 73%), tyrants less (55%, was 62%), still with two and a half to three times the score. The careful player keeps about 5 requests a run and breaks almost none; the tyrant keeps 2 and breaks 1 to 2. A day now asks about 235 words and 3.5 decisions (was 3).
+
+Checked: a 24-day run clicked through the real buttons at 375 px (inherited, seed 41): requests promised, worked on and kept; one left to lapse and broken; the third answer and refusals; the ledger and the end screen. No errors. A strike and the workshop and filing perks checked directly in the rules.
+
 ## Not done, not checked
 
-- Round 5 has not been played by a person. Sam played round 4 to day 3. The balance numbers come from players made of code. A day has not been timed on a phone.
+- Rounds 5 and 6 have not been played by a person. Sam played round 4 to day 3. The saint keeps power in nearly 9 runs in 10 on the inherited and vote cards: a safe, low-scoring way to play that may be too safe. The balance numbers come from players made of code. A day has not been timed on a phone.
 - Sound has not been heard (this PC cannot play it back to me). The levels copy build 15, which Sam approved. No new sounds were added for the new actions beyond the stamp.
 - Not opened on a real phone. The card model has only been drawn by this PC's Intel chip.
 - The two paper checks from the fold card (paper rules, card through card) were not written for this model. The fold is solved in closed form (every piece is at height x the board's direction plus depth x forward), so pieces cannot change shape, but pieces that would collide in card (the pawns, the props near the folded-flat pose) are simply hidden until the model stands.

@@ -125,6 +125,12 @@ The recipe Sam approved on build 15: silent at rest, short shaped bursts of nois
 
 **Measuring a day.** `playDay()` counts what a day puts in front of the player when `st.load` is set: words in the report, the event, waiting things and results, and decisions made. The bench reports words, decisions and things waiting a day. It is a stand-in for timing a day on a phone, not a replacement.
 
+## 12. Requests: promises as jobs over several days (round 6)
+
+`src/data/requests.js` holds 18 requests as data: who asks, the parts (stores, or 'time' meaning a card play), the days, a perk for keeping it, a fallout for breaking it, a third answer and a refusal line. The rules are `maybeRequest`, `requestView`, `answer`, `workOn`, `keepRequest` and `breakRequest` in `sim.js`. A request's life: asked (waits `REQ_WAIT` days) -> owed (one part a day, at most `REQ_RUNNING` at once) -> kept or broken at the end of its last day. Perks and fallouts are small effect lists (`night`, `flag`, `strike`, `plain`, `lostPlay` ...), so a new request needs no new code.
+
+What made it balance: the reward for keeping a request goes to the asker and their friend only, and the perk carries the rest. When everyone was pleased by every kept request, kind players could not lose. Breaking moves the asker a step up the threat ladder at once, which is what makes a broken promise frightening rather than just a number. The code tyrant needed its own request policy (keep the useful ones, lie when the bunker is restless) before the bench said anything useful about evil play.
+
 ## URL controls
 
 `?card=` start at once · `?crew=` eight digits, who came in at the hatch · `?seed=` the same run · `?day=N` play to day N with the careful player (`?as=tyrant` for the other one) · `?view=day|done|night` step into the day · `?end=<ending id>` show an ending · `?still=1` no ambient motion · `?flat=1` the flat picture instead of the card model.

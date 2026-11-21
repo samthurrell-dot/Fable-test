@@ -463,3 +463,27 @@ h3 { font: 600 13px/1.2 var(--label); letter-spacing: 0.12em; text-transform: up
 button:focus-visible { outline: 2.5px solid var(--haz); outline-offset: 2px; }
 .calm *, .calm *::before, .calm *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ================================================================ round 6: requests from the staff, and the promises you made them */
+.requests .left { margin-left: auto; font: 600 13px var(--label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); white-space: nowrap; }
+.requests header { flex-wrap: nowrap; align-items: center; }
+.req { padding: 10px 0 12px; border-top: 1px solid var(--paper3); }
+.req:first-of-type { border-top: 0; padding-top: 2px; }
+.rq-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; }
+.rq-head > b { font: 600 18px/1.1 var(--label); text-transform: uppercase; letter-spacing: 0.02em; flex: 1 1 auto; min-width: 0; }
+.rq-head .stamp { font-size: 11.5px; }
+.req .body { margin: 2px 0 6px; }
+.req .terms { font-size: 14.5px; line-height: 1.35; margin: 4px 0; color: var(--soft); }
+.req .terms .chip { vertical-align: -2px; }
+.req .stakes { display: grid; gap: 3px; font-size: 14px; line-height: 1.3; margin: 6px 0 8px; }
+.req .stakes span { padding: 4px 8px; border-radius: 0 3px 3px 0; border-left: 3px solid; }
+.req .stakes .good { border-color: var(--green); background: rgba(47, 107, 58, 0.09); }
+.req .stakes .bad { border-color: var(--red); background: rgba(181, 72, 46, 0.08); }
+.req .choice.yes { border-color: var(--green); }
+.rpips { display: flex; gap: 3px; }
+.rpips i { width: 14px; height: 9px; border-radius: 2px; border: 1.5px solid var(--ink); background: transparent; display: block; }
+.rpips i.on { background: var(--gold); }
+.req .work { width: 100%; justify-content: center; gap: 6px; }
+.req.late .rq-head > b { color: var(--red); }
+.req .warn { color: var(--red); }
+.incidents li.ask { border-left-color: var(--gold); }

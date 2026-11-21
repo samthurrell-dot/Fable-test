@@ -47,7 +47,7 @@ export const ROLES = {
     title: 'Cleaner', the: 'the cleaner', name: 'Agnes Pell', first: 'Agnes', post: 'medical',
     keeps: 'Goes everywhere unnoticed', danger: 'Perfect spy, for either side',
     want: 'To be noticed, once in a while.',
-    wantMet: (st, p) => st.day - (p.noticed ?? -99) <= 8,
+    wantMet: (st, p) => !!p.titled || st.day - (p.noticed ?? -99) <= 8,
   },
   heir: {
     title: 'Family', the: 'your family', name: 'Caspian', first: 'Caspian', post: 'suite',

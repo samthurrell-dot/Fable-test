@@ -10,6 +10,7 @@
 //   set rations and lifestyle      setPolicy(st, key, value)               (free; they bite at night)
 //   commission a project           projectList(st), commission(st, id)     (the upgrade path)
 //   mend what is broken            matterView(st), decide(st, i, id)
+//   answer a request, and work on what you promised   requestView(st), answer(st, i, id), workOn(st, i)
 // then endDay(st): staff react, threat check, the night's supplies.
 // newRun(cardId, seed) gives a fresh state at the first morning report; openDay(st) moves report -> day.
 //
@@ -22,6 +23,7 @@ import { RUMOURS, RUMOURS_AFRAID, MOODS, SABOTAGE, THEFT } from '../data/text.js
 import { EVENTS } from '../data/events.js';
 import { ASKS, FAULTS, SABOTEUR, WHY_BAD, WHY_GOOD, SAYS } from '../data/matters.js';
 import { CARDS, START_DECK, TIERS, TIER_LINES, PROJECTS } from '../data/deck.js';
+import { REQUESTS } from '../data/requests.js';
 
 export const RULES = {
   DAYS: 30,                      // nights until the surface is safe
@@ -31,7 +33,7 @@ export const RULES = {
   GRUDGE_START: 16,              // loyalty the person with a grudge starts short by
   // Each night, loyalty drifts by:
   WANT_MET: 0.3, WANT_UNMET: -1.5,   // whether the person's want is met
-  CABIN: 0.06,                   // lost a night per day spent underground so far: it wears on everyone
+  CABIN: 0.07,                   // lost a night per day spent underground so far: it wears on everyone
   CAMERA_LOYALTY: 0.6,           // lost a night while the cameras are on
   GRUDGE: 1.2,                   // lost a night by the person with a grudge
   TRUST_KEPT: 0.12, TRUST_BROKEN: 0.6,   // per promise kept or broken so far
@@ -72,7 +74,15 @@ export const RULES = {
   DESERT_LOYALTY: 14, DESERT_FEAR: 60, DESERT: 0.06, DESERT_GUARDED: 0.25, DESERT_CURFEW: 0.6,
   ALONE: 3,                      // with fewer staff than this the silo cannot be run at all, and you have nobody to rule   // hated and terrified: chance a night that they take a suit and go
   CELL_NIGHTS: 3, ISOLATE_DAYS: 6, SCAPEGOAT_UNREST: 14, SCAPEGOAT_FADE: 0.6, SEARCH_FADE: 0.5,
-  // Requests (switched off in round 5) and faults.
+  // Requests (round 6, data/requests.js): asked, promised, worked on a part a day, then kept or broken.
+  REQ_FIRST: 2, REQ_CHANCE: 0.3, REQ_PROJECT: 0.15,   // first day one may come; chance a morning (more while a project is under way)
+  REQ_WAIT: 2, REQ_RUNNING: 3,   // days to answer one; most promised jobs on the go at once
+  REQ_HOPE: 1, REQ_REFUSED: 5, REQ_IGNORED: 4,                 // the asker, when you promise, refuse, or never answer
+  REQ_KEEP: 5, REQ_KEEP_FRIEND: 1, REQ_KEEP_ALL: 0,             // kept: the asker, their friend, everyone (the perk does the rest)
+  REQ_BREAK: 12, REQ_BREAK_FRIEND: 5, REQ_BREAK_ALL: 2, REQ_BREAK_UNREST: 8,   // broken
+  REQ_TRUST_KEPT: 0, REQ_TRUST_BROKEN: 0.15,                 // a night, for everyone, per request kept or broken so far
+  STRIKE: 2, LAX_SECURITY: 5, UNION: 0.5, MAINTAINED: 0.5, PATROLS_DESERT: 0.5, PATROLS_FEAR: 0.7, FILING: 3,
+  // Old requests (switched off in round 5) and faults.
   ASK_CHANCE: 0, ASK_DAYS: 3, ASK_REFUSED: 5, ASK_LATE: 4,
   FAULT_CHANCE: 0.09, PATCH: 0.4, PATCH_FAILS: 0.35, REPAIR: 3, REPAIR_NO_ENGINEER: 5, REPAIR_GRUDGE: 3,
   // Actions.
@@ -181,6 +191,7 @@ function ctx(st) {
       if (fr && fr.status === 'ok') { move(fr, -(p.exposed ? R.FRIEND_LOSS_JUST : R.FRIEND_LOSS), 'friend:' + p.role); fr.friend = null; }
       if (st.informant === p.role) st.informant = null;
       for (const pr of st.promises) if (pr.role === p.role && pr.state === 'owed') pr.state = 'void';
+      for (const r of st.requests || []) if (r.role === p.role && (r.state === 'asked' || r.state === 'owed')) r.state = 'void';
       st.matters = st.matters.filter((m) => m.role !== p.role);
     },
     queue(id, c = {}, pri = 1, extra = {}) { st.queue.push({ id, ctx: c, pri, ...extra }); },
@@ -252,7 +263,7 @@ function shuffle(st, arr) {
 export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {}) {
   const card = cardById(cardId);
   const st = {
-    v: 4, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report',
+    v: 5, seed, rng: seed | 0, card: card.id, day: 1, phase: 'report', requests: [], perks: [],
     res: { ...R.START }, crit: { food: 0, water: 0, power: 0 }, delta: {},
     policy: { rations: 1, life: 1, curfew: 0 }, cameras: false, infamy: 0, scapegoats: 0, searches: 0, picks, regime: card.regime || 1, tierUsed: {}, path: [],
     deck: [], discard: [], hand: [], played: [], gone: [], plays: R.PLAYS, built: {}, project: null,
@@ -260,7 +271,7 @@ export function newRun(cardId, seed = (Math.random() * 2 ** 31) | 0, picks = {})
     staff: [], unrest: 0, word: 1, speeches: 0, informant: null,
     promises: [], flags: {}, queue: [], seen: {}, log: [],
     report: null, event: null, result: null, ending: null, cause: null,
-    stats: { made: 0, kept: 0, broken: 0, perks: 0, talks: 0, examples: 0, exiles: 0, deaths: 0, survivedAttempts: 0, asks: 0, repairs: 0, cruel: 0 },
+    stats: { made: 0, kept: 0, broken: 0, perks: 0, talks: 0, examples: 0, exiles: 0, deaths: 0, survivedAttempts: 0, asks: 0, repairs: 0, cruel: 0, reqMade: 0, reqKept: 0, reqBroken: 0 },
   };
   if (card.stores) for (const k of ['food', 'water', 'power', 'med', 'lux']) st.res[k] += card.stores;
   const vary = () => (rnd(st) * 2 - 1) * R.VARY;
@@ -367,6 +378,9 @@ function beginDay(st, inc) {
       st.matters.push({ kind: 'ask', role: p.role, key: def.key, born: st.day, due: st.day + R.ASK_DAYS });
     }
   }
+  // somebody may ask you for something that takes days to deliver
+  const req = maybeRequest(st, g);
+  if (req) inc.push({ kind: 'ask', text: `${g.n(req.role)} has a request: ${REQUESTS[req.id].title.toLowerCase()}. It is on your desk.` });
   st.hand = draw(st, R.HAND); st.played = []; st.plays = playsFor(st);
   const band = Math.min(4, Math.floor(st.unrest / 20));
   st.report = { day: st.day, inc, mood: g.pick(MOODS[band]), tense: band >= 3, rumours, informant, cams, faces, delta: { ...st.delta } };
@@ -445,6 +459,7 @@ export function setPolicy(st, key, v) {
 export const policyValue = (st, key) => st.policy[key];
 // Why a setting cannot be chosen, or ''.
 export function policyBlock(st, key, v) {
+  if (key === 'life' && v > 0 && (st.flags.plainUntil || 0) >= st.day) return 'The chef is serving you staff rations';
   if (st.flags.equalRations && ((key === 'life' && v > 0) || (key === 'rations' && v < 1))) return 'You promised equal rations';
   return '';
 }
@@ -527,7 +542,7 @@ export const kindness = (st) => Math.max(R.SOUR_FLOOR, 1 - R.SOUR * (st.regime -
 const shockOf = (st, tier) => Math.max(R.NUMB_FLOOR, 1 - R.NUMB * (st.regime - 1 - (tier || 0)));
 // The opulence a card pays you. Ruthless cards pay more the further down you are: it gets easier.
 export const payOf = (st, c) => Math.round(((c.gain && c.gain.opu) || 0) * (c.kind === 'cruel' ? 1 + R.RELISH * (st.regime - 1) : 1));
-export const playsFor = (st) => R.PLAYS + (st.built.butler ? 1 : 0);
+export const playsFor = (st) => Math.max(1, R.PLAYS + (st.built.butler ? 1 : 0) - (st.flags.lostPlay === st.day ? 1 : 0));
 
 function draw(st, n) {
   const out = [];
@@ -683,6 +698,7 @@ function whyLine(st, key, good, p) {
   if (key === 'want') return good ? 'I have what I asked for. That counts.' : `What do I want? ${p.wantText} I am not getting it.`;
   if (key.startsWith('ev:')) return good ? `That business with “${key.slice(3).toLowerCase()}”: you did right by us.` : `It was that business with “${key.slice(3).toLowerCase()}”. You know what you did.`;
   if (key.startsWith('or:') && CARDS[key.slice(3)]) return good ? `The ${CARDS[key.slice(3)].name.toLowerCase()}. I haven’t forgotten.` : (WHY_BAD[key] || `The ${CARDS[key.slice(3)].name.toLowerCase()}. You know what I mean.`);
+  if (key.startsWith('req:') && REQUESTS[key.slice(4)]) { const t = REQUESTS[key.slice(4)].title.toLowerCase(); return good ? `You kept your word about the ${t.replace(/^an? /, '')}. I did not expect that.` : `The ${t.replace(/^an? /, '')}. I asked you for one thing.`; }
   if (key.startsWith('friend:')) { const f = st.staff.find((x) => x.role === key.slice(7)); return good ? `You were good to ${f.first}. I noticed that.` : `It is what you did to ${f.first}. ${f.first} is my friend.`; }
   return (good ? WHY_GOOD : WHY_BAD)[key] || (good ? 'Things have been a little better.' : 'A lot of small things.');
 }
@@ -706,9 +722,12 @@ function talk(st, g, p) {
 
 export function projectList(st) {
   return Object.entries(PROJECTS).map(([id, d]) => {
-    const v = { id, ...d, built: !!st.built[id], building: st.project && st.project.id === id, ok: true, why: '' };
-    if (v.built) { v.ok = false; v.why = 'Built'; } else if (v.building) { v.ok = false; v.why = `${st.project.left} ${st.project.left === 1 ? 'night' : 'nights'} to go`; } else if (st.project) { v.ok = false; v.why = 'One project at a time'; } else if (st.day + d.days > R.DAYS) { v.ok = false; v.why = 'Not enough days left to finish it'; }
-    else for (const k in d.cost) if (st.res[k] + d.cost[k] < 0) { v.ok = false; v.why = 'Not enough luxury'; }
+    // kept requests make projects cheaper (filing) and quicker (the workshop)
+    const cost = st.flags.filing ? { ...d.cost, lux: Math.min(0, d.cost.lux + R.FILING) } : d.cost;
+    const days = st.flags.workshop ? Math.max(1, d.days - 1) : d.days;
+    const v = { id, ...d, cost, days, built: !!st.built[id], building: st.project && st.project.id === id, ok: true, why: '' };
+    if (v.built) { v.ok = false; v.why = 'Built'; } else if (v.building) { v.ok = false; v.why = `${st.project.left} ${st.project.left === 1 ? 'night' : 'nights'} to go`; } else if (st.project) { v.ok = false; v.why = 'One project at a time'; } else if (st.day + days > R.DAYS) { v.ok = false; v.why = 'Not enough days left to finish it'; }
+    else for (const k in cost) if (st.res[k] + cost[k] < 0) { v.ok = false; v.why = 'Not enough luxury'; }
     return v;
   });
 }
@@ -728,6 +747,151 @@ export function commission(st, id) {
 // The escape pod: from day 20, leave whenever you like, with your score.
 export const canEscape = (st) => !!st.built.pod && st.day >= R.POD_DAY && st.phase === 'day';
 export function escape(st) { if (!canEscape(st)) return false; ctx(st).end('escaped'); return true; }
+
+// --- Requests: what the staff ask of you, and what you promised them (data/requests.js) ---------------
+// st.requests: { id, role, state: asked|owed|kept|broken|alt|refused|ignored|void, born, by (last day to
+// answer), until (last day to do a part), done (parts done), worked (day of the last part) }
+
+const afford = (st, cost) => { for (const k in cost || {}) if (cost[k] < 0 && st.res[k] + cost[k] < 0) return false; return true; };
+
+function maybeRequest(st, g) {
+  if (st.day < R.REQ_FIRST || st.requests.some((r) => r.state === 'asked')) return null;
+  if (st.requests.filter((r) => r.state === 'owed').length >= R.REQ_RUNNING) return null;
+  if (rnd(st) >= R.REQ_CHANCE + (st.project ? R.REQ_PROJECT : 0)) return null;
+  const used = new Set(st.requests.map((r) => r.id));
+  const free = g.here().filter((p) => !((p.cell || 0) > st.day) && !p.exposed && p.stage < 5 && !st.requests.some((r) => r.role === p.role && (r.state === 'owed' || r.state === 'asked')));
+  if (!free.length) return null;
+  const opts = [];
+  for (const [id, d] of Object.entries(REQUESTS)) {
+    if (used.has(id) || (d.when && !d.when(g)) || st.day + d.days - 1 > R.DAYS) continue;
+    // the unhappy ask more often; 'any' is whoever is least happy with you
+    const p = d.role === 'any' ? free.slice().sort((a, b) => a.loyalty - b.loyalty)[0] : free.find((x) => x.role === d.role);
+    if (p) opts.push({ id, p, w: d.role === 'any' ? 2.5 : p.stage >= 1 && p.stage <= 3 ? 3 : 1 });
+  }
+  if (!opts.length) return null;
+  let x = rnd(st) * opts.reduce((a, o) => a + o.w, 0), pick = opts[0];
+  for (const o of opts) { x -= o.w; if (x <= 0) { pick = o; break; } }
+  const r = { id: pick.id, role: pick.p.role, state: 'asked', born: st.day, by: st.day + R.REQ_WAIT - 1, done: 0 };
+  st.requests.push(r);
+  return r;
+}
+
+// The requests on your desk, ready to show: waiting for an answer, or promised and under way.
+export function requestView(st) {
+  const g = ctx(st);
+  const out = [];
+  st.requests.forEach((r, i) => {
+    if (r.state !== 'asked' && r.state !== 'owed') return;
+    const d = REQUESTS[r.id], p = g.who(r.role), time = d.part === 'time';
+    const v = { i, id: r.id, state: r.state, role: r.role, who: p.first, title: d.title, text: d.text(p.first), steps: d.steps, done: r.done, days: d.days, time, part: time ? {} : d.part, perkText: d.perkText, falloutText: d.falloutText };
+    if (r.state === 'asked') {
+      v.left = r.by - st.day + 1;
+      const altOk = afford(st, d.alt.c);
+      v.choices = [
+        { id: 'yes', label: 'Promise it', cost: {}, ok: true, why: '' },
+        { id: 'alt', label: d.alt.t, cost: { ...(d.alt.c || {}), ...(d.alt.gain || {}) }, ok: altOk, why: altOk ? '' : 'You can’t spare it' },
+        { id: 'no', label: 'Refuse', cost: {}, ok: true, why: '' },
+      ];
+    } else {
+      v.left = r.until - st.day + 1;                     // days left to do a part, counting today
+      v.today = r.worked === st.day;
+      let ok = !v.today, why = v.today ? 'Done for today' : '';
+      if (ok && time && st.plays <= 0) { ok = false; why = 'No plays left today'; }
+      if (ok && !time && !afford(st, d.part)) { ok = false; why = 'Not enough in the stores'; }
+      v.work = { ok, why };
+      v.late = d.steps - r.done > v.left;               // it can no longer be finished in time
+    }
+    out.push(v);
+  });
+  return out;
+}
+
+export function answer(st, i, id) {
+  if (st.phase !== 'day') return null;
+  const r = st.requests[i];
+  if (!r || r.state !== 'asked') return null;
+  const d = REQUESTS[r.id], g = ctx(st), p = g.s(r.role);
+  if (!p || (id === 'alt' && !afford(st, d.alt.c))) return null;
+  st.delta = {}; st.cause = 'req:' + r.id;
+  let text;
+  if (id === 'yes') {
+    r.state = 'owed'; r.until = st.day + d.days - 1; st.stats.reqMade++;
+    g.loy(p, R.REQ_HOPE * kindness(st), 'promise');
+    text = `You promise ${p.first}: ${d.title.toLowerCase()}. ${d.steps} ${d.part === 'time' ? 'sessions of your time' : 'parts'}, one a day, all done by the end of day ${r.until}. ${p.first} looks at you as if it might actually happen.`;
+  } else if (id === 'alt') {
+    for (const k in d.alt.c || {}) g.res(k, d.alt.c[k]);
+    for (const k in d.alt.gain || {}) g.res(k, d.alt.gain[k]);
+    r.state = 'alt';
+    text = d.alt.r(g, p);
+  } else {
+    r.state = 'refused';
+    g.loy(p, -R.REQ_REFUSED, 'punish');
+    text = d.no(p.first);
+  }
+  st.cause = null;
+  st.today.push({ title: `${d.title}`, text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, request: r.id, answer: id });
+  return text;
+}
+
+// Do today's part of a promised request: pay it in stores, or in your time (one play).
+export function workOn(st, i) {
+  if (st.phase !== 'day') return null;
+  const v = requestView(st).find((x) => x.i === i);
+  if (!v || v.state !== 'owed' || !v.work.ok) return null;
+  const r = st.requests[i], d = REQUESTS[r.id], g = ctx(st), p = g.s(r.role);
+  st.delta = {}; st.cause = 'req:' + r.id;
+  if (d.part === 'time') st.plays--; else for (const k in d.part) g.res(k, d.part[k]);
+  r.done++; r.worked = st.day;
+  if (p) g.loy(p, 1);
+  const text = r.done < d.steps ? `Part ${r.done} of ${d.steps} done. ${p ? p.first : 'Everyone'} has noticed.` : keepRequest(st, g, r);
+  st.cause = null;
+  st.today.push({ title: d.title, text, delta: { ...st.delta } });
+  st.log.push({ day: st.day, request: r.id, part: r.done });
+  return text;
+}
+
+function keepRequest(st, g, r) {
+  const d = REQUESTS[r.id], p = g.s(r.role), k = d.perk;
+  r.state = 'kept'; st.stats.reqKept++;
+  st.word = Math.min(1.6, st.word + 0.1);
+  st.cause = 'req:' + r.id;
+  if (p) { g.loy(p, R.REQ_KEEP, 'promise'); g.loy('not:' + p.role, R.REQ_KEEP_ALL); const f = p.friend && g.s(p.friend); if (f) g.move(f, R.REQ_KEEP_FRIEND + (k.friendBoost || 0), 'friend:' + p.role); }
+  if (k.night) st.perks.push({ ...k.night });
+  if (k.flag) st.flags[k.flag] = true;
+  if (k.opu) g.res('opu', k.opu);
+  if (k.loyAll) g.loy('all', k.loyAll);
+  if (k.fear) g.fear('all', k.fear);
+  if (k.unrest) g.unrest(k.unrest);
+  if (k.card) addCard(st, k.card);
+  if (k.titled && p) p.titled = true;
+  if (k.noticed && p) p.noticed = st.day + k.noticed - 8;   // wantMet counts 8 days from being noticed
+  if (k.delay && st.project) st.project.left += k.delay;
+  return `${d.keep} Kept: ${d.perkText.charAt(0).toLowerCase() + d.perkText.slice(1)}.`;
+}
+
+function breakRequest(st, g, r, inc) {
+  const d = REQUESTS[r.id], p = g.s(r.role), f = d.fallout;
+  r.state = 'broken'; st.stats.reqBroken++;
+  st.word *= 0.75;
+  const was = st.cause; st.cause = 'req:' + r.id;
+  if (p) {
+    g.loy(p, -R.REQ_BREAK, 'punish');
+    p.stage = Math.min(6, Math.max(p.stage + 1, 1));         // the person you let down takes a step towards removing you
+    const fr = p.friend && g.s(p.friend); if (fr) g.move(fr, -R.REQ_BREAK_FRIEND, 'friend:' + p.role);
+  }
+  g.loy(p ? 'not:' + p.role : 'all', -R.REQ_BREAK_ALL);
+  g.unrest(R.REQ_BREAK_UNREST + (f.unrest || 0));
+  for (const k in f.res || {}) g.res(k, f.res[k]);
+  if (f.flag) st.flags[f.flag] = st.day + (f.days || 3);
+  if (f.strike && st.project) st.project.left += R.STRIKE;
+  if (f.plain) { st.flags.plainUntil = st.day + f.plain; st.policy.life = 0; }
+  if (f.lostPlay) st.flags.lostPlay = st.day + 1;
+  if (f.loyAll) g.loy('all', f.loyAll);
+  if (f.opu) g.res('opu', f.opu);
+  st.cause = was;
+  inc.push({ kind: 'bad', text: `${d.fail(p ? p.first : 'Somebody')} You promised. Broken: ${d.falloutText.charAt(0).toLowerCase() + d.falloutText.slice(1)}.` });
+}
 
 // --- Night ------------------------------------------------------------------------------------------
 
@@ -749,6 +913,7 @@ function nightly(st) {
     opu: (st.res.power > 0 && st.res.water > 0 ? P.life.opu[pol.life] : 0) + P.curfew.opu[pol.curfew],
   };
   out.food += extra('food'); out.lux += extra('lux'); out.opu += extra('opu');   // who you let in at the hatch
+  for (const n of st.perks || []) for (const k in n) if (k in out) out[k] += n[k];   // requests you kept
   for (const id in st.built) for (const k in PROJECTS[id].night || {}) if (k in out) out[k] += PROJECTS[id].night[k];
   return out;
 }
@@ -769,9 +934,18 @@ export function endDay(st) {
   const g = ctx(st), inc = [], P = R.POLICY, pol = st.policy;
   st.delta = {};
   const here = g.here();
-  const sec = g.s('security'), secOK = sec && sec.stage < 3 && !((sec.cell || 0) > st.day);
+  const sec = g.s('security'), secOK = sec && sec.stage < 3 && !((sec.cell || 0) > st.day) && !((st.flags.lax || 0) >= st.day);
 
-  // Requests nobody answered.
+  // Requests: unanswered ones lapse; promised ones whose time has run out are broken.
+  for (const r of st.requests) {
+    const d = REQUESTS[r.id], p = g.s(r.role);
+    if (r.state === 'asked' && st.day >= r.by) {
+      r.state = 'ignored';
+      if (p) { g.move(p, -R.REQ_IGNORED, 'req:' + r.id); inc.push({ kind: 'bad', text: `${p.first} asked you about ${d.title.toLowerCase()} and has stopped waiting for an answer.` }); }
+    } else if (r.state === 'owed' && st.day >= r.until && r.done < d.steps) breakRequest(st, g, r, inc);
+  }
+
+  // Old-style requests nobody answered.
   st.matters = st.matters.filter((m) => {
     if (m.kind !== 'ask' || st.day < m.due) return true;
     const p = g.s(m.role);
@@ -785,20 +959,20 @@ export function endDay(st) {
   const wellness = st.built.wellness ? PROJECTS.wellness.night.loyalty : 0;
   for (const p of here) {
     for (const k in p.why) { p.why[k] *= 0.8; if (Math.abs(p.why[k]) < 0.3) delete p.why[k]; }   // old reasons fade
-    if (st.project) g.move(p, -R.OVERTIME, 'overtime');
+    if (st.project) g.move(p, -R.OVERTIME * (st.flags.union ? R.UNION : 1), 'overtime');
     if (wellness) g.move(p, wellness, 'wellness');
     g.move(p, ROLES[p.role].wantMet(st, p) ? R.WANT_MET : R.WANT_UNMET, 'want');
     if (st.cameras) g.move(p, -R.CAMERA_LOYALTY, 'cameras');
     if (p.grudge) g.move(p, -R.GRUDGE, 'grudge');
     g.move(p, -R.CABIN * st.day, 'cabin');
-    const trust = st.stats.kept * R.TRUST_KEPT - st.stats.broken * R.TRUST_BROKEN;
+    const trust = st.stats.kept * R.TRUST_KEPT - st.stats.broken * R.TRUST_BROKEN + st.stats.reqKept * R.REQ_TRUST_KEPT - st.stats.reqBroken * R.REQ_TRUST_BROKEN;
     if (trust) g.move(p, trust, 'trust');
     if (contagion) g.move(p, -contagion, 'unrest');
     if (hungry) g.move(p, -R.HUNGER, 'hunger');
     if (P.rations.loyalty[pol.rations] && !(pol.rations === 0 && (st.flags.fast || 0) > st.day)) g.move(p, P.rations.loyalty[pol.rations], 'rations');
     if (P.life.loyalty[pol.life]) g.move(p, P.life.loyalty[pol.life], 'life');
     if (pol.curfew) g.move(p, P.curfew.loyalty[1], 'curfew');
-    p.fear = clamp(p.fear + (R.FEAR_REST - p.fear) * R.FEAR_DECAY * (secOK ? 0.5 / sec.skill : 1.5) * (st.res.lux <= 0 ? 1.5 : 1) / (1 + st.infamy * R.INFAMY_FEAR));
+    p.fear = clamp(p.fear + (R.FEAR_REST - p.fear) * R.FEAR_DECAY * (secOK ? 0.5 / sec.skill : 1.5) * (st.flags.patrols && secOK ? R.PATROLS_FEAR : 1) * (st.res.lux <= 0 ? 1.5 : 1) / (1 + st.infamy * R.INFAMY_FEAR));
     if (pol.curfew && p.fear < P.curfew.cap) p.fear = Math.min(P.curfew.cap, p.fear + P.curfew.fear[1] * (secOK ? 1 : 0.4));
   }
 
@@ -812,7 +986,7 @@ export function endDay(st) {
     if ((p.cell || 0) > st.day) { p.faction = false; continue; }      // locked up: they can do nothing tonight
     // Terror has a price. Someone who hates you and dares do nothing else may simply leave.
     // (A head of security who is doing the job keeps the airlock; a curfew keeps people in their bunks.)
-    if (p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && g.chance(R.DESERT * (secOK && p !== sec ? R.DESERT_GUARDED : 1) * (pol.curfew ? R.DESERT_CURFEW : 1))) {
+    if (p.loyalty < R.DESERT_LOYALTY && p.fear >= R.DESERT_FEAR && g.chance(R.DESERT * (secOK && p !== sec ? R.DESERT_GUARDED : 1) * (pol.curfew ? R.DESERT_CURFEW : 1) * (st.flags.patrols && secOK ? R.PATROLS_DESERT : 1))) {
       g.remove(p, 'exiled'); p.fled = st.day;
       for (const q of here) if (q !== p) g.move(q, -3, 'or:exile');
       inc.push({ kind: 'bad', text: `${p.first} took a suit from the airlock in the night and went up to the surface, rather than spend another day down here with you. Nobody else can do that job properly.` });
@@ -879,7 +1053,7 @@ export function endDay(st) {
     if (m.patched && g.chance(R.PATCH_FAILS)) { m.patched = false; inc.push({ kind: 'bad', text: `The patch on ${FAULTS[m.sys].name.toLowerCase()} has given way.` }); }
     g.res(FAULTS[m.sys].res, -FAULTS[m.sys].drain * (m.patched ? R.PATCH : 1));
   }
-  if (st.matters.filter((m) => m.kind === 'fault').length < 2 && g.chance(R.FAULT_CHANCE * (g.s('engineer') ? 1 : 2.5))) {
+  if (st.matters.filter((m) => m.kind === 'fault').length < 2 && g.chance(R.FAULT_CHANCE * (g.s('engineer') ? 1 : 2.5) * (st.flags.maintained ? R.MAINTAINED : 1))) {
     const free = Object.keys(FAULTS).filter((s) => !faulty(s));
     if (free.length) { const s = g.pick(free); st.matters.push({ kind: 'fault', sys: s, born: st.day, by: null }); inc.push({ kind: 'bad', text: FAULTS[s].text }); }
   }

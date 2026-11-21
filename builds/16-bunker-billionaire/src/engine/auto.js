@@ -6,11 +6,13 @@
 //            the two styles the design must both allow
 //   seer     reads the hidden numbers: the best a player could hope to do
 // A policy: event(st, view, r) -> choice; orders(st) sets rations and lifestyle; project(st) -> id or null;
-// matter(st, m) -> choice id or null; card(st, hand, r) -> { i, arg } or null (asked until out of plays).
+// matter(st, m) -> choice id or null; card(st, hand, r) -> { i, arg } or null (asked until out of plays);
+// request(st, v, r) -> 'yes' | 'alt' | 'no' for a new request; work(st, v, r) -> true to do today's part of a promise.
 // simulate(n, policy, card) plays n whole runs and reports how they ended, the score, and what a day asked.
 
 import { CANDIDATES } from '../data/staff.js';
-import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape } from './sim.js';
+import { REQUESTS } from '../data/requests.js';
+import { newRun, openDay, eventView, choose, handView, mayPlay, playCard, promiseList, projectList, commission, matterView, decide, setPolicy, endDay, forecast, canEscape, escape, requestView, answer, workOn } from './sim.js';
 
 const AMBIGUOUS = ['chef_special', 'airlock', 'vitamin', 'master_keys', 'midnight_note'];
 const here = (st) => st.staff.filter((p) => p.status === 'ok');
@@ -100,6 +102,14 @@ const targetFor = (c, st) => {
   if (c.id === 'trust') return here(st).find((p) => p.face === 'happy' || p.face === 'content') || null;
   return worst[0] || (c.kind === 'cruel' ? here(st)[here(st).length - 1] : null);
 };
+// Can the stores carry the rest of this request, keeping `spare` of each? (A request paid in time needs a free play a day.)
+const carry = (st, v, spare) => {
+  if (v.time) return requestView(st).filter((x) => x.state === 'owed' && x.time).length < 1;
+  return Object.entries(v.part).every(([k, d]) => k === 'opu' ? st.res.opu + d * (v.steps - v.done) >= 0 : st.res[k] + d * (v.steps - v.done) >= spare);
+};
+const running = (st) => requestView(st).filter((x) => x.state === 'owed').length;
+const useful = (id) => { const d = REQUESTS[id], k = d.perk; return d.role === 'security' || !!k.opu || !!(k.night && k.night.opu) || ['filing', 'workshop', 'union'].includes(k.flag); };
+const altPays = (v) => (v.choices[1].cost.opu || 0) > 0 || (v.choices[1].cost.lux || 0) > 0;
 const mend = (st, m, spare) => (m.choices[0].ok && st.res.lux >= spare ? 'repair' : 'staff');
 const tense = (st) => !!(st.report && st.report.tense);
 
@@ -109,6 +119,8 @@ export const POLICIES = {
     orders: (st, r) => { if (r() < 0.3) { setPolicy(st, 'life', Math.floor(r() * 3)); setPolicy(st, 'rations', Math.floor(r() * 3)); } },
     project: (st, r) => { const ok = projectList(st).filter((v) => v.ok); return ok.length && r() < 0.3 ? ok[Math.floor(r() * ok.length)].id : null; },
     matter: (st, m, r) => (r() < 0.6 ? (r() < 0.5 && m.choices[0].ok ? 'repair' : 'staff') : null),
+    request: (st, v, r) => (r() < 0.3 ? null : ['yes', 'alt', 'no'][Math.floor(r() * 3)]),
+    work: (st, v, r) => r() < 0.6,
     card: (st, r) => {
       if (r() < 0.2) return null;
       const h = here(st), ok = handView(st).filter((c) => c.ok);
@@ -125,6 +137,8 @@ export const POLICIES = {
     orders: (st) => setLife(st, 1, here(st).filter(suspect).length >= 3),
     project: (st) => pickProject(st, ['wellness', 'hottub', 'truffles', 'butler', 'mint', 'panic'], 12),
     matter: (st, m) => mend(st, m, 10),
+    request: (st, v) => (running(st) < 2 && carry(st, v, 18) ? 'yes' : v.choices[1].ok && !suspect(st.staff.find((p) => p.role === v.role)) ? 'alt' : 'no'),
+    work: (st, v) => v.time || carry(st, v, 10),
     card: (st) => pickCard(st, (c) => {
       const worst = worstFirst(st).length;
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -145,6 +159,8 @@ export const POLICIES = {
     orders: (st) => setLife(st, 1, true),
     project: (st) => pickProject(st, ['wellness', 'truffles', 'hottub', 'mint', 'butler'], 8),
     matter: (st, m) => mend(st, m, 4),
+    request: (st, v) => (carry(st, v, 10) ? 'yes' : 'no'),
+    work: (st, v) => v.time || carry(st, v, 4),
     card: (st) => pickCard(st, (c) => {
       const worst = worstFirst(st).length;
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -162,6 +178,10 @@ export const POLICIES = {
     orders: (st) => setLife(st, 2, false),
     project: (st) => pickProject(st, ['gallery', 'cameras', 'radio', 'panic', 'butler', 'hottub', 'pod'], 6),
     matter: (st, m) => mend(st, m, 14),
+    // a tyrant keeps what keeps security sweet or feeds the score; promises anything else when the bunker
+    // is restless, and does none of it; otherwise takes the selfish answer
+    request: (st, v) => (useful(v.id) && carry(st, v, 14) ? 'yes' : tense(st) ? 'yes' : v.choices[1].ok && (altPays(v) || v.time) ? 'alt' : 'no'),
+    work: (st, v) => useful(v.id),
     card: (st) => pickCard(st, (c) => {
       const h = here(st), sec = h.find((p) => p.role === 'security');
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -186,6 +206,8 @@ export const POLICIES = {
     orders: (st) => setLife(st, here(st).filter((p) => p.loyalty < 45).length >= 3 ? 1 : 2, here(st).filter((p) => p.loyalty < 50).length >= 3),
     project: (st) => pickProject(st, ['wellness', 'hottub', 'butler', 'truffles', 'panic', 'gallery'], 10),
     matter: (st, m) => mend(st, m, 6),
+    request: (st, v) => { const p = st.staff.find((x) => x.role === v.role); return carry(st, v, 14) && (running(st) < 2 || p.loyalty < 45) ? 'yes' : p.loyalty >= 55 && v.choices[1].ok ? 'alt' : 'no'; },
+    work: (st, v) => v.time || carry(st, v, 6),
     card: (st) => pickCard(st, (c, s, arg) => {
       const low = here(st).filter((p) => p.loyalty < 48).length;
       if (c.id === 'exile') return exposedFirst(st) ? 100 : -1;
@@ -220,6 +242,7 @@ export function playDay(st, policy, r = Math.random) {
     L.words += words(v.title) + words(v.text) + v.choices.reduce((a, c) => a + words(c.label), 0);
     L.words += handView(st).reduce((a, c) => a + words(c.name) + words(c.text), 0);
     for (const m of matterView(st)) { L.words += words(m.text); L.waiting++; }
+    for (const v of requestView(st)) { L.words += v.state === 'asked' ? words(v.text) + v.choices.reduce((a, c) => a + words(c.label), 0) : words(v.title) + 6; L.waiting++; }
   }
   if (!st.eventDone) choose(st, policy.event(st, eventView(st), r));
   if (st.phase !== 'day') return;
@@ -231,6 +254,15 @@ export function playDay(st, policy, r = Math.random) {
     const ms = matterView(st);
     let did = false;
     for (const m of ms) { const id = policy.matter(st, m, r); if (id && decide(st, m.i, id) !== null) { did = true; if (L) L.decisions++; break; } }
+    if (!did) break;
+  }
+  // requests: answer new ones, then do today's part of each promise the policy means to keep
+  for (let guard = 0; guard < 6; guard++) {
+    let did = false;
+    for (const v of requestView(st)) {
+      if (v.state === 'asked') { const a = policy.request ? policy.request(st, v, r) : 'no'; if (a && answer(st, v.i, a) !== null) { did = true; if (L) L.decisions++; break; } }
+      else if (v.work.ok && policy.work && policy.work(st, v, r) && workOn(st, v.i) !== null) { did = true; if (L) L.decisions++; break; }
+    }
     if (!did) break;
   }
   for (let guard = 0; guard < 4 && st.plays > 0; guard++) {
@@ -253,7 +285,7 @@ export function playOut(st, policy, r = Math.random, untilDay = Infinity) {
 // Plays n whole runs and reports how they ended, the score (opulence), how often each card and project
 // was used (a run), and what a day asked of the player (words read, decisions made, things waiting).
 export function simulate(n = 200, policyName = 'careful', cardId = 'inherited', seed0 = 1) {
-  const out = { runs: n, policy: policyName, card: cardId, endings: {}, kinds: {}, meanDay: 0, left: { food: 0, water: 0, power: 0, med: 0, lux: 0 }, meanStaff: 0, acts: 0, infamy: 0, opu: 0, opuWin: 0, wins: 0, built: 0, titles: {}, uses: {}, load: { days: 0, words: 0, decisions: 0, waiting: 0 } };
+  const out = { runs: n, policy: policyName, card: cardId, endings: {}, kinds: {}, meanDay: 0, left: { food: 0, water: 0, power: 0, med: 0, lux: 0 }, meanStaff: 0, acts: 0, infamy: 0, opu: 0, opuWin: 0, wins: 0, built: 0, titles: {}, uses: {}, req: { made: 0, kept: 0, broken: 0, asked: 0 }, load: { days: 0, words: 0, decisions: 0, waiting: 0 } };
   let s = seed0 * 2654435761;
   const r = () => { s = (s + 0x6D2B79F5) | 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   for (let i = 0; i < n; i++) {
@@ -273,8 +305,9 @@ export function simulate(n = 200, policyName = 'careful', cardId = 'inherited', 
     out.infamy += st.infamy / n;
     out.opu += st.res.opu / n;
     out.built += Object.keys(st.built).length / n;
+    out.req.asked += st.requests.length / n; out.req.made += st.stats.reqMade / n; out.req.kept += st.stats.reqKept / n; out.req.broken += st.stats.reqBroken / n;
     for (const l of st.log) {
-      const k = l.card ? l.card : l.project ? 'build:' + l.project : l.matter ? `${l.matter}:${l.id}` : null;
+      const k = l.card ? l.card : l.project ? 'build:' + l.project : l.matter ? `${l.matter}:${l.id}` : l.answer ? `req:${l.request}:${l.answer}` : null;
       if (!k) continue;
       out.uses[k] = (out.uses[k] || 0) + 1 / n;
       if (l.card) out.acts += 1 / n;

@@ -11,13 +11,14 @@
 //   ?view=<day|done|night>   step that far into the day                   ?end=<ending id>  show an ending
 //   ?still=1      no ambient motion                                        ?flat=1  the flat picture, not the card model
 
-import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape } from '../engine/sim.js';
+import { RULES, PROMISES, newRun, openDay, eventView, choose, handView, mayPlay, playCard, kindness, promiseList, promiseText, matterView, decide, setPolicy, policyBlock, forecast, endDay, projectList, commission, canEscape, escape, requestView, answer, workOn } from '../engine/sim.js';
 import { POLICIES, playOut } from '../engine/auto.js';
 import { ROLES, ROLE_ORDER, TRAITS, STAGES, CANDIDATES } from '../data/staff.js';
 import { CARDS as STARTS, cardById } from '../data/cards.js';
 import { ENDINGS } from '../data/text.js';
 import { POLICY_INFO, DONE } from '../data/matters.js';
 import { CARDS as DECK, KINDS, PROJECTS, TIERS, TIER_NAMES, titleOf, nextTitle } from '../data/deck.js';
+import { REQUESTS } from '../data/requests.js';
 import { faceSVG, MOOD_WORDS } from './faces.js';
 import { createSilo, ZONES } from './silo.js';
 import { createDiorama } from './diorama.js';
@@ -91,7 +92,9 @@ function renderBar(delta = {}) {
   if (!st) { bar.innerHTML = `<div class="brand">Bunker Billionaire</div><div class="bar-right">${soundButton()}</div>`; return; }
   const owed = st.promises.filter((p) => p.state === 'owed' || p.state === 'forgotten');
   const next = owed.filter((p) => p.due).sort((a, b) => a.due - b.due)[0];
-  const soon = next && next.due - st.day <= 2;
+  const jobs = (st.requests || []).filter((r) => r.state === 'owed');
+  const soon = (next && next.due - st.day <= 2) || jobs.some((r) => r.until - st.day <= 1);
+  owed.push(...jobs);
   const f = st.phase === 'ended' ? {} : forecast(st), left = RULES.DAYS - st.day + 1;
   bar.innerHTML = `<button type="button" class="day" data-act="menu" aria-label="Day ${st.day} of ${RULES.DAYS}. Open the menu"><b>${Math.min(st.day, RULES.DAYS)}</b><span>of ${RULES.DAYS}</span></button>
     <div class="stores">${RES.map(([k, name]) => {
@@ -110,6 +113,7 @@ function siloView(night) {
   const matters = over ? [] : matterView(st);
   const asks = {};
   for (const m of matters) if (m.kind === 'ask') asks[m.role] = m.i;
+  if (!over) for (const v of requestView(st)) if (v.state === 'asked') asks[v.role] = v.i;
   const staff = st.staff.map((p) => {
     let zone = ROLES[p.role].post, unseen = false;
     if (p.status === 'exiled') zone = 'surface';
@@ -176,12 +180,12 @@ function stopAttract() { clearInterval(attract); attract = null; }
 
 function renderTitle() {
   const save = store.get('bb.save', null), found = store.get('bb.endings', []);
-  const ok = save && save.v === 4 && save.phase !== 'ended';
+  const ok = save && save.v === 5 && save.phase !== 'ended';
   desk.innerHTML = `<article class="card title-card deal">
     <p class="kicker">Act 2 · a management game for one bunker</p>
     <h1>Bunker Billionaire</h1>
     <p class="lede">You run a luxury doomsday bunker in an old missile silo. The surface will be safe in thirty days.</p>
-    <ul class="goal"><li><b>Live as lavishly as you can.</b> Your score is your opulence: hot tubs, banquets, portraits of yourself.</li><li><b>Still be in charge on day 30.</b> Eight staff, a closed silo, and none of them can be trusted.</li><li><b>Each day:</b> one piece of business, two cards from your hand, and the upgrade you are building.</li></ul>
+    <ul class="goal"><li><b>Live as lavishly as you can.</b> Your score is your opulence: hot tubs, banquets, portraits of yourself.</li><li><b>Still be in charge on day 30.</b> Eight staff, a closed silo, and none of them can be trusted.</li><li><b>Each day:</b> one piece of business, two cards from your hand, what you promised the staff, and the upgrade you are building.</li></ul>
     <p class="hintline">Being kind is expensive. Spin is cheap. Being a monster pays best, and costs most.</p>
     ${ok ? `<button type="button" class="go" data-act="resume">Carry on from day ${save.day}</button>` : ''}
     <h2>First: how did you get the bunker?</h2>
@@ -231,7 +235,7 @@ function facesLine(f) {
 function renderReport() {
   const r = st.report, card = cardById(st.card);
   const first = st.day === 1 ? `<p class="lede">${esc(card.line)}</p><p class="hintline">The aim: be living as lavishly as possible, and still be in charge, when the hatch opens on day ${RULES.DAYS}. Your opulence and the bunker’s mood are under the silo. Tap a face to open that person’s file.</p>` : '';
-  const waiting = st.matters.length;
+  const waiting = st.matters.length, asked = requestView(st).filter((v) => v.state === 'asked').length;
   desk.innerHTML = `<article class="card report deal">
     <header><span class="stamp">Day ${st.day} of ${RULES.DAYS}</span><h2>Morning report</h2></header>
     ${first}
@@ -242,7 +246,7 @@ function renderReport() {
     ${r.cams ? `<p class="cams-line">${rich(r.cams)}</p>` : ''}
     ${r.informant ? `<p class="informant-line">${rich(r.informant.text)}</p>` : ''}
     ${r.rumours.length ? `<h3>Heard on the stairs</h3><ul class="rumours">${r.rumours.map((x) => `<li>${rich(x.text)}</li>`).join('')}</ul>` : ''}
-    <button type="button" class="go" data-act="open">Start the day${waiting ? ` · ${waiting} broken` : ''}</button>
+    <button type="button" class="go" data-act="open">Start the day${asked ? ` · ${asked} request` : ''}${waiting ? ` · ${waiting} broken` : ''}</button>
   </article>`;
 }
 
@@ -277,6 +281,7 @@ function renderDay() {
   const log = st.today.length ? `<ul class="today">${st.today.map((t) => `<li><b>${rich(t.title)}</b> ${rich(t.text)} ${chips(t.delta)}</li>`).join('')}</ul>` : '';
   const firstDays = st.day <= 2 && !st.today.length;
   desk.innerHTML = `${top}
+  ${requestsCard()}
   ${faults.map((m) => matterCard(m, false)).join('')}
   <article class="card hand">
     <header><h2>Your hand</h2><span class="pips big">${pips()}</span><span class="left">${st.plays ? `play ${st.plays} more` : 'all played'}</span></header>
@@ -288,6 +293,35 @@ function renderDay() {
   ${projectsCard()}
   ${canEscape(st) ? `<button type="button" class="go ghost pod" data-act="escape">Board the escape pod (with ${Math.round(st.res.opu)} opulence)</button>` : ''}
   <button type="button" class="go" data-act="night"${st.eventDone ? '' : ' disabled'}>${st.eventDone ? 'Lights out' : 'Settle today’s business first'}</button>`;
+}
+
+// Requests: what the staff have asked for, and what you promised them. Each promise is a job: a part a day,
+// paid in stores or in your time (a card play), finished in time or broken.
+const pipsOf = (v) => Array.from({ length: v.steps }, (_, k) => `<i class="${k < v.done ? 'on' : ''}"></i>`).join('');
+const partChips = (v) => (v.time ? '<span class="chip act">1 play</span>' : chips(v.part));
+const stakes = (v) => `<p class="stakes"><span class="good"><b>Kept:</b> ${esc(v.perkText)}.</span> <span class="bad"><b>Broken:</b> ${esc(v.falloutText)}.</span></p>`;
+function requestsCard() {
+  const list = requestView(st);
+  if (!list.length) return '';
+  const asked = list.filter((v) => v.state === 'asked'), owed = list.filter((v) => v.state === 'owed');
+  const ask = (v) => `<div class="req ask">
+      <p class="rq-head"><b>${esc(v.title)}</b><span class="stamp">${v.left <= 1 ? 'answer today' : `answer within ${v.left} days`}</span></p>
+      <p class="body">${rich(v.text)}</p>
+      <p class="terms">If you promise: ${v.steps} ${v.steps === 1 ? 'part' : 'parts'}, one a day, all within ${v.days} days. Each part ${partChips(v)}</p>
+      ${stakes(v)}
+      <div class="choices small">${v.choices.map((c) => `<button type="button" class="choice${c.id === 'yes' ? ' yes' : ''}" data-act="answer" data-i="${v.i}" data-id="${c.id}"${c.ok ? '' : ' disabled'}><span class="t">${esc(c.label)}${c.ok ? '' : `<small>${esc(c.why)}</small>`}</span><span class="costs">${chips(c.cost)}</span></button>`).join('')}</div>
+    </div>`;
+  const job = (v) => `<div class="req job${v.late ? ' late' : ''}">
+      <p class="rq-head">${whoChip(person(v.role))}<b>${esc(v.title)}</b><span class="rpips">${pipsOf(v)}</span></p>
+      <p class="terms">${v.late ? '<b class="warn">Can no longer be finished in time.</b> ' : ''}${v.steps - v.done} ${v.steps - v.done === 1 ? 'part' : 'parts'} to go, ${v.left <= 1 ? 'today is the last day' : `${v.left} days left`}.</p>
+      ${stakes(v)}
+      <button type="button" class="tool work" data-act="work" data-i="${v.i}"${v.work.ok ? '' : ' disabled'}>${v.work.ok ? `Do today’s part ${partChips(v)}` : esc(v.work.why)}</button>
+    </div>`;
+  return `<article class="card requests deal">
+    <header><h2>Requests</h2><span class="left">${[owed.length ? `${owed.length} promised` : '', asked.length ? `${asked.length} waiting` : ''].filter(Boolean).join(' · ')}</span></header>
+    ${st.day <= 8 && !st.stats.reqMade ? '<p class="hintline">The staff ask for things that take days. Promise, and you owe a part every day until it is done: kept, it pays for good; broken, it costs you. Or give them the third answer.</p>' : ''}
+    ${asked.map(ask).join('')}${owed.map(job).join('')}
+  </article>`;
 }
 
 // A card in your hand: what kind it is, what it does, the joke, and what it costs or pays.
@@ -357,7 +391,7 @@ function renderEnding() {
     <div class="final ${won ? 'won' : 'lost'}">${ICON.opu}<b>${o}</b><span>opulence</span><strong>${won ? esc(titleOf(o)) : 'Former ' + esc(titleOf(o))}</strong><small>${won ? (o >= best ? 'Your best yet on this start.' : `Your best on this start: ${best}.`) : 'You were not in charge at the end. The score stands; the title does not.'}</small></div>
     <p class="verdict">History will remember you as <b>${epithet(st.infamy)}</b>.</p>
     ${builtNames.length ? `<p class="fine">You built: ${builtNames.map(esc).join(', ')}.</p>` : ''}
-    <p class="fine">${st.day >= RULES.DAYS && (kind === 'king' || kind === 'word' || st.ending.id === 'deposed_hatch') ? `All ${RULES.DAYS} days` : `Day ${st.day} of ${RULES.DAYS}`} · ${esc(card.name)} · ${s.cruel} ruthless cards · ${s.perks} little somethings · ${s.talks} open doors · ${s.exiles} sent up · promises kept ${kept}, broken ${broken}</p>
+    <p class="fine">${st.day >= RULES.DAYS && (kind === 'king' || kind === 'word' || st.ending.id === 'deposed_hatch') ? `All ${RULES.DAYS} days` : `Day ${st.day} of ${RULES.DAYS}`} · ${esc(card.name)} · ${s.cruel} ruthless cards · ${s.perks} little somethings · ${s.talks} open doors · ${s.exiles} sent up · promises kept ${kept}, broken ${broken} · requests kept ${s.reqKept || 0}, broken ${s.reqBroken || 0}</p>
     ${slope}
     <h3>Who paid for it, and what you never saw</h3>
     <p class="fine key"><span class="k-loy"></span> loyalty <span class="k-fear"></span> fear, day by day</p>
@@ -434,13 +468,18 @@ function pickPromiseWho(i, type) {
 }
 function ledger() {
   const label = { owed: 'owed', kept: 'kept', broken: 'broken', forgotten: 'quietly forgotten', void: 'no longer matters' };
-  openSheet(`<h2>Promises</h2>${st.promises.length ? `<ul class="ledger-list">${st.promises.map((p) => `<li class="p-${p.state}"><b>“${esc(promiseText(st, p))}”</b><small>${label[p.state]}${p.state === 'owed' ? (p.due ? ` · due day ${p.due}` : ' · stands until the hatch opens') : ''}</small><small>Cost of keeping it: ${esc(PROMISES[p.type].cost)}</small></li>`).join('')}</ul>` : '<p class="fine">You have promised nothing. Yet.</p>'}<p class="fine">A promise is the quickest way out of trouble, and a debt.</p>`);
+  const jobs = st.requests.filter((r) => r.state !== 'asked'), views = requestView(st);
+  const rl = { owed: 'under way', kept: 'kept', broken: 'broken', alt: 'answered your way', refused: 'refused', ignored: 'never answered', void: 'no longer matters' };
+  const cls = { owed: 'owed', kept: 'kept', broken: 'broken' };
+  const reqs = jobs.length ? `<h3>Requests from the staff</h3><ul class="ledger-list">${jobs.map((r) => { const v = views.find((x) => x.i === st.requests.indexOf(r)); return `<li class="p-${cls[r.state] || 'void'}"><b>${esc(person(r.role).first)}: ${esc(REQUESTS[r.id].title)}</b><small>${rl[r.state]}${v ? ` · ${v.done} of ${v.steps} parts · ${v.left} ${v.left === 1 ? 'day' : 'days'} left` : ''}</small></li>`; }).join('')}</ul>` : '';
+  openSheet(`<h2>Promises</h2>${reqs}${reqs && st.promises.length ? '<h3>What you promised everyone</h3>' : ''}${st.promises.length ? `<ul class="ledger-list">${st.promises.map((p) => `<li class="p-${p.state}"><b>“${esc(promiseText(st, p))}”</b><small>${label[p.state]}${p.state === 'owed' ? (p.due ? ` · due day ${p.due}` : ' · stands until the hatch opens') : ''}</small><small>Cost of keeping it: ${esc(PROMISES[p.type].cost)}</small></li>`).join('')}</ul>` : (reqs ? '' : '<p class="fine">You have promised nothing. Yet.</p>')}<p class="fine">A promise is the quickest way out of trouble, and a debt.</p>`);
 }
 function help() {
   openSheet(`<h2>How to play</h2><div class="help">
     <p><b>The aim.</b> Live as lavishly as you can, and still be in charge when the hatch opens on day ${RULES.DAYS}. Your score is your <b>opulence</b>; it earns you titles, from Tenant to God-Emperor of Silo 7.</p>
     <p><b>Each day:</b> settle one piece of business; play two of the four cards in your hand; set your lifestyle and the staff’s rations for the night; then lights out.</p>
     <p><b>Cards.</b> Generous ones cost you and please them. Spin is cheap and absurd, and sometimes works. Ruthless ones pay you in opulence, frighten everyone, and open worse ones the morning after. Indulgent ones are just for you.</p>
+    <p><b>Requests.</b> Every few days one of the staff asks for something that takes days to deliver. Promise it and you owe a part a day, paid from the stores or with your own time (a card play), until it is done. Keep it and you get something for good; let the days run out and it is broken, with consequences. Or refuse, or give the funny third answer.</p>
     <p><b>Projects</b> are the upgrade path: a gold hot tub, a radio station, your own currency, a robot butler, an escape pod. Each adds opulence or new cards. The staff build them on overtime, and mind.</p>
     <p><b>The stores are a closed system.</b> Nothing new comes in. The number under each store is what tonight will take. Decadence costs food, water and power; if one runs out and stays out, everyone dies.</p>
     <p><b>You never see what people think.</b> You see a face each morning and hear rumours; both can be wrong, and frightened people smile whatever they feel. The bunker’s mood, under the silo, is the one thing you can always see: let it reach “On the brink” and they act together.</p>
@@ -531,6 +570,8 @@ document.addEventListener('click', (ev) => {
     case 'matter': { const m = matterView(st)[+d.i]; if (m && st.phase === 'day') openSheet(matterCard(m, true)); else if (m) openSheet(`<h2>${rich(m.title)}</h2><p class="body">${rich(m.text)}</p><p class="fine">Start the day to deal with it.</p>`); break; }
     case 'decide': { const text = decide(st, +d.i, d.id); if (text === null) break; closeSheet(); sound.play('stamp'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'set': if (setPolicy(st, d.k, +d.v)) { sound.play('tap'); save(); renderBar(); const y = desk.scrollTop; renderSilo(false); renderDay(); desk.scrollTop = y; } break;
+    case 'answer': { const text = answer(st, +d.i, d.id); if (text === null) break; sound.play(d.id === 'yes' ? 'promise' : d.id === 'no' ? 'stamp' : 'good'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
+    case 'work': { const text = workOn(st, +d.i); if (text === null) break; sound.play(st.requests[+d.i].state === 'kept' ? 'win' : 'coin'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'projects': projectsSheet(); break;
     case 'build': { const text = commission(st, d.id); if (text === null) break; closeSheet(); sound.play('promise'); const delta = st.today[st.today.length - 1].delta; save(); render(delta); break; }
     case 'escape': if (escape(st)) { finish(); render(); } break;
